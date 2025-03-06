@@ -41,20 +41,19 @@ export class VitalSignsProcessor {
   private lipidProcessor: LipidProcessor;
   
   private lastValidResults: VitalSignsResult | null = null;
-  
   private isCalibrating: boolean = false;
   private calibrationStartTime: number = 0;
   private calibrationSamples: number = 0;
   private readonly CALIBRATION_REQUIRED_SAMPLES: number = 40;
   private readonly CALIBRATION_DURATION_MS: number = 6000;
-  private calibrationProgress: {
-    heartRate: number;
-    spo2: number;
-    pressure: number;
-    arrhythmia: number;
-    glucose: number;
-    lipids: number;
-  } = {
+  
+  private spo2Samples: number[] = [];
+  private pressureSamples: number[] = [];
+  private heartRateSamples: number[] = [];
+  private glucoseSamples: number[] = [];
+  private lipidSamples: number[] = [];
+  
+  private calibrationProgress = {
     heartRate: 0,
     spo2: 0,
     pressure: 0,
@@ -65,7 +64,7 @@ export class VitalSignsProcessor {
   
   private forceCompleteCalibration: boolean = false;
   private calibrationTimer: any = null;
-  
+
   constructor() {
     this.spo2Processor = new SpO2Processor();
     this.bpProcessor = new BloodPressureProcessor();
@@ -76,11 +75,17 @@ export class VitalSignsProcessor {
   }
 
   public startCalibration(): void {
-    console.log("VitalSignsProcessor: Iniciando proceso de calibración simultánea");
+    console.log("VitalSignsProcessor: Iniciando calibración real");
     this.isCalibrating = true;
     this.forceCompleteCalibration = false;
     this.calibrationStartTime = Date.now();
     this.calibrationSamples = 0;
+    
+    this.spo2Samples = [];
+    this.pressureSamples = [];
+    this.heartRateSamples = [];
+    this.glucoseSamples = [];
+    this.lipidSamples = [];
     
     this.calibrationProgress = {
       heartRate: 0,
@@ -104,17 +109,58 @@ export class VitalSignsProcessor {
   private updateCalibrationProgress(): void {
     if (!this.isCalibrating) return;
     
+    const ppgValues = this.signalProcessor.getPPGValues();
+    if (ppgValues.length < 5) return;
+    
+    const latestPPG = ppgValues.slice(-60);
+    if (latestPPG.length >= 30) {
+      const spo2Value = this.spo2Processor.calculateSpO2(latestPPG);
+      if (spo2Value > 0) {
+        this.spo2Samples.push(spo2Value);
+        this.calibrationProgress.spo2 = Math.min(100, (this.spo2Samples.length / 20) * 100);
+      }
+    }
+    
+    if (latestPPG.length >= 40) {
+      const bp = this.bpProcessor.calculateBloodPressure(latestPPG);
+      if (bp.systolic > 0 && bp.diastolic > 0) {
+        this.pressureSamples.push(bp.systolic + bp.diastolic);
+        this.calibrationProgress.pressure = Math.min(100, (this.pressureSamples.length / 15) * 100);
+      }
+    }
+    
+    if (latestPPG.length >= 30) {
+      const peaks = this.detectPeaks(latestPPG);
+      if (peaks > 0) {
+        this.heartRateSamples.push(peaks);
+        this.calibrationProgress.heartRate = Math.min(100, (this.heartRateSamples.length / 25) * 100);
+      }
+    }
+    
+    if (latestPPG.length >= 50) {
+      const glucose = this.glucoseProcessor.calculateGlucose(latestPPG);
+      if (glucose > 0) {
+        this.glucoseSamples.push(glucose);
+        this.calibrationProgress.glucose = Math.min(100, (this.glucoseSamples.length / 18) * 100);
+      }
+    }
+    
+    if (latestPPG.length >= 50) {
+      const lipids = this.lipidProcessor.calculateLipids(latestPPG);
+      if (lipids.totalCholesterol > 0) {
+        this.lipidSamples.push(lipids.totalCholesterol);
+        this.calibrationProgress.lipids = Math.min(100, (this.lipidSamples.length / 18) * 100);
+      }
+    }
+    
+    this.calibrationProgress.arrhythmia = Math.min(
+      this.calibrationProgress.heartRate,
+      this.calibrationProgress.pressure
+    );
+    
     const elapsedTime = Date.now() - this.calibrationStartTime;
-    const elapsedPercentage = Math.min(100, (elapsedTime / this.CALIBRATION_DURATION_MS) * 100);
-    const samplesPercentage = Math.min(100, (this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100);
     
     if (this.forceCompleteCalibration || elapsedTime >= this.CALIBRATION_DURATION_MS) {
-      console.log("VitalSignsProcessor: Completando calibración forzadamente", {
-        porTimeout: this.forceCompleteCalibration,
-        tiempoTranscurrido: elapsedTime,
-        porcentajeTranscurrido: elapsedPercentage
-      });
-      
       Object.keys(this.calibrationProgress).forEach(key => {
         this.calibrationProgress[key as keyof typeof this.calibrationProgress] = 100;
       });
@@ -127,63 +173,24 @@ export class VitalSignsProcessor {
       return;
     }
     
-    const accelerationFactor = 1.5;
-    
-    this.calibrationProgress.heartRate = Math.min(
-      elapsedPercentage * 1.2 * accelerationFactor, 
-      samplesPercentage * 1.3 * accelerationFactor
-    );
-    
-    this.calibrationProgress.spo2 = Math.min(
-      elapsedPercentage * 1.1 * accelerationFactor, 
-      samplesPercentage * 1.0 * accelerationFactor
-    );
-    
-    this.calibrationProgress.pressure = Math.min(
-      elapsedPercentage * 0.9 * accelerationFactor, 
-      samplesPercentage * 0.95 * accelerationFactor
-    );
-    
-    this.calibrationProgress.arrhythmia = Math.min(
-      elapsedPercentage * 0.7 * accelerationFactor, 
-      samplesPercentage * 0.85 * accelerationFactor
-    );
-    
-    this.calibrationProgress.glucose = Math.min(
-      elapsedPercentage * 0.8 * accelerationFactor, 
-      samplesPercentage * 0.9 * accelerationFactor
-    );
-    
-    this.calibrationProgress.lipids = Math.min(
-      elapsedPercentage * 0.6 * accelerationFactor, 
-      samplesPercentage * 0.8 * accelerationFactor
-    );
-    
-    Object.keys(this.calibrationProgress).forEach(key => {
-      this.calibrationProgress[key as keyof typeof this.calibrationProgress] = 
-        Math.min(100, Math.max(0, Math.round(this.calibrationProgress[key as keyof typeof this.calibrationProgress])));
-    });
-    
-    if (elapsedTime > (this.CALIBRATION_DURATION_MS * 0.75)) {
-      const minProgress = Math.min(...Object.values(this.calibrationProgress));
-      
-      if (minProgress > 85) {
-        Object.keys(this.calibrationProgress).forEach(key => {
-          const currentValue = this.calibrationProgress[key as keyof typeof this.calibrationProgress];
-          this.calibrationProgress[key as keyof typeof this.calibrationProgress] = 
-            Math.min(100, currentValue + 5);
-        });
-      }
-    }
-    
     if (Object.values(this.calibrationProgress).every(progress => progress >= 100)) {
-      console.log("VitalSignsProcessor: Calibración completada para todos los indicadores");
+      console.log("VitalSignsProcessor: Calibración real completada");
       this.isCalibrating = false;
       if (this.calibrationTimer) {
         clearTimeout(this.calibrationTimer);
         this.calibrationTimer = null;
       }
     }
+  }
+
+  private detectPeaks(signal: number[]): number {
+    let peaks = 0;
+    for (let i = 1; i < signal.length - 1; i++) {
+      if (signal[i] > signal[i-1] && signal[i] > signal[i+1]) {
+        peaks++;
+      }
+    }
+    return peaks;
   }
 
   public processSignal(
