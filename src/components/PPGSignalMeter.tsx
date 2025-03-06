@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -47,14 +46,12 @@ const PPGSignalMeter = ({
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
   
-  // Enhanced peak detection parameters
-  const PEAK_DETECTION_WINDOW = 8; // Smaller window for even higher sensitivity
-  const PEAK_THRESHOLD = 3; // Lower threshold to catch more peaks
-  const MIN_PEAK_DISTANCE_MS = 250; // Reduced minimum time between peaks (250ms ~= 240bpm max)
+  const PEAK_DETECTION_WINDOW = 8;
+  const PEAK_THRESHOLD = 3;
+  const MIN_PEAK_DISTANCE_MS = 250;
   
-  // New parameters to reduce delays
-  const IMMEDIATE_RENDERING = true; // Force immediate rendering of new peaks
-  const MAX_PEAKS_TO_DISPLAY = 25; // Limit the number of peaks to avoid overwhelming the display
+  const IMMEDIATE_RENDERING = true;
+  const MAX_PEAKS_TO_DISPLAY = 25;
   
   useEffect(() => {
     if (!dataBufferRef.current) {
@@ -142,24 +139,19 @@ const PPGSignalMeter = ({
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
     
-    // First pass: identify potential peaks with the sliding window approach
     const potentialPeaks: {index: number, value: number, time: number, isArrhythmia: boolean}[] = [];
     
-    // Scan through all points with a sliding window
     for (let i = PEAK_DETECTION_WINDOW; i < points.length - PEAK_DETECTION_WINDOW; i++) {
       const currentPoint = points[i];
       
-      // Skip if we've already processed this time range
       const recentlyProcessed = peaksRef.current.some(
         peak => Math.abs(peak.time - currentPoint.time) < MIN_PEAK_DISTANCE_MS
       );
       
       if (recentlyProcessed) continue;
       
-      // Check if this point is higher than all points in the window before and after
       let isPeak = true;
       
-      // Check points before
       for (let j = i - PEAK_DETECTION_WINDOW; j < i; j++) {
         if (points[j].value >= currentPoint.value) {
           isPeak = false;
@@ -167,7 +159,6 @@ const PPGSignalMeter = ({
         }
       }
       
-      // If still a potential peak, check points after
       if (isPeak) {
         for (let j = i + 1; j <= i + PEAK_DETECTION_WINDOW; j++) {
           if (j < points.length && points[j].value > currentPoint.value) {
@@ -177,7 +168,6 @@ const PPGSignalMeter = ({
         }
       }
       
-      // Require minimum amplitude to be considered a peak
       if (isPeak && Math.abs(currentPoint.value) > PEAK_THRESHOLD) {
         potentialPeaks.push({
           index: i,
@@ -188,15 +178,12 @@ const PPGSignalMeter = ({
       }
     }
     
-    // Second pass: ensure peaks are significant and not too close to each other
     for (const peak of potentialPeaks) {
-      // Verify this peak is not too close to existing peaks
       const tooClose = peaksRef.current.some(
         existingPeak => Math.abs(existingPeak.time - peak.time) < MIN_PEAK_DISTANCE_MS
       );
       
       if (!tooClose) {
-        // Add to peaks collection
         peaksRef.current.push({
           time: peak.time,
           value: peak.value,
@@ -205,13 +192,11 @@ const PPGSignalMeter = ({
       }
     }
     
-    // Sort peaks by time to maintain chronological order
     peaksRef.current.sort((a, b) => a.time - b.time);
     
-    // Cleanup old peaks outside the visible window and limit the total number
     peaksRef.current = peaksRef.current
       .filter(peak => now - peak.time < WINDOW_WIDTH_MS)
-      .slice(-MAX_PEAKS_TO_DISPLAY); // Keep only the most recent peaks
+      .slice(-MAX_PEAKS_TO_DISPLAY);
   }, []);
 
   const renderSignal = useCallback(() => {
@@ -223,7 +208,6 @@ const PPGSignalMeter = ({
     const currentTime = performance.now();
     const timeSinceLastRender = currentTime - lastRenderTimeRef.current;
 
-    // For more consistent rendering, only limit framerate if not in immediate rendering mode
     if (!IMMEDIATE_RENDERING && timeSinceLastRender < FRAME_TIME) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
@@ -267,13 +251,11 @@ const PPGSignalMeter = ({
     dataBufferRef.current.push(dataPoint);
     const points = dataBufferRef.current.getPoints();
     
-    // Run peak detection immediately for every frame to reduce delay
     detectPeaks(points, now);
 
     drawGrid(ctx);
 
     if (points.length > 1) {
-      // Draw signal line with improved rendering
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
@@ -291,14 +273,12 @@ const PPGSignalMeter = ({
         const x2 = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
         const y2 = canvas.height / 2 - point.value;
 
-        // Use a single path for better performance
         if (firstPoint) {
           ctx.moveTo(x1, y1);
           firstPoint = false;
         }
         ctx.lineTo(x2, y2);
         
-        // If this point is an arrhythmia, change color immediately
         if (point.isArrhythmia) {
           ctx.stroke();
           ctx.beginPath();
@@ -314,34 +294,29 @@ const PPGSignalMeter = ({
       }
       ctx.stroke();
 
-      // Draw peak markers - render all peaks immediately for better visibility
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
-          // Draw peak circle with improved visibility
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
-            // Draw yellow circumference for arrhythmia
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Add ARRITMIA label with improved visibility
             ctx.font = 'bold 12px Inter';
             ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
 
-          // Show peak amplitude with better contrast
           ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
@@ -370,17 +345,17 @@ const PPGSignalMeter = ({
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
-      <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-bold text-slate-700">PPG</span>
-          <div className="w-[200px]">
-            <div className={`h-1.5 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold text-slate-700">PPG</span>
+          <div className="w-[180px]">
+            <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
               <div
                 className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
                 style={{ width: `${isFingerDetected ? quality : 0}%` }}
               />
             </div>
-            <span className="text-[9px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
+            <span className="text-[8px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
                   style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
               {getQualityText(quality)}
             </span>
@@ -389,7 +364,7 @@ const PPGSignalMeter = ({
 
         <div className="flex flex-col items-center">
           <Fingerprint
-            className={`h-12 w-12 transition-colors duration-300 ${
+            className={`h-8 w-8 transition-colors duration-300 ${
               !isFingerDetected ? 'text-gray-400' :
               quality > 75 ? 'text-green-500' :
               quality > 50 ? 'text-yellow-500' :
@@ -397,7 +372,7 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[10px] text-center mt-0.5 font-medium text-slate-600">
+          <span className="text-[8px] text-center font-medium text-slate-600">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
@@ -407,24 +382,24 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(40vh)] mt-20"
+        className="w-full h-[calc(45vh)] mt-12"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[80px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
           onClick={onStartMeasurement}
-          className="bg-white text-slate-700 hover:bg-gray-50 active:bg-gray-100 transition-colors duration-200"
+          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
         >
-          <span className="text-lg font-semibold">
+          <span className="text-base font-semibold">
             INICIAR/DETENER
           </span>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-white text-slate-700 hover:bg-gray-50 active:bg-gray-100 transition-colors duration-200"
+          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
         >
-          <span className="text-lg font-semibold">
+          <span className="text-base font-semibold">
             RESETEAR
           </span>
         </button>

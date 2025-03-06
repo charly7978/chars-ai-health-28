@@ -10,16 +10,13 @@ const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
   return (
     <button 
       onClick={onClick}
-      className={`w-full h-full text-2xl font-bold active:bg-gray-800 ${
+      className={`w-full h-full text-lg font-bold active:shadow-inner ${
         isMonitoring 
-        ? 'bg-gradient-to-b from-red-600 to-red-700 text-white shadow-inner' 
-        : 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-md'
+        ? 'bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-md' 
+        : 'bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-md'
       }`}
       style={{
-        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-        boxShadow: isMonitoring 
-          ? 'inset 0 1px 3px rgba(0,0,0,0.3)' 
-          : '0 1px 3px rgba(0,0,0,0.2)'
+        textShadow: '0 1px 2px rgba(0,0,0,0.2)'
       }}
     >
       {isMonitoring ? 'DETENER' : 'INICIAR'}
