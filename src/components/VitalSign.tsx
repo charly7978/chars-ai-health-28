@@ -114,8 +114,8 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
   const { text, color } = getDisplayContent();
 
   return (
-    <div className={`relative overflow-hidden group bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-md rounded-lg p-3 py-6 transition-all duration-300 hover:from-gray-800/60 hover:to-gray-900/60 ${
-      highlighted ? 'ring-1 ring-cyan-500/50 from-gray-800/60 to-gray-900/70' : ''
+    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 py-6 transition-all duration-300 ${
+      highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       <h3 className={`text-white text-xs text-center pt-1 mb-1 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
