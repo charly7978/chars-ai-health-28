@@ -168,14 +168,12 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div 
-      className="fixed inset-0 flex flex-col bg-black" 
+    <div className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
         height: 'calc(100vh + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)'
-      }}
-    >
+      }}>
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
@@ -195,6 +193,7 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={stopMonitoring}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
+              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
             />
           </div>
 
@@ -205,20 +204,24 @@ const Index = () => {
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
+                  calibrationProgress={vitalSigns.calibration?.progress.heartRate}
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
+                  calibrationProgress={vitalSigns.calibration?.progress.spo2}
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
+                  calibrationProgress={vitalSigns.calibration?.progress.pressure}
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
+                  calibrationProgress={vitalSigns.calibration?.progress.arrhythmia}
                 />
               </div>
             </div>

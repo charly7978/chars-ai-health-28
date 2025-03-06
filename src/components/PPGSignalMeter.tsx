@@ -147,11 +147,10 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Draw arrhythmia alert or counter
+    // Solo mostrar alertas de arritmia
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
-      // First arrhythmia alert
       if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
@@ -159,7 +158,6 @@ const PPGSignalMeter = ({
         ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
-      // Counter for subsequent arrhythmias
       else if (status.includes("ARRITMIA") && Number(count) > 1) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
