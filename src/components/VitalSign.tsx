@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -6,7 +5,7 @@ interface VitalSignProps {
   value: string | number;
   unit?: string;
   highlighted?: boolean;
-  calibrationProgress?: number; // Add calibration progress prop
+  calibrationProgress?: number;
 }
 
 const VitalSign: React.FC<VitalSignProps> = ({ 
@@ -21,9 +20,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const isPressureDisplay = label === "PRESIÓN ARTERIAL";
   const isGlucoseDisplay = label === "GLUCOSA";
   const isCalibrating = calibrationProgress !== undefined && calibrationProgress < 100;
-  
+
   const getDisplayContent = () => {
-    // Si está calibrando, mostrar estado de calibración
     if (isCalibrating) {
       return {
         text: `CALIBRANDO ${Math.round(calibrationProgress)}%`,
@@ -31,7 +29,6 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
-    // Para arritmias
     if (isArrhythmiaDisplay) {
       if (value === "--") {
         return { 
@@ -62,7 +59,6 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
-    // Para niveles de glucosa
     if (isGlucoseDisplay) {
       const numValue = Number(value);
       
@@ -73,26 +69,24 @@ const VitalSign: React.FC<VitalSignProps> = ({
         };
       }
       
-      // Interpretación según criterios médicos
       if (numValue < 70) {
         return {
           text: String(value),
-          color: "text-orange-500"  // Hipoglucemia - naranja
+          color: "text-orange-500"
         };
       } else if (numValue > 140) {
         return {
           text: String(value),
-          color: "text-red-500"     // Hiperglucemia - rojo
+          color: "text-red-500"
         };
       } else {
         return {
           text: String(value),
-          color: "text-green-500"   // Normal - verde
+          color: "text-green-500"
         };
       }
     }
     
-    // Para el perfil lipídico
     if (isLipidsDisplay) {
       if (value === "--" || value === "0/0" || value === "--/--") {
         return {
@@ -101,17 +95,15 @@ const VitalSign: React.FC<VitalSignProps> = ({
         };
       }
       
-      // Analizar colesterol y triglicéridos
       const [cholesterol, triglycerides] = String(value).split('/').map(Number);
       
-      // Determinar el color basado en el colesterol total
       let color = "text-white";
       if (cholesterol > 200) {
-        color = "text-red-500";     // Alto - rojo
+        color = "text-red-500";
       } else if (cholesterol > 180) {
-        color = "text-yellow-500";  // Límite - amarillo
+        color = "text-yellow-500";
       } else if (cholesterol > 0) {
-        color = "text-green-500";   // Normal - verde
+        color = "text-green-500";
       }
       
       return {
@@ -120,7 +112,6 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
-    // Para todas las demás mediciones
     return {
       text: value,
       color: "text-white"
@@ -130,22 +121,25 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color } = getDisplayContent();
 
   return (
-    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 py-8 transition-all duration-300 ${
+    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 py-6 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
-      {/* Barra de calibración */}
       {isCalibrating && (
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <h3 className={`text-white text-sm text-center pt-1 mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
-      <div className="flex items-baseline gap-1 justify-center min-h-[45px]">
+      <h3 className={`text-white text-base font-medium mb-3 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
+        {label}
+      </h3>
+      
+      <div className="flex items-center justify-center gap-1 min-h-[40px]">
         <span 
-          className={`${isArrhythmiaDisplay ? 'text-sm' : isLipidsDisplay ? 'text-lg' : isPressureDisplay ? 'text-lg' : 'text-2xl'} font-bold truncate ${color} transition-colors duration-300 ${
-            highlighted ? 'drop-shadow-glow' : ''
-          }`}
+          className={`font-bold truncate ${color} transition-colors duration-300 
+            ${isArrhythmiaDisplay ? 'text-base' : 'text-2xl'}
+            ${isLipidsDisplay || isPressureDisplay ? 'text-xl' : ''}
+            ${highlighted ? 'drop-shadow-glow' : ''}`}
           style={{
             textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
           }}
@@ -153,7 +147,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
           {text}
         </span>
         {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
-          <span className={`text-gray-400/90 text-sm ${highlighted ? 'text-cyan-400/90' : ''}`}>{unit}</span>
+          <span className={`text-gray-400/90 text-base font-medium ${highlighted ? 'text-cyan-400/90' : ''}`}>
+            {unit}
+          </span>
         )}
       </div>
     </div>
