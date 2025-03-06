@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -163,32 +162,32 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 transition-all duration-300">
-      <div className="flex flex-col items-center justify-center h-full gap-3">
-        <h3 className="text-white text-[13px] font-medium text-center w-full leading-tight tracking-tight">
+    <div className="relative overflow-hidden bg-black backdrop-blur-md rounded-lg p-4 transition-all duration-300 flex flex-col h-full">
+      <div className="flex flex-col items-center justify-center flex-1 gap-3">
+        <h3 className="text-white text-[13px] font-medium text-center w-full leading-tight tracking-tight whitespace-normal px-1">
           {label}
         </h3>
         
-        <div className="flex flex-col items-center justify-center gap-2 min-h-[50px]">
+        <div className="flex flex-col items-center justify-center gap-2 min-h-[60px]">
           <div className="flex items-center justify-center gap-1.5">
             <span 
               className={`font-bold ${color} transition-colors duration-300 
-                ${isArrhythmiaDisplay ? 'text-[14px] leading-tight' : ''}
-                ${isLipidsDisplay || isPressureDisplay ? 'text-[18px] leading-tight' : ''}
-                ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[20px] leading-tight' : ''}`}
+                ${isArrhythmiaDisplay ? 'text-[15px] leading-tight' : ''}
+                ${isLipidsDisplay || isPressureDisplay ? 'text-[19px] leading-tight' : ''}
+                ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[22px] leading-tight' : ''}`}
             >
               {text}
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gray-400/90 text-[13px] font-medium leading-tight">
+              <span className="text-gray-400/90 text-[14px] font-medium leading-tight">
                 {unit}
               </span>
             )}
           </div>
           
           {status && (
-            <span className={`text-[12px] font-medium leading-tight ${color}`}>
+            <span className={`text-[13px] font-medium leading-tight text-center ${color}`}>
               {status}
             </span>
           )}
