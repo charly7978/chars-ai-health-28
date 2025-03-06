@@ -34,16 +34,16 @@ const PPGSignalMeter = ({
   const lastArrhythmiaTime = useRef<number>(0);
   const arrhythmiaCountRef = useRef<number>(0);
   
-  const WINDOW_WIDTH_MS = 3000; // Reducido para mejor rendimiento
+  const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
   const CANVAS_HEIGHT = 500;
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
-  const SMOOTHING_FACTOR = 1.3; // Ajustado para menor latencia
+  const SMOOTHING_FACTOR = 1.3;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
-  const BUFFER_SIZE = 600; // Reducido para mejor rendimiento
+  const BUFFER_SIZE = 600;
 
   useEffect(() => {
     if (!dataBufferRef.current) {
@@ -202,25 +202,42 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      points.forEach((point, index) => {
-        if (index > 0 && index < points.length - 1) {
-          const x = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
-          const y = canvas.height / 2 - point.value;
-          const prevPoint = points[index - 1];
-          const nextPoint = points[index + 1];
-          
-          if (point.value > prevPoint.value && point.value > nextPoint.value) {
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = point.isArrhythmia ? '#DC2626' : '#0EA5E9';
-            ctx.fill();
-
-            ctx.font = 'bold 12px Inter';
-            ctx.fillStyle = '#000000';
-            ctx.textAlign = 'center';
-            ctx.fillText(Math.abs(point.value / verticalScale).toFixed(2), x, y - 20);
+      const windowSize = 30;
+      const peaks: number[] = [];
+      
+      for (let i = windowSize; i < points.length - windowSize; i += windowSize) {
+        let maxIdx = i;
+        let maxVal = points[i].value;
+        
+        for (let j = i - windowSize/2; j < i + windowSize/2; j++) {
+          if (j >= 0 && j < points.length && points[j].value > maxVal) {
+            maxVal = points[j].value;
+            maxIdx = j;
           }
         }
+        
+        if (maxIdx > 0 && maxIdx < points.length - 1) {
+          if (points[maxIdx].value > points[maxIdx-1].value && 
+              points[maxIdx].value > points[maxIdx+1].value) {
+            peaks.push(maxIdx);
+          }
+        }
+      }
+
+      peaks.forEach(peakIdx => {
+        const point = points[peakIdx];
+        const x = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
+        const y = canvas.height / 2 - point.value;
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = point.isArrhythmia ? '#DC2626' : '#0EA5E9';
+        ctx.fill();
+
+        ctx.font = 'bold 12px Inter';
+        ctx.fillStyle = '#000000';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.abs(point.value / verticalScale).toFixed(2), x, y - 20);
       });
     }
 
