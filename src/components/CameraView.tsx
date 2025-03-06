@@ -18,26 +18,42 @@ const CameraView = ({
 
   // Connect video element to stream when stream changes
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && stream) {
+      console.log("CameraView: Setting stream to video element");
       videoRef.current.srcObject = stream;
       
-      if (stream) {
-        videoRef.current.onloadedmetadata = () => {
-          if (videoRef.current) {
-            videoRef.current.play().catch(err => 
-              console.error("Error playing video:", err)
-            );
-          }
+      videoRef.current.onloadedmetadata = () => {
+        if (videoRef.current) {
+          videoRef.current.play().catch(err => 
+            console.error("Error playing video:", err)
+          );
+        }
+      };
+      
+      // Handle potential stream track ending
+      const tracks = stream.getTracks();
+      tracks.forEach(track => {
+        track.onended = () => {
+          console.warn("CameraView: Track ended unexpectedly");
         };
-      }
+      });
     }
     
     return () => {
       if (videoRef.current) {
-        videoRef.current.srcObject = null;
+        console.log("CameraView: Cleaning up video element");
+        const oldStream = videoRef.current.srcObject as MediaStream;
+        if (oldStream) {
+          try {
+            // Don't stop tracks here, let the parent component manage this
+            videoRef.current.srcObject = null;
+          } catch (err) {
+            console.error("Error cleaning up video:", err);
+          }
+        }
       }
     };
-  }, [stream]);
+  }, [stream]); // Only depend on stream changes
 
   return (
     <video

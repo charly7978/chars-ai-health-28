@@ -1,53 +1,63 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 
 export const useSignalProcessor = () => {
-  const [processor] = useState(() => {
-    console.log("useSignalProcessor: Creating new processor instance");
-    return new PPGSignalProcessor();
-  });
+  // Use a ref to maintain processor instance across renders
+  const processorRef = useRef<PPGSignalProcessor | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastSignal, setLastSignal] = useState<ProcessedSignal | null>(null);
   const [error, setError] = useState<ProcessingError | null>(null);
 
+  // Initialize processor only once
   useEffect(() => {
+    if (!processorRef.current) {
+      console.log("useSignalProcessor: Creating new processor instance");
+      processorRef.current = new PPGSignalProcessor();
+    }
+    
     console.log("useSignalProcessor: Setting up callbacks");
     
-    processor.onSignalReady = (signal: ProcessedSignal) => {
-      console.log("useSignalProcessor: Signal received:", {
-        timestamp: signal.timestamp,
-        quality: signal.quality,
-        fingerDetected: signal.fingerDetected,
-        filteredValue: signal.filteredValue
-      });
-      setLastSignal(signal);
-      setError(null);
-    };
+    if (processorRef.current) {
+      processorRef.current.onSignalReady = (signal: ProcessedSignal) => {
+        console.log("useSignalProcessor: Signal received:", {
+          timestamp: signal.timestamp,
+          quality: signal.quality,
+          fingerDetected: signal.fingerDetected,
+          filteredValue: signal.filteredValue
+        });
+        setLastSignal(signal);
+        setError(null);
+      };
 
-    processor.onError = (error: ProcessingError) => {
-      console.error("useSignalProcessor: Error received:", error);
-      setError(error);
-    };
+      processorRef.current.onError = (error: ProcessingError) => {
+        console.error("useSignalProcessor: Error received:", error);
+        setError(error);
+      };
+    }
 
     console.log("useSignalProcessor: Initializing processor");
-    processor.initialize().catch(error => {
+    processorRef.current?.initialize().catch(error => {
       console.error("useSignalProcessor: Initialization error:", error);
     });
 
     return () => {
       console.log("useSignalProcessor: Cleaning up");
-      processor.stop();
+      if (processorRef.current) {
+        processorRef.current.stop();
+      }
       setIsProcessing(false);
     };
-  }, [processor]);
+  }, []);
 
   const startProcessing = useCallback(() => {
     try {
       console.log("useSignalProcessor: Starting processing");
-      setIsProcessing(true);
-      processor.start();
+      if (processorRef.current) {
+        setIsProcessing(true);
+        processorRef.current.start();
+      }
     } catch (error) {
       console.error("Error starting processing:", error);
       setIsProcessing(false);
@@ -57,13 +67,15 @@ export const useSignalProcessor = () => {
         timestamp: Date.now() 
       });
     }
-  }, [processor]);
+  }, []);
 
   const stopProcessing = useCallback(() => {
     try {
       console.log("useSignalProcessor: Stopping processing");
+      if (processorRef.current) {
+        processorRef.current.stop();
+      }
       setIsProcessing(false);
-      processor.stop();
     } catch (error) {
       console.error("Error stopping processing:", error);
       setError({ 
@@ -72,15 +84,15 @@ export const useSignalProcessor = () => {
         timestamp: Date.now() 
       });
     }
-  }, [processor]);
+  }, []);
 
   const processFrame = useCallback((imageData: ImageData) => {
-    if (!isProcessing) {
+    if (!isProcessing || !processorRef.current) {
       return;
     }
     
     try {
-      processor.processFrame(imageData);
+      processorRef.current.processFrame(imageData);
     } catch (error) {
       console.error("Error processing frame:", error);
       setError({ 
@@ -89,7 +101,7 @@ export const useSignalProcessor = () => {
         timestamp: Date.now() 
       });
     }
-  }, [isProcessing, processor]);
+  }, [isProcessing]);
 
   return {
     isProcessing,
