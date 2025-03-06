@@ -5,7 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import MeasurementButton from "@/components/MeasurementButton";
+import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
 const Index = () => {
@@ -254,8 +254,8 @@ const Index = () => {
           </div>
 
           <div className="absolute bottom-[70px] left-0 right-0">
-            <div className={`bg-black w-full py-8 px-2 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
-              <div className={`grid grid-cols-3 gap-0 ${showResults ? 'opacity-100' : ''}`}>
+            <div className={`bg-gray-900/40 backdrop-blur-sm py-8 px-2 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
+              <div className={`grid grid-cols-3 gap-2 ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
@@ -304,7 +304,7 @@ const Index = () => {
           </div>
 
           <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <MeasurementButton 
+            <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
