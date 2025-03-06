@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -30,7 +29,6 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
-    // Si no hay valor o es 0, mostrar "--"
     if (!value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
