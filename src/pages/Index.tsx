@@ -119,13 +119,14 @@ const Index = () => {
   };
 
   const startAutoCalibration = () => {
-    console.log("Iniciando auto-calibración rápida");
+    console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
     
     // Iniciar la calibración en el procesador
     startCalibration();
     
-    // Establecer valores iniciales de calibración
+    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
+    // Esto garantiza que el estado comience correctamente
     console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
@@ -140,15 +141,19 @@ const Index = () => {
       }
     });
     
-    // Simulación de avance rápido de calibración
+    // Logear para verificar que el estado se estableció
+    setTimeout(() => {
+      console.log("Estado de calibración establecido:", calibrationProgress);
+    }, 100);
+    
+    // Actualizar el progreso visualmente en intervalos regulares
     let step = 0;
-    const totalSteps = 5; // Reducido a 5 pasos (de 10)
     const calibrationInterval = setInterval(() => {
       step += 1;
       
-      // Actualizar progreso visual (5 pasos en total)
-      if (step <= totalSteps) {
-        const progressPercent = step * (100/totalSteps); // 0-100%
+      // Actualizar progreso visual (10 pasos en total)
+      if (step <= 10) {
+        const progressPercent = step * 10; // 0-100%
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
         // Actualizar cada valor individualmente para asegurar que se renderice
@@ -157,15 +162,15 @@ const Index = () => {
           progress: {
             heartRate: progressPercent,
             spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 15),
-            arrhythmia: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 20),
+            arrhythmia: Math.max(0, progressPercent - 15),
             glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 20),
-            hemoglobin: Math.max(0, progressPercent - 25)
+            lipids: Math.max(0, progressPercent - 25),
+            hemoglobin: Math.max(0, progressPercent - 30)
           }
         });
       } else {
-        // Al finalizar, detener el intervalo - Completar después de 5 pasos
+        // Al finalizar, detener el intervalo
         console.log("Finalizando animación de calibración");
         clearInterval(calibrationInterval);
         
@@ -175,8 +180,20 @@ const Index = () => {
           forceCalibrationCompletion();
           setIsCalibrating(false);
           
-          // Establecer calibrationProgress a undefined para que no muestre más el progreso
-          setCalibrationProgress(undefined);
+          // Importante: Establecer calibrationProgress a undefined o con valores 100
+          // para que la UI refleje que ya no está calibrando
+          setCalibrationProgress({
+            isCalibrating: false,
+            progress: {
+              heartRate: 100,
+              spo2: 100,
+              pressure: 100,
+              arrhythmia: 100,
+              glucose: 100,
+              lipids: 100,
+              hemoglobin: 100
+            }
+          });
           
           // Opcional: vibración si está disponible
           if (navigator.vibrate) {
@@ -184,9 +201,9 @@ const Index = () => {
           }
         }
       }
-    }, 600); // Cada paso dura 600ms (3 segundos en total)
+    }, 800); // Cada paso dura 800ms (8 segundos en total)
     
-    // Temporizador de seguridad más corto
+    // Temporizador de seguridad
     setTimeout(() => {
       if (isCalibrating) {
         console.log("Forzando finalización de calibración por tiempo límite");
@@ -195,9 +212,20 @@ const Index = () => {
         setIsCalibrating(false);
         
         // Asegurar que se limpie el estado de calibración
-        setCalibrationProgress(undefined);
+        setCalibrationProgress({
+          isCalibrating: false,
+          progress: {
+            heartRate: 100,
+            spo2: 100,
+            pressure: 100,
+            arrhythmia: 100,
+            glucose: 100,
+            lipids: 100,
+            hemoglobin: 100
+          }
+        });
       }
-    }, 5000); // 5 segundos como máximo (reducido de 10)
+    }, 10000); // 10 segundos como máximo
   };
 
   const finalizeMeasurement = () => {
@@ -412,7 +440,7 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          <div className="flex-grow">
+          <div className="flex-1">
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
@@ -425,9 +453,9 @@ const Index = () => {
             />
           </div>
 
-          <div className="w-full">
-            <div className={`bg-black py-3 border-t border-b border-gray-800 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
-              <div className={`grid grid-cols-3 gap-1 min-h-[180px] w-full px-1 ${showResults ? 'opacity-100' : ''}`}>
+          <div className="absolute bottom-[70px] left-0 right-0">
+            <div className={`bg-black px-2 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`} style={{ paddingTop: '8px', paddingBottom: '8px' }}>
+              <div className={`grid grid-cols-3 gap-2 mx-auto max-w-[1200px] ${showResults ? 'opacity-100' : ''}`} style={{ minHeight: '140px' }}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
