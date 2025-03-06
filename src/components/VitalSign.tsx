@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -44,27 +45,137 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const hr = Number(value);
       if (hr === 0) return { text: "--", color: "text-white" };
       
-      if (hr < 60) return { text: String(value), color: "text-orange-500" };  // Bradicardia
-      if (hr > 100) return { text: String(value), color: "text-red-500" };    // Taquicardia
-      return { text: String(value), color: "text-green-500" };                 // Normal
+      if (hr < 60) return { 
+        text: String(value), 
+        color: "text-orange-500",
+        condition: "BRADICARDIA"
+      };
+      if (hr > 100) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "TAQUICARDIA"
+      };
+      return { 
+        text: String(value), 
+        color: "text-green-500",
+        condition: "NORMAL"
+      };
     }
     
     if (isOxygenDisplay) {
       const spo2 = Number(value);
       if (spo2 === 0) return { text: "--", color: "text-white" };
       
-      if (spo2 < 90) return { text: String(value), color: "text-red-500" };     // Hipoxia severa
-      if (spo2 < 95) return { text: String(value), color: "text-orange-500" };  // Hipoxia moderada
-      return { text: String(value), color: "text-green-500" };                   // Normal
+      if (spo2 < 90) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "HIPOXIA SEVERA"
+      };
+      if (spo2 < 95) return { 
+        text: String(value), 
+        color: "text-orange-500",
+        condition: "HIPOXIA MODERADA"
+      };
+      return { 
+        text: String(value), 
+        color: "text-green-500",
+        condition: "NORMAL"
+      };
     }
     
     if (isHemoglobinDisplay) {
       const hb = Number(value);
       if (hb === 0) return { text: "--", color: "text-white" };
       
-      if (hb < 12) return { text: String(value), color: "text-red-500" };      // Anemia
-      if (hb > 16) return { text: String(value), color: "text-yellow-500" };   // Elevada
-      return { text: String(value), color: "text-green-500" };                 // Normal
+      if (hb < 12) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "ANEMIA"
+      };
+      if (hb > 16) return { 
+        text: String(value), 
+        color: "text-yellow-500",
+        condition: "ELEVADA"
+      };
+      return { 
+        text: String(value), 
+        color: "text-green-500",
+        condition: "NORMAL"
+      };
+    }
+    
+    if (isGlucoseDisplay) {
+      const glucose = Number(value);
+      
+      if (glucose === 0) return { text: "--", color: "text-white" };
+      
+      if (glucose < 70) return { 
+        text: String(value), 
+        color: "text-orange-500",
+        condition: "HIPOGLUCEMIA"
+      };
+      if (glucose > 180) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "HIPERGLUCEMIA SEVERA"
+      };
+      if (glucose > 140) return { 
+        text: String(value), 
+        color: "text-yellow-500",
+        condition: "HIPERGLUCEMIA MODERADA"
+      };
+      return { 
+        text: String(value), 
+        color: "text-green-500",
+        condition: "NORMAL"
+      };
+    }
+    
+    if (isLipidsDisplay) {
+      if (value === "0/0") return { text: "--/--", color: "text-white" };
+      
+      const [cholesterol, triglycerides] = String(value).split('/').map(Number);
+      
+      let color = "text-white";
+      let condition = "";
+      
+      if (cholesterol > 240) {
+        color = "text-red-500";
+        condition = "ALTO RIESGO";
+      } else if (cholesterol > 200) {
+        color = "text-yellow-500";
+        condition = "RIESGO MODERADO";
+      } else if (cholesterol > 0) {
+        color = "text-green-500";
+        condition = "NORMAL";
+      }
+      
+      return { text: String(value), color, condition };
+    }
+    
+    if (isPressureDisplay) {
+      if (value === "--/--") return { text: "--/--", color: "text-white" };
+      
+      const [systolic, diastolic] = String(value).split('/').map(Number);
+      
+      let color = "text-white";
+      let condition = "";
+      
+      if (systolic >= 180 || diastolic >= 120) {
+        color = "text-red-500";
+        condition = "CRISIS HIPERTENSIVA";
+      } else if (systolic >= 140 || diastolic >= 90) {
+        color = "text-orange-500";
+        condition = "HIPERTENSIÓN";
+      } else if (systolic >= 130 || diastolic >= 80) {
+        color = "text-yellow-500";
+        condition = "PREHIPERTENSIÓN";
+      } else if (systolic > 0 && diastolic > 0) {
+        color = "text-green-500";
+        condition = "NORMAL";
+      }
+      
+      return { text: String(value), color, condition };
     }
     
     if (isArrhythmiaDisplay) {
@@ -94,61 +205,13 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
-    if (isGlucoseDisplay) {
-      const glucose = Number(value);
-      
-      if (glucose === 0) return { text: "--", color: "text-white" };
-      
-      if (glucose < 70) return { text: String(value), color: "text-orange-500" };  // Hipoglucemia
-      if (glucose > 180) return { text: String(value), color: "text-red-500" };    // Hiperglucemia severa
-      if (glucose > 140) return { text: String(value), color: "text-yellow-500" }; // Hiperglucemia moderada
-      return { text: String(value), color: "text-green-500" };                     // Normal
-    }
-    
-    if (isLipidsDisplay) {
-      if (value === "0/0") return { text: "--/--", color: "text-white" };
-      
-      const [cholesterol, triglycerides] = String(value).split('/').map(Number);
-      
-      let color = "text-white";
-      // Evaluación del colesterol
-      if (cholesterol > 240) {
-        color = "text-red-500";      // Alto riesgo
-      } else if (cholesterol > 200) {
-        color = "text-yellow-500";   // Riesgo moderado
-      } else if (cholesterol > 0) {
-        color = "text-green-500";    // Normal
-      }
-      
-      return { text: String(value), color };
-    }
-    
-    if (isPressureDisplay) {
-      if (value === "--/--") return { text: "--/--", color: "text-white" };
-      
-      const [systolic, diastolic] = String(value).split('/').map(Number);
-      
-      let color = "text-white";
-      if (systolic >= 180 || diastolic >= 120) {
-        color = "text-red-500";       // Crisis hipertensiva
-      } else if (systolic >= 140 || diastolic >= 90) {
-        color = "text-orange-500";    // Hipertensión
-      } else if (systolic >= 130 || diastolic >= 80) {
-        color = "text-yellow-500";    // Prehipertensión
-      } else if (systolic > 0 && diastolic > 0) {
-        color = "text-green-500";     // Normal
-      }
-      
-      return { text: String(value), color };
-    }
-    
     return {
       text: value,
       color: "text-white"
     };
   };
 
-  const { text, color, isCalibrating: isDisplayCalibrating } = getDisplayContent();
+  const { text, color, condition, isCalibrating: isDisplayCalibrating } = getDisplayContent();
 
   return (
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
@@ -165,7 +228,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           {label}
         </h3>
         
-        <div className="flex items-center justify-center gap-1 min-h-[32px]">
+        <div className="flex flex-col items-center justify-center gap-0.5 min-h-[32px]">
           <span 
             className={`font-bold ${color} transition-colors duration-300 
               ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : ''}
@@ -179,9 +242,16 @@ const VitalSign: React.FC<VitalSignProps> = ({
           >
             {text}
           </span>
+          
           {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
             <span className={`text-gray-400/90 text-[10px] font-medium leading-none ${highlighted ? 'text-cyan-400/90' : ''}`}>
               {unit}
+            </span>
+          )}
+          
+          {condition && !isCalibrating && (
+            <span className={`${color} text-[9px] font-medium leading-none mt-0.5 opacity-80`}>
+              {condition}
             </span>
           )}
         </div>
