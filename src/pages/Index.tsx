@@ -12,6 +12,11 @@ interface VitalSigns {
   spo2: number;
   pressure: string;
   arrhythmiaStatus: string;
+  glucose?: number;
+  lipids?: {
+    totalCholesterol: number;
+    triglycerides: number;
+  }
 }
 
 const Index = () => {
@@ -21,7 +26,12 @@ const Index = () => {
   const [vitalSigns, setVitalSigns] = useState<VitalSigns>({ 
     spo2: 0, 
     pressure: "--/--",
-    arrhythmiaStatus: "--" 
+    arrhythmiaStatus: "--",
+    glucose: 0,
+    lipids: {
+      totalCholesterol: 0,
+      triglycerides: 0
+    }
   });
   const [heartRate, setHeartRate] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
@@ -103,7 +113,12 @@ const Index = () => {
     setVitalSigns({ 
       spo2: 0, 
       pressure: "--/--",
-      arrhythmiaStatus: "--" 
+      arrhythmiaStatus: "--",
+      glucose: 0,
+      lipids: {
+        totalCholesterol: 0,
+        triglycerides: 0
+      }
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
@@ -214,7 +229,7 @@ const Index = () => {
 
           <div className="absolute bottom-[90px] left-0 right-0 px-4">
             <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
@@ -233,6 +248,16 @@ const Index = () => {
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
+                />
+                <VitalSign 
+                  label="GLUCOSA"
+                  value={vitalSigns.glucose || "--"}
+                  unit="mg/dL"
+                />
+                <VitalSign 
+                  label="COLESTEROL/TRIGL."
+                  value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                  unit="mg/dL"
                 />
               </div>
             </div>

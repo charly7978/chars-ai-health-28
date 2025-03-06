@@ -72,6 +72,8 @@ export const useVitalSignsProcessor = () => {
           return {
             spo2: result.spo2,
             pressure: result.pressure,
+            glucose: result.glucose,
+            lipids: result.lipids,
             arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter + 1}`,
             lastArrhythmiaData: {
               timestamp: currentTime,
@@ -88,6 +90,8 @@ export const useVitalSignsProcessor = () => {
       return {
         spo2: result.spo2,
         pressure: result.pressure,
+        glucose: result.glucose,
+        lipids: result.lipids,
         arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter}`,
         lastArrhythmiaData: null
       };
@@ -97,6 +101,8 @@ export const useVitalSignsProcessor = () => {
     return {
       spo2: result.spo2,
       pressure: result.pressure,
+      glucose: result.glucose,
+      lipids: result.lipids,
       arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
     };
   }, [processor, arrhythmiaCounter]);

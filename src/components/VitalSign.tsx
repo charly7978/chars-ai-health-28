@@ -9,53 +9,119 @@ interface VitalSignProps {
 
 const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit }) => {
   const isArrhythmiaDisplay = label === "ARRITMIAS";
+  const isLipidsDisplay = label === "COLESTEROL/TRIGL.";
+  const isGlucoseDisplay = label === "GLUCOSA";
   
-  const getArrhythmiaDisplay = () => {
-    if (!isArrhythmiaDisplay) return { text: value, color: "" };
-    
-    if (value === "--") {
-      return { 
-        text: "--/--", 
-        color: "text-white" 
-      };
-    }
-    
-    const [status, count] = String(value).split('|');
-    console.log('Procesando display de arritmias:', { status, count, value });
-    
-    if (status === "ARRITMIA DETECTADA") {
+  const getDisplayContent = () => {
+    // Para arritmias
+    if (isArrhythmiaDisplay) {
+      if (value === "--") {
+        return { 
+          text: "--/--", 
+          color: "text-white" 
+        };
+      }
+      
+      const [status, count] = String(value).split('|');
+      
+      if (status === "ARRITMIA DETECTADA") {
+        return {
+          text: count ? `ARRITMIA DETECTADA (${count})` : "ARRITMIA DETECTADA",
+          color: "text-red-500"
+        };
+      }
+      
+      if (status === "CALIBRANDO...") {
+        return {
+          text: status,
+          color: "text-yellow-500"
+        };
+      }
+      
       return {
-        text: count ? `ARRITMIA DETECTADA (${count})` : "ARRITMIA DETECTADA",
-        color: "text-red-500"
+        text: "SIN ARRITMIA DETECTADA",
+        color: "text-cyan-500"
       };
     }
     
-    if (status === "CALIBRANDO...") {
+    // Para niveles de glucosa
+    if (isGlucoseDisplay) {
+      const numValue = Number(value);
+      
+      if (value === "--" || numValue === 0) {
+        return {
+          text: "--",
+          color: "text-white"
+        };
+      }
+      
+      // Interpretación según criterios médicos
+      if (numValue < 70) {
+        return {
+          text: String(value),
+          color: "text-orange-500"  // Hipoglucemia - naranja
+        };
+      } else if (numValue > 140) {
+        return {
+          text: String(value),
+          color: "text-red-500"     // Hiperglucemia - rojo
+        };
+      } else {
+        return {
+          text: String(value),
+          color: "text-green-500"   // Normal - verde
+        };
+      }
+    }
+    
+    // Para el perfil lipídico
+    if (isLipidsDisplay) {
+      if (value === "--" || value === "0/0" || value === "--/--") {
+        return {
+          text: "--/--",
+          color: "text-white"
+        };
+      }
+      
+      // Analizar colesterol y triglicéridos
+      const [cholesterol, triglycerides] = String(value).split('/').map(Number);
+      
+      // Determinar el color basado en el colesterol total
+      let color = "text-white";
+      if (cholesterol > 200) {
+        color = "text-red-500";     // Alto - rojo
+      } else if (cholesterol > 180) {
+        color = "text-yellow-500";  // Límite - amarillo
+      } else if (cholesterol > 0) {
+        color = "text-green-500";   // Normal - verde
+      }
+      
       return {
-        text: status,
-        color: "text-yellow-500"
+        text: String(value),
+        color
       };
     }
     
+    // Para todas las demás mediciones
     return {
-      text: "SIN ARRITMIA DETECTADA",
-      color: "text-cyan-500"
+      text: value,
+      color: "text-white"
     };
   };
 
-  const { text, color } = getArrhythmiaDisplay();
+  const { text, color } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden group bg-gradient-to-br from-gray-800/30 to-gray-900/30 backdrop-blur-md rounded-lg p-4 transition-all duration-300 hover:from-gray-800/40 hover:to-gray-900/40">
+    <div className="relative overflow-hidden group bg-gradient-to-br from-gray-800/30 to-gray-900/30 backdrop-blur-md rounded-lg p-3 transition-all duration-300 hover:from-gray-800/40 hover:to-gray-900/40">
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <h3 className="text-gray-400/90 text-xs mb-2">{label}</h3>
+      <h3 className="text-gray-400/90 text-xs mb-1">{label}</h3>
       <div className="flex items-baseline gap-1 justify-center">
         <span 
-          className={`${isArrhythmiaDisplay ? 'text-sm' : 'text-lg'} font-bold ${color || 'text-white'} transition-colors duration-300`}
+          className={`${isArrhythmiaDisplay || isLipidsDisplay ? 'text-xs' : 'text-lg'} font-bold ${color} transition-colors duration-300`}
         >
           {text}
         </span>
-        {!isArrhythmiaDisplay && unit && (
+        {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
           <span className="text-gray-400/90 text-xs">{unit}</span>
         )}
       </div>
