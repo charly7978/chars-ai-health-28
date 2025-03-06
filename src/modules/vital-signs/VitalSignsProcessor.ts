@@ -4,6 +4,12 @@ import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 
+/**
+ * VitalSignsProcessor
+ * 
+ * Procesador integrado de signos vitales que implementa algoritmos avanzados
+ * para el análisis de señales PPG en tiempo real.
+ */
 export class VitalSignsProcessor {
   private spo2Processor: SpO2Processor;
   private bpProcessor: BloodPressureProcessor;
@@ -18,19 +24,25 @@ export class VitalSignsProcessor {
   }
 
   /**
-   * Process an incoming PPG signal and calculate vital signs
+   * Procesa una señal PPG entrante y calcula los signos vitales
    */
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
   ) {
-    // Filter signal
+    // Filtrar señal usando algoritmos avanzados
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     
-    // Process arrhythmia data
+    // Calcular características fisiológicas
+    const physFeatures = this.signalProcessor.calculatePhysiologicalFeatures();
+    
+    // Detectar picos para análisis de ritmo cardíaco
+    const peaks = this.signalProcessor.detectPeaks();
+    
+    // Procesar datos de arritmia con algoritmo mejorado
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     
-    // Calculate vital signs
+    // Calcular signos vitales basados en la señal filtrada
     const ppgValues = this.signalProcessor.getPPGValues();
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
@@ -40,12 +52,14 @@ export class VitalSignsProcessor {
       spo2,
       pressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
-      lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData
+      lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
+      signalQuality: physFeatures.signalQuality,
+      perfusionIndex: physFeatures.perfusionIndex
     };
   }
 
   /**
-   * Reset all processors to their initial state
+   * Reinicia todos los procesadores a su estado inicial
    */
   public reset(): void {
     this.spo2Processor.reset();
