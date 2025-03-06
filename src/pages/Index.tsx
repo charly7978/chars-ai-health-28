@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -43,7 +42,8 @@ const Index = () => {
     reset: resetVitalSigns,
     fullReset: fullResetVitalSigns,
     lastValidResults,
-    startCalibration
+    startCalibration,
+    forceCalibrationCompletion
   } = useVitalSignsProcessor();
 
   const enterFullScreen = async () => {
@@ -87,7 +87,6 @@ const Index = () => {
         arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
-      // Start calibration automatically
       startAutoCalibration();
       
       if (measurementTimerRef.current) {
@@ -110,10 +109,24 @@ const Index = () => {
     console.log("Iniciando auto-calibración de todos los parámetros");
     setIsCalibrating(true);
     startCalibration();
+    
+    setTimeout(() => {
+      if (isCalibrating) {
+        console.log("Forzando finalización de calibración por tiempo de respaldo");
+        forceCalibrationCompletion();
+        setIsCalibrating(false);
+      }
+    }, 8000);
   };
 
   const finalizeMeasurement = () => {
     console.log("Finalizando medición: manteniendo resultados");
+    
+    if (isCalibrating) {
+      console.log("Calibración en progreso al finalizar, forzando finalización");
+      forceCalibrationCompletion();
+    }
+    
     setIsMonitoring(false);
     setIsCameraOn(false);
     setIsCalibrating(false);
@@ -132,6 +145,7 @@ const Index = () => {
     
     setElapsedTime(0);
     setSignalQuality(0);
+    setCalibrationProgress(undefined);
   };
 
   const handleReset = () => {
@@ -163,6 +177,7 @@ const Index = () => {
     setArrhythmiaCount("--");
     setSignalQuality(0);
     setLastArrhythmiaData(null);
+    setCalibrationProgress(undefined);
   };
 
   const handleStreamReady = (stream: MediaStream) => {
@@ -218,7 +233,6 @@ const Index = () => {
       if (vitals) {
         setVitalSigns(vitals);
         
-        // Update calibration status
         if (vitals.calibration) {
           setCalibrationProgress(vitals.calibration);
           setIsCalibrating(vitals.calibration.isCalibrating);

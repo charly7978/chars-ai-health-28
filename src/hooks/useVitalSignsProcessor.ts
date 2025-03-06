@@ -59,6 +59,18 @@ export const useVitalSignsProcessor = () => {
     processor.startCalibration();
   }, [processor]);
   
+  /**
+   * Force calibration to complete immediately
+   */
+  const forceCalibrationCompletion = useCallback(() => {
+    console.log("useVitalSignsProcessor: Forzando finalización de calibración", {
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId.current
+    });
+    
+    processor.forceCalibrationCompletion();
+  }, [processor]);
+  
   // Process the signal with improved algorithms
   const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
@@ -288,6 +300,7 @@ export const useVitalSignsProcessor = () => {
     reset,
     fullReset,
     startCalibration,
+    forceCalibrationCompletion,
     arrhythmiaCounter,
     lastValidResults,
     debugInfo: {
