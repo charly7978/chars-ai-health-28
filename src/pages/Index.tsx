@@ -242,16 +242,17 @@ const Index = () => {
             </div>
           )}
 
-          <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
             <button 
               onClick={handleReset}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 text-lg font-bold shadow-md"
+              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
             >
-              RESET
+              RESETEAR
             </button>
           </div>
         </div>
