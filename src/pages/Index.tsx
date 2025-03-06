@@ -453,9 +453,9 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute inset-x-0 bottom-[70px]">
-            <div className={`bg-black ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
-              <div className={`grid grid-cols-3 gap-2 ${showResults ? 'opacity-100' : ''}`} style={{ minHeight: '140px' }}>
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black">
+            <div className={`h-full ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
+              <div className={`grid grid-cols-3 gap-2 h-full ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
