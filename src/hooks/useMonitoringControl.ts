@@ -59,24 +59,24 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
 
-  // Efecto para procesar las señales y actualizar los signos vitales
+  // Process signals and update vital signs
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
       try {
-        // Procesar latido cardíaco
+        // Process heart beat
         const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
         if (heartBeatResult && heartBeatResult.bpm) {
           setHeartRate(heartBeatResult.bpm);
           
-          // Procesar signos vitales
+          // Process vital signs
           const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
           if (vitals) {
             setVitalSigns(vitals);
-            // Extraer el contador de arritmias si está disponible
+            // Extract arrhythmia counter if available
             const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
             setArrhythmiaCount(arrhythmiaInfo[1] || "--");
             
-            // Guardar datos de arritmia para visualización
+            // Save arrhythmia data for visualization
             if (vitals.lastArrhythmiaData) {
               setLastArrhythmiaData(vitals.lastArrhythmiaData);
             }
@@ -85,7 +85,7 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
         
         setSignalQuality(lastSignal.quality);
       } catch (error) {
-        console.error("Error al procesar señal:", error);
+        console.error("Error processing signal:", error);
       }
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
@@ -96,12 +96,12 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
         await document.documentElement.requestFullscreen();
       }
     } catch (err) {
-      console.log('Error al entrar en pantalla completa:', err);
+      console.log('Error entering fullscreen mode:', err);
     }
   };
 
   const startMonitoring = useCallback(() => {
-    console.log("Iniciando monitoreo");
+    console.log("Starting monitoring");
     if (isMonitoring) {
       handleReset();
     } else {

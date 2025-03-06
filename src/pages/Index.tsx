@@ -22,6 +22,7 @@ const Index = () => {
     lastSignal
   } = useMonitoringControl();
   
+  // Prevent page scrolling
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
     document.body.addEventListener('touchmove', preventScroll, { passive: false });
@@ -33,22 +34,30 @@ const Index = () => {
     };
   }, []);
 
+  // Handle stream ready callback
   const handleStreamReady = useCallback((stream: MediaStream) => {
     if (!isMonitoring) return;
     
     const videoTrack = stream.getVideoTracks()[0];
+    
+    if (!videoTrack) {
+      console.error("No video track found in stream");
+      return;
+    }
+    
     const imageCapture = new ImageCapture(videoTrack);
     
+    // Try to enable torch if available
     if (videoTrack.getCapabilities()?.torch) {
       videoTrack.applyConstraints({
         advanced: [{ torch: true }]
-      }).catch(err => console.error("Error activando linterna:", err));
+      }).catch(err => console.error("Error activating torch:", err));
     }
     
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
     if (!tempCtx) {
-      console.error("No se pudo obtener el contexto 2D");
+      console.error("Could not get 2D context");
       return;
     }
     
@@ -67,7 +76,7 @@ const Index = () => {
           requestAnimationFrame(processImage);
         }
       } catch (error) {
-        console.error("Error capturando frame:", error);
+        console.error("Error capturing frame:", error);
         if (isMonitoring) {
           requestAnimationFrame(processImage);
         }
@@ -98,6 +107,7 @@ const Index = () => {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex-1">
+            {/* Only render PPGSignalMeter when we have a signal or monitoring is active */}
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
