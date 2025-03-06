@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -225,7 +224,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       
       <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-2">
         <h3 className={`text-white text-[13px] font-medium text-center tracking-wide uppercase ${highlighted ? 'text-cyan-400/90' : ''}`}>
-          {label}
+          {label === "COLESTEROL/TRIGL." ? "COLESTEROL/TRIG." : label}
         </h3>
         
         <div className="flex flex-col items-center justify-center gap-1.5">
