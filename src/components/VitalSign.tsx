@@ -114,14 +114,14 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
   const { text, color } = getDisplayContent();
 
   return (
-    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 py-6 transition-all duration-300 ${
+    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 py-8 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <h3 className={`text-white text-xs text-center pt-1 mb-1 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
-      <div className="flex items-baseline gap-1 justify-center min-h-[40px]">
+      <h3 className={`text-white text-sm text-center pt-1 mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
+      <div className="flex items-baseline gap-1 justify-center min-h-[45px]">
         <span 
-          className={`${isArrhythmiaDisplay ? 'text-xs' : isLipidsDisplay ? 'text-sm' : isPressureDisplay ? 'text-sm' : 'text-xl'} font-bold truncate ${color} transition-colors duration-300 ${
+          className={`${isArrhythmiaDisplay ? 'text-sm' : isLipidsDisplay ? 'text-lg' : isPressureDisplay ? 'text-lg' : 'text-2xl'} font-bold truncate ${color} transition-colors duration-300 ${
             highlighted ? 'drop-shadow-glow' : ''
           }`}
           style={{
@@ -131,7 +131,7 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
           {text}
         </span>
         {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-          <span className={`text-gray-400/90 text-xs ${highlighted ? 'text-cyan-400/90' : ''}`}>{unit}</span>
+          <span className={`text-gray-400/90 text-sm ${highlighted ? 'text-cyan-400/90' : ''}`}>{unit}</span>
         )}
       </div>
     </div>
