@@ -45,15 +45,25 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const hr = Number(value);
       if (hr === 0) return { text: "--", color: "text-white" };
       
+      if (hr < 50) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "BRADICARDIA SEVERA"
+      };
       if (hr < 60) return { 
         text: String(value), 
         color: "text-orange-500",
-        condition: "BRADICARDIA"
+        condition: "BRADICARDIA LEVE"
+      };
+      if (hr > 150) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "TAQUICARDIA SEVERA"
       };
       if (hr > 100) return { 
         text: String(value), 
-        color: "text-red-500",
-        condition: "TAQUICARDIA"
+        color: "text-orange-500",
+        condition: "TAQUICARDIA LEVE"
       };
       return { 
         text: String(value), 
@@ -66,15 +76,25 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const spo2 = Number(value);
       if (spo2 === 0) return { text: "--", color: "text-white" };
       
+      if (spo2 < 85) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "HIPOXIA CRÍTICA"
+      };
       if (spo2 < 90) return { 
         text: String(value), 
         color: "text-red-500",
         condition: "HIPOXIA SEVERA"
       };
-      if (spo2 < 95) return { 
+      if (spo2 < 93) return { 
         text: String(value), 
         color: "text-orange-500",
         condition: "HIPOXIA MODERADA"
+      };
+      if (spo2 < 95) return { 
+        text: String(value), 
+        color: "text-yellow-500",
+        condition: "HIPOXIA LEVE"
       };
       return { 
         text: String(value), 
@@ -87,15 +107,25 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const hb = Number(value);
       if (hb === 0) return { text: "--", color: "text-white" };
       
-      if (hb < 12) return { 
+      if (hb < 10) return { 
         text: String(value), 
         color: "text-red-500",
-        condition: "ANEMIA"
+        condition: "ANEMIA SEVERA"
+      };
+      if (hb < 12) return { 
+        text: String(value), 
+        color: "text-orange-500",
+        condition: "ANEMIA MODERADA"
+      };
+      if (hb > 18) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "POLICITEMIA SEVERA"
       };
       if (hb > 16) return { 
         text: String(value), 
-        color: "text-yellow-500",
-        condition: "ELEVADA"
+        color: "text-orange-500",
+        condition: "POLICITEMIA LEVE"
       };
       return { 
         text: String(value), 
@@ -109,20 +139,30 @@ const VitalSign: React.FC<VitalSignProps> = ({
       
       if (glucose === 0) return { text: "--", color: "text-white" };
       
+      if (glucose < 50) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "HIPOGLUCEMIA SEVERA"
+      };
       if (glucose < 70) return { 
         text: String(value), 
         color: "text-orange-500",
-        condition: "HIPOGLUCEMIA"
+        condition: "HIPOGLUCEMIA LEVE"
       };
-      if (glucose > 180) return { 
+      if (glucose > 300) return { 
+        text: String(value), 
+        color: "text-red-500",
+        condition: "HIPERGLUCEMIA CRÍTICA"
+      };
+      if (glucose > 200) return { 
         text: String(value), 
         color: "text-red-500",
         condition: "HIPERGLUCEMIA SEVERA"
       };
       if (glucose > 140) return { 
         text: String(value), 
-        color: "text-yellow-500",
-        condition: "HIPERGLUCEMIA MODERADA"
+        color: "text-orange-500",
+        condition: "HIPERGLUCEMIA LEVE"
       };
       return { 
         text: String(value), 
@@ -139,15 +179,28 @@ const VitalSign: React.FC<VitalSignProps> = ({
       let color = "text-white";
       let condition = "";
       
-      if (cholesterol > 240) {
+      // Evaluación del colesterol
+      if (cholesterol > 300) {
         color = "text-red-500";
-        condition = "ALTO RIESGO";
+        condition = "COLESTEROL CRÍTICO";
+      } else if (cholesterol > 240) {
+        color = "text-red-500";
+        condition = "COLESTEROL ALTO";
       } else if (cholesterol > 200) {
-        color = "text-yellow-500";
-        condition = "RIESGO MODERADO";
+        color = "text-orange-500";
+        condition = "COLESTEROL LÍMITE";
       } else if (cholesterol > 0) {
         color = "text-green-500";
-        condition = "NORMAL";
+        condition = "COLESTEROL NORMAL";
+      }
+      
+      // Si los triglicéridos están muy altos, priorizamos mostrar esa condición
+      if (triglycerides > 500) {
+        color = "text-red-500";
+        condition = "TRIGLICÉRIDOS CRÍTICOS";
+      } else if (triglycerides > 200 && (cholesterol <= 240)) {
+        color = "text-orange-500";
+        condition = "TRIGLICÉRIDOS ALTOS";
       }
       
       return { text: String(value), color, condition };
@@ -164,12 +217,18 @@ const VitalSign: React.FC<VitalSignProps> = ({
       if (systolic >= 180 || diastolic >= 120) {
         color = "text-red-500";
         condition = "CRISIS HIPERTENSIVA";
+      } else if (systolic >= 160 || diastolic >= 100) {
+        color = "text-red-500";
+        condition = "HIPERTENSIÓN SEVERA";
       } else if (systolic >= 140 || diastolic >= 90) {
         color = "text-orange-500";
-        condition = "HIPERTENSIÓN";
+        condition = "HIPERTENSIÓN LEVE";
       } else if (systolic >= 130 || diastolic >= 80) {
         color = "text-yellow-500";
         condition = "PREHIPERTENSIÓN";
+      } else if (systolic < 90 || diastolic < 60) {
+        color = "text-red-500";
+        condition = "HIPOTENSIÓN";
       } else if (systolic > 0 && diastolic > 0) {
         color = "text-green-500";
         condition = "NORMAL";
@@ -179,7 +238,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     }
     
     if (isArrhythmiaDisplay) {
-      if (value === "--") return { text: "--/--", color: "text-white" };
+      if (value === "--") return { text: "--", color: "text-white" };
       
       const [status, count] = String(value).split('|');
       
