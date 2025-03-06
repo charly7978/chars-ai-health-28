@@ -25,7 +25,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (isCalibrating) {
       return {
         text: `CALIBRANDO ${Math.round(calibrationProgress)}%`,
-        color: "text-yellow-500"
+        color: "text-yellow-500",
+        isCalibrating: true
       };
     }
     
@@ -125,7 +126,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     };
   };
 
-  const { text, color } = getDisplayContent();
+  const { text, color, isCalibrating: isDisplayCalibrating } = getDisplayContent();
 
   return (
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
@@ -145,8 +146,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="flex items-center justify-center gap-1 min-h-[32px]">
           <span 
             className={`font-bold ${color} transition-colors duration-300 
-              ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : 'text-sm leading-none'}
+              ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : ''}
+              ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-[11px]' : ''}
               ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
+              ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-sm leading-none' : ''}
               ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
               textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
