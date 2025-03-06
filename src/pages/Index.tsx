@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -62,7 +61,6 @@ const Index = () => {
     };
   }, []);
 
-  // Effect para mantener los últimos resultados válidos
   useEffect(() => {
     if (lastValidResults && !isMonitoring) {
       setVitalSigns(lastValidResults);
@@ -104,7 +102,7 @@ const Index = () => {
   const finalizeMeasurement = () => {
     console.log("Finalizando medición: manteniendo resultados");
     setIsMonitoring(false);
-    setIsCameraOn(false); // Turn off camera
+    setIsCameraOn(false);
     stopProcessing();
     
     if (measurementTimerRef.current) {
@@ -112,7 +110,6 @@ const Index = () => {
       measurementTimerRef.current = null;
     }
     
-    // Realizar un soft reset que preserva los resultados
     const savedResults = resetVitalSigns();
     if (savedResults) {
       setVitalSigns(savedResults);
@@ -135,7 +132,6 @@ const Index = () => {
       measurementTimerRef.current = null;
     }
     
-    // Realizar un reset completo borrando resultados
     fullResetVitalSigns();
     setElapsedTime(0);
     setHeartRate(0);
@@ -257,7 +253,7 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute bottom-[90px] left-0 right-0 px-4">
+          <div className="absolute bottom-[80px] left-0 right-0 px-4">
             <div className={`bg-gray-900/30 backdrop-blur-sm rounded-xl p-4 ${showResults ? 'border-2 border-cyan-500/30' : ''}`}>
               <div className={`grid grid-cols-3 gap-4 ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
@@ -306,7 +302,7 @@ const Index = () => {
           </div>
 
           {isMonitoring && (
-            <div className="absolute bottom-16 left-0 right-0 text-center">
+            <div className="absolute bottom-8 left-0 right-0 text-center">
               <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
             </div>
           )}
@@ -318,7 +314,7 @@ const Index = () => {
             />
             <button 
               onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 text-lg font-bold shadow-md"
+              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
               style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
             >
               RESETEAR
