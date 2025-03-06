@@ -1,49 +1,29 @@
 
-import React, { useState, useRef, useEffect } from "react";
-import VitalSign from "@/components/VitalSign";
+import React, { useEffect, useCallback } from "react";
+import VitalSignsPanel from "@/components/VitalSignsPanel";
 import CameraView from "@/components/CameraView";
-import { useSignalProcessor } from "@/hooks/useSignalProcessor";
-import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
-import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import MonitorButton from "@/components/MonitorButton";
-
-interface VitalSigns {
-  spo2: number;
-  pressure: string;
-  arrhythmiaStatus: string;
-}
+import TimerDisplay from "@/components/TimerDisplay";
+import ControlButtons from "@/components/ControlButtons";
+import { useMonitoringControl } from "@/hooks/useMonitoringControl";
+import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 
 const Index = () => {
-  const [isMonitoring, setIsMonitoring] = useState(false);
-  const [isCameraOn, setIsCameraOn] = useState(false);
-  const [signalQuality, setSignalQuality] = useState(0);
-  const [vitalSigns, setVitalSigns] = useState<VitalSigns>({ 
-    spo2: 0, 
-    pressure: "--/--",
-    arrhythmiaStatus: "--" 
-  });
-  const [heartRate, setHeartRate] = useState(0);
-  const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const measurementTimerRef = useRef<number | null>(null);
-  const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
-    timestamp: number;
-    rmssd: number;
-    rrVariation: number;
-  } | null>(null);
+  const {
+    isMonitoring,
+    isCameraOn,
+    elapsedTime,
+    vitalSigns,
+    heartRate,
+    signalQuality,
+    lastArrhythmiaData,
+    startMonitoring,
+    handleReset,
+    processFrame,
+    lastSignal
+  } = useMonitoringControl();
   
-  const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
-  const { processSignal: processHeartBeat } = useHeartBeatProcessor();
-  const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
-
-  const enterFullScreen = async () => {
-    try {
-      await document.documentElement.requestFullscreen();
-    } catch (err) {
-      console.log('Error al entrar en pantalla completa:', err);
-    }
-  };
+  const { processSignal: processVitalSigns } = useVitalSignsProcessor();
 
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
@@ -56,61 +36,7 @@ const Index = () => {
     };
   }, []);
 
-  const startMonitoring = () => {
-    if (isMonitoring) {
-      handleReset();
-    } else {
-      enterFullScreen();
-      setIsMonitoring(true);
-      setIsCameraOn(true);
-      startProcessing();
-      setElapsedTime(0);
-      setVitalSigns(prev => ({
-        ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0"
-      }));
-      
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-      }
-      
-      measurementTimerRef.current = window.setInterval(() => {
-        setElapsedTime(prev => {
-          if (prev >= 30) {
-            handleReset();
-            return 30;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-  };
-
-  const handleReset = () => {
-    console.log("Handling reset: turning off camera and stopping processing");
-    setIsMonitoring(false);
-    setIsCameraOn(false); // This is crucial to turn off the camera
-    stopProcessing();
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-      measurementTimerRef.current = null;
-    }
-    
-    resetVitalSigns();
-    setElapsedTime(0);
-    setHeartRate(0);
-    setVitalSigns({ 
-      spo2: 0, 
-      pressure: "--/--",
-      arrhythmiaStatus: "--" 
-    });
-    setArrhythmiaCount("--");
-    setSignalQuality(0);
-    setLastArrhythmiaData(null);
-  };
-
-  const handleStreamReady = (stream: MediaStream) => {
+  const handleStreamReady = useCallback((stream: MediaStream) => {
     if (!isMonitoring) return;
     
     const videoTrack = stream.getVideoTracks()[0];
@@ -152,33 +78,13 @@ const Index = () => {
     };
 
     processImage();
-  };
+  }, [isMonitoring, processFrame]);
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
-      
-      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-      if (vitals) {
-        setVitalSigns(vitals);
-        
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
-          
-          setVitalSigns(current => ({
-            ...current,
-            arrhythmiaStatus: vitals.arrhythmiaStatus
-          }));
-        }
-      }
-      
-      setSignalQuality(lastSignal.quality);
+      // This is handled internally by useMonitoringControl now
     }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
+  }, [lastSignal, isMonitoring]);
 
   return (
     <div 
@@ -212,51 +118,21 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute bottom-[90px] left-0 right-0 px-4">
-            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <VitalSign 
-                  label="FRECUENCIA CARDÍACA"
-                  value={heartRate || "--"}
-                  unit="BPM"
-                />
-                <VitalSign 
-                  label="SPO2"
-                  value={vitalSigns.spo2 || "--"}
-                  unit="%"
-                />
-                <VitalSign 
-                  label="PRESIÓN ARTERIAL"
-                  value={vitalSigns.pressure}
-                  unit="mmHg"
-                />
-                <VitalSign 
-                  label="ARRITMIAS"
-                  value={vitalSigns.arrhythmiaStatus}
-                />
-              </div>
-            </div>
-          </div>
+          <VitalSignsPanel
+            heartRate={heartRate}
+            vitalSigns={vitalSigns}
+          />
 
-          {isMonitoring && (
-            <div className="absolute bottom-16 left-0 right-0 text-center">
-              <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
-            </div>
-          )}
+          <TimerDisplay 
+            elapsedTime={elapsedTime} 
+            isMonitoring={isMonitoring} 
+          />
 
-          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <MonitorButton 
-              isMonitoring={isMonitoring}
-              onClick={startMonitoring}
-            />
-            <button 
-              onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 text-lg font-bold shadow-md"
-              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
-            >
-              RESETEAR
-            </button>
-          </div>
+          <ControlButtons 
+            isMonitoring={isMonitoring} 
+            onMonitor={startMonitoring} 
+            onReset={handleReset} 
+          />
         </div>
       </div>
     </div>
