@@ -14,6 +14,7 @@ interface PPGSignalMeterProps {
     rmssd: number;
     rrVariation: number;
   } | null;
+  preserveResults?: boolean;
 }
 
 const PPGSignalMeter = ({ 
@@ -23,7 +24,8 @@ const PPGSignalMeter = ({
   onStartMeasurement,
   onReset,
   arrhythmiaStatus,
-  rawArrhythmiaData
+  rawArrhythmiaData,
+  preserveResults = false
 }: PPGSignalMeterProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataBufferRef = useRef<CircularBuffer | null>(null);
@@ -34,7 +36,7 @@ const PPGSignalMeter = ({
   const lastArrhythmiaTime = useRef<number>(0);
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
-  
+
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
   const CANVAS_HEIGHT = 500;
@@ -52,12 +54,21 @@ const PPGSignalMeter = ({
   
   const IMMEDIATE_RENDERING = true;
   const MAX_PEAKS_TO_DISPLAY = 25;
-  
+
   useEffect(() => {
     if (!dataBufferRef.current) {
       dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
     }
-  }, []);
+    
+    if (preserveResults && !isFingerDetected) {
+      if (dataBufferRef.current) {
+        dataBufferRef.current.clear();
+      }
+      peaksRef.current = [];
+      baselineRef.current = null;
+      lastValueRef.current = null;
+    }
+  }, [preserveResults, isFingerDetected]);
 
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
@@ -222,6 +233,22 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
+    drawGrid(ctx);
+    
+    if (preserveResults && !isFingerDetected) {
+      ctx.font = 'bold 18px Inter';
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.7)';
+      ctx.textAlign = 'center';
+      ctx.fillText('RESULTADOS DE LA ÚLTIMA MEDICIÓN', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+      ctx.font = '14px Inter';
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+      ctx.fillText('Coloque su dedo para iniciar una nueva medición', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      
+      lastRenderTimeRef.current = currentTime;
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
+    
     if (baselineRef.current === null) {
       baselineRef.current = value;
     } else {
@@ -252,8 +279,6 @@ const PPGSignalMeter = ({
     const points = dataBufferRef.current.getPoints();
     
     detectPeaks(points, now);
-
-    drawGrid(ctx);
 
     if (points.length > 1) {
       ctx.beginPath();
@@ -327,7 +352,7 @@ const PPGSignalMeter = ({
 
     lastRenderTimeRef.current = currentTime;
     animationFrameRef.current = requestAnimationFrame(renderSignal);
-  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus, drawGrid, detectPeaks, smoothValue]);
+  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus, drawGrid, detectPeaks, smoothValue, preserveResults]);
 
   useEffect(() => {
     renderSignal();

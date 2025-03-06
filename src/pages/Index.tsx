@@ -7,23 +7,13 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
-
-interface VitalSigns {
-  spo2: number;
-  pressure: string;
-  arrhythmiaStatus: string;
-  glucose?: number;
-  lipids?: {
-    totalCholesterol: number;
-    triglycerides: number;
-  }
-}
+import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [signalQuality, setSignalQuality] = useState(0);
-  const [vitalSigns, setVitalSigns] = useState<VitalSigns>({ 
+  const [vitalSigns, setVitalSigns] = useState<VitalSignsResult>({ 
     spo2: 0, 
     pressure: "--/--",
     arrhythmiaStatus: "--",
@@ -36,6 +26,7 @@ const Index = () => {
   const [heartRate, setHeartRate] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [showResults, setShowResults] = useState(false);
   const measurementTimerRef = useRef<number | null>(null);
   const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
     timestamp: number;
@@ -45,7 +36,12 @@ const Index = () => {
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
-  const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
+  const { 
+    processSignal: processVitalSigns, 
+    reset: resetVitalSigns,
+    fullReset: fullResetVitalSigns,
+    lastValidResults 
+  } = useVitalSignsProcessor();
 
   const enterFullScreen = async () => {
     try {
@@ -66,13 +62,22 @@ const Index = () => {
     };
   }, []);
 
+  // Effect para mantener los últimos resultados válidos
+  useEffect(() => {
+    if (lastValidResults && !isMonitoring) {
+      setVitalSigns(lastValidResults);
+      setShowResults(true);
+    }
+  }, [lastValidResults, isMonitoring]);
+
   const startMonitoring = () => {
     if (isMonitoring) {
-      handleReset();
+      finalizeMeasurement();
     } else {
       enterFullScreen();
       setIsMonitoring(true);
       setIsCameraOn(true);
+      setShowResults(false);
       startProcessing();
       setElapsedTime(0);
       setVitalSigns(prev => ({
@@ -87,7 +92,7 @@ const Index = () => {
       measurementTimerRef.current = window.setInterval(() => {
         setElapsedTime(prev => {
           if (prev >= 30) {
-            handleReset();
+            finalizeMeasurement();
             return 30;
           }
           return prev + 1;
@@ -96,10 +101,10 @@ const Index = () => {
     }
   };
 
-  const handleReset = () => {
-    console.log("Handling reset: turning off camera and stopping processing");
+  const finalizeMeasurement = () => {
+    console.log("Finalizando medición: manteniendo resultados");
     setIsMonitoring(false);
-    setIsCameraOn(false); // This is crucial to turn off the camera
+    setIsCameraOn(false); // Turn off camera
     stopProcessing();
     
     if (measurementTimerRef.current) {
@@ -107,7 +112,31 @@ const Index = () => {
       measurementTimerRef.current = null;
     }
     
-    resetVitalSigns();
+    // Realizar un soft reset que preserva los resultados
+    const savedResults = resetVitalSigns();
+    if (savedResults) {
+      setVitalSigns(savedResults);
+      setShowResults(true);
+    }
+    
+    setElapsedTime(0);
+    setSignalQuality(0);
+  };
+
+  const handleReset = () => {
+    console.log("Reseteando completamente la aplicación");
+    setIsMonitoring(false);
+    setIsCameraOn(false);
+    setShowResults(false);
+    stopProcessing();
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
+    
+    // Realizar un reset completo borrando resultados
+    fullResetVitalSigns();
     setElapsedTime(0);
     setHeartRate(0);
     setVitalSigns({ 
@@ -224,42 +253,55 @@ const Index = () => {
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
               rawArrhythmiaData={lastArrhythmiaData}
+              preserveResults={showResults}
             />
           </div>
 
           <div className="absolute bottom-[90px] left-0 right-0 px-4">
-            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
-              <div className="grid grid-cols-3 gap-4">
+            <div className={`bg-gray-900/30 backdrop-blur-sm rounded-xl p-4 ${showResults ? 'border-2 border-cyan-500/30' : ''}`}>
+              <div className={`grid grid-cols-3 gap-4 ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
+                  highlighted={showResults}
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
+                  highlighted={showResults}
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
+                  highlighted={showResults}
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
+                  highlighted={showResults}
                 />
                 <VitalSign 
                   label="GLUCOSA"
                   value={vitalSigns.glucose || "--"}
                   unit="mg/dL"
+                  highlighted={showResults}
                 />
                 <VitalSign 
                   label="COLESTEROL/TRIGL."
                   value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                   unit="mg/dL"
+                  highlighted={showResults}
                 />
               </div>
+              
+              {showResults && (
+                <div className="mt-2 text-center">
+                  <span className="text-xs text-cyan-400">RESULTADOS DE LA ÚLTIMA MEDICIÓN</span>
+                </div>
+              )}
             </div>
           </div>
 

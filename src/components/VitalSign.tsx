@@ -5,9 +5,10 @@ interface VitalSignProps {
   label: string;
   value: string | number;
   unit?: string;
+  highlighted?: boolean;
 }
 
-const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit }) => {
+const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted = false }) => {
   const isArrhythmiaDisplay = label === "ARRITMIAS";
   const isLipidsDisplay = label === "COLESTEROL/TRIGL.";
   const isGlucoseDisplay = label === "GLUCOSA";
@@ -112,17 +113,24 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit }) => {
   const { text, color } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden group bg-gradient-to-br from-gray-800/30 to-gray-900/30 backdrop-blur-md rounded-lg p-3 transition-all duration-300 hover:from-gray-800/40 hover:to-gray-900/40">
+    <div className={`relative overflow-hidden group bg-gradient-to-br from-gray-800/30 to-gray-900/30 backdrop-blur-md rounded-lg p-3 transition-all duration-300 hover:from-gray-800/40 hover:to-gray-900/40 ${
+      highlighted ? 'ring-1 ring-cyan-500/50 from-gray-800/40 to-gray-900/50' : ''
+    }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <h3 className="text-gray-400/90 text-xs mb-1">{label}</h3>
+      <h3 className={`text-gray-400/90 text-xs mb-1 ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
       <div className="flex items-baseline gap-1 justify-center">
         <span 
-          className={`${isArrhythmiaDisplay || isLipidsDisplay ? 'text-xs' : 'text-lg'} font-bold ${color} transition-colors duration-300`}
+          className={`${isArrhythmiaDisplay || isLipidsDisplay ? 'text-xs' : 'text-lg'} font-bold ${color} transition-colors duration-300 ${
+            highlighted ? 'drop-shadow-glow' : ''
+          }`}
+          style={{
+            textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
+          }}
         >
           {text}
         </span>
         {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-          <span className="text-gray-400/90 text-xs">{unit}</span>
+          <span className={`text-gray-400/90 text-xs ${highlighted ? 'text-cyan-400/90' : ''}`}>{unit}</span>
         )}
       </div>
     </div>

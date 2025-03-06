@@ -1,6 +1,6 @@
 
 import { useState, useCallback, useRef } from 'react';
-import { VitalSignsProcessor } from '../modules/vital-signs/VitalSignsProcessor';
+import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
 /**
  * Custom hook for processing vital signs with advanced algorithms
@@ -10,6 +10,7 @@ export const useVitalSignsProcessor = () => {
   // State and refs
   const [processor] = useState(() => new VitalSignsProcessor());
   const [arrhythmiaCounter, setArrhythmiaCounter] = useState(0);
+  const [lastValidResults, setLastValidResults] = useState<VitalSignsResult | null>(null);
   const lastArrhythmiaTime = useRef<number>(0);
   const hasDetectedArrhythmia = useRef<boolean>(false);
   
@@ -23,6 +24,11 @@ export const useVitalSignsProcessor = () => {
     // Process signal through the vital signs processor
     const result = processor.processSignal(value, rrData);
     const currentTime = Date.now();
+    
+    // Si tenemos un resultado válido, guárdalo
+    if (result.spo2 > 0 && result.glucose > 0 && result.lipids.totalCholesterol > 0) {
+      setLastValidResults(result);
+    }
     
     // Enhanced RR interval analysis (more robust than previous)
     if (rrData?.intervals && rrData.intervals.length >= 3) {
@@ -70,10 +76,7 @@ export const useVitalSignsProcessor = () => {
           });
 
           return {
-            spo2: result.spo2,
-            pressure: result.pressure,
-            glucose: result.glucose,
-            lipids: result.lipids,
+            ...result,
             arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter + 1}`,
             lastArrhythmiaData: {
               timestamp: currentTime,
@@ -88,10 +91,7 @@ export const useVitalSignsProcessor = () => {
     // If we previously detected an arrhythmia, maintain that state
     if (hasDetectedArrhythmia.current) {
       return {
-        spo2: result.spo2,
-        pressure: result.pressure,
-        glucose: result.glucose,
-        lipids: result.lipids,
+        ...result,
         arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter}`,
         lastArrhythmiaData: null
       };
@@ -99,26 +99,39 @@ export const useVitalSignsProcessor = () => {
     
     // No arrhythmias detected
     return {
-      spo2: result.spo2,
-      pressure: result.pressure,
-      glucose: result.glucose,
-      lipids: result.lipids,
+      ...result,
       arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
     };
   }, [processor, arrhythmiaCounter]);
 
-  // Reset all states and processors
+  // Soft reset: mantener los resultados pero reiniciar los procesadores
   const reset = useCallback(() => {
-    processor.reset();
+    const savedResults = processor.reset();
+    if (savedResults) {
+      setLastValidResults(savedResults);
+    }
     setArrhythmiaCounter(0);
     lastArrhythmiaTime.current = 0;
     hasDetectedArrhythmia.current = false;
-    console.log("Reseteo de detección de arritmias");
+    console.log("Reseteo suave - manteniendo resultados");
+    return savedResults;
+  }, [processor]);
+  
+  // Hard reset: borrar todos los resultados y reiniciar
+  const fullReset = useCallback(() => {
+    processor.fullReset();
+    setLastValidResults(null);
+    setArrhythmiaCounter(0);
+    lastArrhythmiaTime.current = 0;
+    hasDetectedArrhythmia.current = false;
+    console.log("Reseteo completo - borrando todos los resultados");
   }, [processor]);
 
   return {
     processSignal,
     reset,
-    arrhythmiaCounter
+    fullReset,
+    arrhythmiaCounter,
+    lastValidResults
   };
 };
