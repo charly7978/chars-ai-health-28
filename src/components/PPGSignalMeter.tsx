@@ -72,7 +72,7 @@ const PPGSignalMeter = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus]);
+  }, []);
 
   // Handle reset button click
   const handleReset = () => {

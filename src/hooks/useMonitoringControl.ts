@@ -62,37 +62,46 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   // Efecto para procesar las señales y actualizar los signos vitales
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // Procesar latido cardíaco
-      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
-      
-      // Procesar signos vitales
-      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-      if (vitals) {
-        setVitalSigns(vitals);
-        // Extraer el contador de arritmias si está disponible
-        const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
-        setArrhythmiaCount(arrhythmiaInfo[1] || "--");
-        
-        // Guardar datos de arritmia para visualización
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+      try {
+        // Procesar latido cardíaco
+        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+        if (heartBeatResult && heartBeatResult.bpm) {
+          setHeartRate(heartBeatResult.bpm);
+          
+          // Procesar signos vitales
+          const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+          if (vitals) {
+            setVitalSigns(vitals);
+            // Extraer el contador de arritmias si está disponible
+            const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
+            setArrhythmiaCount(arrhythmiaInfo[1] || "--");
+            
+            // Guardar datos de arritmia para visualización
+            if (vitals.lastArrhythmiaData) {
+              setLastArrhythmiaData(vitals.lastArrhythmiaData);
+            }
+          }
         }
+        
+        setSignalQuality(lastSignal.quality);
+      } catch (error) {
+        console.error("Error al procesar señal:", error);
       }
-      
-      setSignalQuality(lastSignal.quality);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   const enterFullScreen = async () => {
     try {
-      await document.documentElement.requestFullscreen();
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
     } catch (err) {
       console.log('Error al entrar en pantalla completa:', err);
     }
   };
 
   const startMonitoring = useCallback(() => {
+    console.log("Iniciando monitoreo");
     if (isMonitoring) {
       handleReset();
     } else {
