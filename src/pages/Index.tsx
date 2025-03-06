@@ -248,7 +248,7 @@ const Index = () => {
     <div 
       className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
-        height: '100vh',
+        height: 'calc(100vh + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)'
       }}
@@ -300,12 +300,6 @@ const Index = () => {
                   unit="mmHg"
                   highlighted={showResults}
                   calibrationProgress={calibrationProgress?.progress.pressure}
-                />
-                <VitalSign 
-                  label="ARRITMIAS"
-                  value={vitalSigns.arrhythmiaStatus}
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.arrhythmia}
                 />
                 <VitalSign 
                   label="GLUCOSA"

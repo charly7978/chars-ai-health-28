@@ -145,7 +145,20 @@ const PPGSignalMeter = ({
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
-  }, []);
+
+    // Draw arrhythmia counter
+    if (arrhythmiaStatus) {
+      const [status, count] = arrhythmiaStatus.split('|');
+      if (status && count) {
+        ctx.fillStyle = status.includes("ARRITMIA") ? '#ef4444' : '#22c55e';
+        ctx.font = '600 12px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Arritmias: ${count}`, 35, 25);
+      }
+    }
+    
+    ctx.stroke();
+  }, [arrhythmiaStatus]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
