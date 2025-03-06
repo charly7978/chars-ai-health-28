@@ -147,30 +147,19 @@ const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Únicamente mostrar alertas de arritmia
+    // Solo mostrar contador de arritmias
     if (arrhythmiaStatus) {
-      const [status, count] = arrhythmiaStatus.split('|');
       const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
-      
-      if (status.includes("ARRITMIA")) {
-        if (redPeaksCount === 1 && !showArrhythmiaAlert) {
-          ctx.fillStyle = '#ef4444';
-          ctx.font = 'bold 16px Inter';
-          ctx.textAlign = 'left';
-          ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
-          setShowArrhythmiaAlert(true);
-        } 
-        else if (redPeaksCount > 1) {
-          ctx.fillStyle = '#ef4444';
-          ctx.font = 'bold 16px Inter';
-          ctx.textAlign = 'left';
-          ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
-        }
+      if (redPeaksCount > 0) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
       }
     }
     
     ctx.stroke();
-  }, [arrhythmiaStatus, showArrhythmiaAlert]);
+  }, [arrhythmiaStatus]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
