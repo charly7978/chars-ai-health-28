@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 
 interface VitalSignProps {
@@ -23,7 +22,6 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const isHemoglobinDisplay = label === "HEMOGLOBINA";
   const isCalibrating = calibrationProgress !== undefined && calibrationProgress < 100;
 
-  // Loguear cuando cambia el progreso de calibración para depuración
   useEffect(() => {
     if (isCalibrating) {
       console.log(`Progreso de calibración para ${label}: ${calibrationProgress}%`);
@@ -34,8 +32,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (isCalibrating) {
       if (isArrhythmiaDisplay) {
         return {
-          text: `Calibrando ${Math.round(calibrationProgress)}%`,
-          color: "text-yellow-500",
+          text: `Calibración ${Math.round(calibrationProgress)}%`,
+          color: "text-gray-400",
           isCalibrating: true
         };
       }
@@ -44,7 +42,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
         text: value && value !== 0 ? value : "--",
         secondaryText: `${Math.round(calibrationProgress)}%`,
         color: "text-white",
-        secondaryColor: "text-yellow-500",
+        secondaryColor: "text-gray-400",
         isCalibrating: true
       };
     }
@@ -179,25 +177,18 @@ const VitalSign: React.FC<VitalSignProps> = ({
   return (
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
-    } ${isCalibrating ? 'ring-1 ring-yellow-500/30 shadow-[0_0_15px_-3px_rgba(234,179,8,0.3)]' : ''}`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
+    }`}>
       {isCalibrating && calibrationProgress !== undefined && (
-        <>
-          <div 
-            className="absolute bottom-0 left-0 h-1.5 bg-gradient-to-r from-yellow-500/40 via-yellow-500 to-yellow-500/40 transition-all duration-300" 
-            style={{ width: `${calibrationProgress}%` }}
-          >
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[progress_2s_ease-in-out_infinite]" />
-          </div>
-          <div className="absolute top-0 right-0 h-1 w-1 rounded-full bg-yellow-500/80 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite] shadow-[0_0_8px_rgba(234,179,8,0.5)]"></div>
-        </>
+        <div 
+          className="absolute bottom-0 left-0 h-1 bg-gray-700 transition-all duration-300" 
+          style={{ width: `${calibrationProgress}%` }}
+        />
       )}
       
       <div className="flex flex-col items-center justify-center h-full">
         <h3 className={`text-white text-[11px] font-medium mb-1 text-center w-full ${
           highlighted ? 'text-cyan-400/90' : ''
-        } ${isCalibrating ? 'animate-pulse' : ''}`}>
+        }`}>
           {label}
         </h3>
         
@@ -208,8 +199,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
               ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-[11px]' : ''}
               ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
               ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-sm leading-none' : ''}
-              ${highlighted ? 'drop-shadow-glow' : ''}
-              ${isCalibrating ? 'animate-pulse' : ''}`}
+              ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
               textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
             }}
@@ -218,9 +208,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           </span>
           
           {secondaryText && (
-            <span className={`${secondaryColor || 'text-yellow-500'} text-[9px] font-medium leading-none ml-0.5 ${
-              isCalibrating ? 'animate-pulse' : ''
-            }`}>
+            <span className={`${secondaryColor || 'text-gray-400'} text-[9px] font-medium leading-none ml-0.5`}>
               {secondaryText}
             </span>
           )}
