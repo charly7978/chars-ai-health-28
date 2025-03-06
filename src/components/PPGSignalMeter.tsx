@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -36,6 +36,7 @@ const PPGSignalMeter = ({
   const lastArrhythmiaTime = useRef<number>(0);
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
+  const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -146,19 +147,30 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Draw arrhythmia counter
+    // Draw arrhythmia alert or counter
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
-      if (status && count) {
-        ctx.fillStyle = status.includes("ARRITMIA") ? '#ef4444' : '#22c55e';
-        ctx.font = 'bold 14px Inter';
+      
+      // First arrhythmia alert
+      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText(`Arritmias: ${count}`, 45, 35);
+        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
+        setShowArrhythmiaAlert(true);
+      } 
+      // Counter for subsequent arrhythmias
+      else if (status.includes("ARRITMIA") && Number(count) > 1) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
+        ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
       }
     }
     
     ctx.stroke();
-  }, [arrhythmiaStatus]);
+  }, [arrhythmiaStatus, showArrhythmiaAlert]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
@@ -369,6 +381,7 @@ const PPGSignalMeter = ({
   }, [renderSignal]);
 
   const handleReset = useCallback(() => {
+    setShowArrhythmiaAlert(false);
     peaksRef.current = [];
     onReset();
   }, [onReset]);
