@@ -253,6 +253,19 @@ const PPGSignalMeter = ({
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
+          if (peak.isArrhythmia) {
+            ctx.beginPath();
+            ctx.arc(x, y, 10, 0, Math.PI * 2);
+            ctx.strokeStyle = '#FEF7CD';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#F97316';
+            ctx.textAlign = 'center';
+            ctx.fillText('ARRITMIA', x, y - 25);
+          }
+
           ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
