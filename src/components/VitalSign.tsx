@@ -7,6 +7,7 @@ interface VitalSignProps {
   unit?: string;
   highlighted?: boolean;
   calibrationProgress?: number;
+  showResults?: boolean;
 }
 
 const VitalSign: React.FC<VitalSignProps> = ({ 
@@ -14,7 +15,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
   value, 
   unit, 
   highlighted = false,
-  calibrationProgress 
+  calibrationProgress,
+  showResults = false
 }) => {
   const isArrhythmiaDisplay = label === "ARRITMIAS";
   const isLipidsDisplay = label === "COLESTEROL/TRIGL.";
@@ -271,6 +273,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
   };
 
   const { text, color, condition, isCalibrating: isDisplayCalibrating } = getDisplayContent();
+  
+  // Only show condition if we have actual results to display
+  const shouldShowCondition = condition && !isCalibrating && (showResults || value !== 0);
 
   return (
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
@@ -314,7 +319,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
           )}
           
-          {condition && !isCalibrating && (
+          {shouldShowCondition && (
             <span 
               className={`${color} text-[12px] font-medium leading-tight mt-1 tracking-wide uppercase text-center w-full px-1`}
               style={{ minHeight: '16px' }}
