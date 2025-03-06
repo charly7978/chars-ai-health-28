@@ -277,7 +277,7 @@ const Index = () => {
           </div>
 
           <div className="absolute bottom-[70px] left-0 right-0">
-            <div className={`bg-black py-12 px-2 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
+            <div className={`bg-black py-8 px-2 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
               <div className={`grid grid-cols-3 gap-3 ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
