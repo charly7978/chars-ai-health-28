@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -294,8 +295,10 @@ const Index = () => {
               </div>
               
               {showResults && (
-                <div className="mt-2 text-center">
-                  <span className="text-xs text-cyan-400">RESULTADOS DE LA ÚLTIMA MEDICIÓN</span>
+                <div className="absolute -top-6 right-3">
+                  <span className="text-xs text-cyan-400/90 font-medium px-2 py-0.5 rounded-t-md bg-transparent">
+                    Resultados disponibles
+                  </span>
                 </div>
               )}
             </div>
