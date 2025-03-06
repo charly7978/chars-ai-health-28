@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -16,6 +15,7 @@ const CameraView = ({
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
   const lastFrameTimeRef = useRef<number>(0);
 
@@ -39,6 +39,7 @@ const CameraView = ({
       }
       
       setStream(null);
+      setTorchEnabled(false);
     }
   };
 
@@ -96,6 +97,15 @@ const CameraView = ({
             videoRef.current.style.transform = 'translateZ(0)';
             videoRef.current.style.backfaceVisibility = 'hidden';
           }
+          
+          // Activar linterna (flash) inmediatamente si está disponible
+          if (capabilities.torch) {
+            console.log("Activando linterna para mejorar la señal PPG");
+            await videoTrack.applyConstraints({
+              advanced: [{ torch: true }]
+            });
+            setTorchEnabled(true);
+          }
         } catch (err) {
           console.log("No se pudieron aplicar algunas optimizaciones:", err);
         }
@@ -133,6 +143,23 @@ const CameraView = ({
       stopCamera();
     };
   }, [isMonitoring]);
+
+  // Asegurar que la linterna esté encendida cuando se detecta un dedo
+  useEffect(() => {
+    if (stream && isFingerDetected && !torchEnabled) {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack && videoTrack.getCapabilities()?.torch) {
+        console.log("Activando linterna después de detectar dedo");
+        videoTrack.applyConstraints({
+          advanced: [{ torch: true }]
+        }).then(() => {
+          setTorchEnabled(true);
+        }).catch(err => {
+          console.error("Error activando linterna:", err);
+        });
+      }
+    }
+  }, [stream, isFingerDetected, torchEnabled]);
 
   return (
     <video

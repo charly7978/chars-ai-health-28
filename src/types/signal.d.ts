@@ -1,4 +1,3 @@
-
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
 
 export interface ProcessedSignal {
@@ -13,6 +12,7 @@ export interface ProcessedSignal {
     width: number;
     height: number;
   };
+  perfusionIndex?: number;
 }
 
 export interface ProcessingError {
