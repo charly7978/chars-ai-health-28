@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -121,7 +122,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color } = getDisplayContent();
 
   return (
-    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 py-6 transition-all duration-300 ${
+    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-4 py-5 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -130,15 +131,15 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <h3 className={`text-white text-base font-medium mb-3 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
+      <h3 className={`text-white text-sm font-medium mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
         {label}
       </h3>
       
-      <div className="flex items-center justify-center gap-1 min-h-[40px]">
+      <div className="flex items-center justify-center gap-1 min-h-[36px]">
         <span 
           className={`font-bold truncate ${color} transition-colors duration-300 
-            ${isArrhythmiaDisplay ? 'text-base' : 'text-2xl'}
-            ${isLipidsDisplay || isPressureDisplay ? 'text-xl' : ''}
+            ${isArrhythmiaDisplay ? 'text-sm' : 'text-lg'}
+            ${isLipidsDisplay || isPressureDisplay ? 'text-base' : ''}
             ${highlighted ? 'drop-shadow-glow' : ''}`}
           style={{
             textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
@@ -147,7 +148,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           {text}
         </span>
         {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
-          <span className={`text-gray-400/90 text-base font-medium ${highlighted ? 'text-cyan-400/90' : ''}`}>
+          <span className={`text-gray-400/90 text-sm font-medium ${highlighted ? 'text-cyan-400/90' : ''}`}>
             {unit}
           </span>
         )}
