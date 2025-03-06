@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -45,7 +46,12 @@ const PPGSignalMeter = ({
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
-
+  
+  // New constants for improved peak detection
+  const PEAK_DETECTION_WINDOW = 15; // Smaller window for higher sensitivity
+  const PEAK_THRESHOLD = 5; // Lower threshold to catch more peaks
+  const MIN_PEAK_DISTANCE_MS = 300; // Minimum time between peaks (300ms ~= 200bpm max)
+  
   useEffect(() => {
     if (!dataBufferRef.current) {
       dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
@@ -130,41 +136,57 @@ const PPGSignalMeter = ({
   }, []);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
-    if (points.length < 30) return;
+    if (points.length < PEAK_DETECTION_WINDOW) return;
     
-    const startIndex = Math.floor(points.length * 0.8);
-    
-    let maxValIdx = startIndex;
-    let maxVal = points[startIndex].value;
-    
-    for (let i = startIndex; i < points.length - 1; i++) {
-      if (points[i].value > maxVal) {
-        maxVal = points[i].value;
-        maxValIdx = i;
-      }
-    }
-    
-    if (maxValIdx > 0 && maxValIdx < points.length - 1) {
-      if (points[maxValIdx].value > points[maxValIdx-1].value && 
-          points[maxValIdx].value > points[maxValIdx+1].value) {
-          
-        const isPeakAlreadyDetected = peaksRef.current.some(peak => 
-          Math.abs(peak.time - points[maxValIdx].time) < 300
-        );
-        
-        if (!isPeakAlreadyDetected && points[maxValIdx].value > 10) {
-          peaksRef.current.push({
-            time: points[maxValIdx].time,
-            value: points[maxValIdx].value,
-            isArrhythmia: points[maxValIdx].isArrhythmia
-          });
-          
-          peaksRef.current = peaksRef.current.filter(
-            peak => now - peak.time < WINDOW_WIDTH_MS
-          );
+    // Iterate through all points with a sliding window
+    for (let i = PEAK_DETECTION_WINDOW; i < points.length - PEAK_DETECTION_WINDOW; i++) {
+      const currentPoint = points[i];
+      
+      // Skip if we've already processed this time range
+      const recentlyProcessed = peaksRef.current.some(
+        peak => Math.abs(peak.time - currentPoint.time) < MIN_PEAK_DISTANCE_MS
+      );
+      
+      if (recentlyProcessed) continue;
+      
+      // Check if this point is higher than all points in the window before and after
+      let isPeak = true;
+      
+      // Check points before
+      for (let j = i - PEAK_DETECTION_WINDOW; j < i; j++) {
+        if (points[j].value >= currentPoint.value) {
+          isPeak = false;
+          break;
         }
       }
+      
+      // If still a potential peak, check points after
+      if (isPeak) {
+        for (let j = i + 1; j <= i + PEAK_DETECTION_WINDOW; j++) {
+          if (j < points.length && points[j].value > currentPoint.value) {
+            isPeak = false;
+            break;
+          }
+        }
+      }
+      
+      // Require minimum amplitude to be considered a peak
+      if (isPeak && Math.abs(currentPoint.value) > PEAK_THRESHOLD) {
+        const isArrhythmia = currentPoint.isArrhythmia;
+        
+        // Add to peaks collection if it's a valid peak
+        peaksRef.current.push({
+          time: currentPoint.time,
+          value: currentPoint.value,
+          isArrhythmia
+        });
+      }
     }
+    
+    // Cleanup old peaks outside the visible window
+    peaksRef.current = peaksRef.current.filter(
+      peak => now - peak.time < WINDOW_WIDTH_MS
+    );
   }, []);
 
   const renderSignal = useCallback(() => {
@@ -224,6 +246,7 @@ const PPGSignalMeter = ({
     drawGrid(ctx);
 
     if (points.length > 1) {
+      // Draw signal line
       for (let i = 1; i < points.length; i++) {
         const prevPoint = points[i - 1];
         const point = points[i];
@@ -243,11 +266,13 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
+      // Draw peak markers
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
+          // Draw peak circle
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
@@ -266,6 +291,7 @@ const PPGSignalMeter = ({
             ctx.fillText('ARRITMIA', x, y - 25);
           }
 
+          // Show peak amplitude
           ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
