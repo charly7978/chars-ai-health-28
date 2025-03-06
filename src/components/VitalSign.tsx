@@ -19,6 +19,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const isLipidsDisplay = label === "COLESTEROL/TRIGL.";
   const isPressureDisplay = label === "PRESIÓN ARTERIAL";
   const isGlucoseDisplay = label === "GLUCOSA";
+  const isHemoglobinDisplay = label === "HEMOGLOBINA";
   const isCalibrating = calibrationProgress !== undefined && calibrationProgress < 100;
 
   const getDisplayContent = () => {
@@ -35,6 +36,33 @@ const VitalSign: React.FC<VitalSignProps> = ({
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
         color: "text-white"
       };
+    }
+    
+    if (isHemoglobinDisplay) {
+      const numValue = Number(value);
+      if (numValue === 0) {
+        return {
+          text: "--",
+          color: "text-white"
+        };
+      }
+      
+      if (numValue < 12) {
+        return {
+          text: String(value),
+          color: "text-red-500"
+        };
+      } else if (numValue > 16) {
+        return {
+          text: String(value),
+          color: "text-yellow-500"
+        };
+      } else {
+        return {
+          text: String(value),
+          color: "text-green-500"
+        };
+      }
     }
     
     if (isArrhythmiaDisplay) {

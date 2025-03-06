@@ -20,7 +20,8 @@ const Index = () => {
     lipids: {
       totalCholesterol: 0,
       triglycerides: 0
-    }
+    },
+    hemoglobin: 0
   });
   const [heartRate, setHeartRate] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
@@ -172,7 +173,8 @@ const Index = () => {
       lipids: {
         totalCholesterol: 0,
         triglycerides: 0
-      }
+      },
+      hemoglobin: 0
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
@@ -245,14 +247,11 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div 
-      className="fixed inset-0 flex flex-col bg-black" 
-      style={{ 
-        height: 'calc(100vh + env(safe-area-inset-bottom))',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)'
-      }}
-    >
+    <div className="fixed inset-0 flex flex-col bg-black" style={{ 
+      height: 'calc(100vh + env(safe-area-inset-bottom))',
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingBottom: 'env(safe-area-inset-bottom)'
+    }}>
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
@@ -302,6 +301,13 @@ const Index = () => {
                   calibrationProgress={calibrationProgress?.progress.pressure}
                 />
                 <VitalSign 
+                  label="HEMOGLOBINA"
+                  value={vitalSigns.hemoglobin || "--"}
+                  unit="g/dL"
+                  highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.hemoglobin}
+                />
+                <VitalSign 
                   label="GLUCOSA"
                   value={vitalSigns.glucose || "--"}
                   unit="mg/dL"
@@ -316,7 +322,7 @@ const Index = () => {
                   calibrationProgress={calibrationProgress?.progress.lipids}
                 />
               </div>
-              
+
               {isCalibrating && (
                 <div className="absolute -top-6 right-3">
                   <span className="text-xs text-yellow-400 bg-black/80 font-medium px-2 py-0.5 rounded-t-md">

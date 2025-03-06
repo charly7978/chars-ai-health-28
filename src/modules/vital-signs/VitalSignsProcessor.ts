@@ -19,6 +19,7 @@ export interface VitalSignsResult {
     totalCholesterol: number;
     triglycerides: number;
   };
+  hemoglobin: number;
   calibration?: {
     isCalibrating: boolean;
     progress: {
@@ -28,6 +29,7 @@ export interface VitalSignsResult {
       arrhythmia: number;
       glucose: number;
       lipids: number;
+      hemoglobin: number;
     };
   };
 }
@@ -59,7 +61,8 @@ export class VitalSignsProcessor {
     pressure: 0,
     arrhythmia: 0,
     glucose: 0,
-    lipids: 0
+    lipids: 0,
+    hemoglobin: 0
   };
   
   private forceCompleteCalibration: boolean = false;
@@ -93,7 +96,8 @@ export class VitalSignsProcessor {
       pressure: 0,
       arrhythmia: 0,
       glucose: 0,
-      lipids: 0
+      lipids: 0,
+      hemoglobin: 0
     };
     
     if (this.calibrationTimer) {
@@ -214,6 +218,8 @@ export class VitalSignsProcessor {
     const glucose = this.glucoseProcessor.calculateGlucose(ppgValues);
     
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
+    
+    const hemoglobin = this.calculateHemoglobin(ppgValues);
 
     const result: VitalSignsResult = {
       spo2,
@@ -221,7 +227,8 @@ export class VitalSignsProcessor {
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
       lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
       glucose,
-      lipids
+      lipids,
+      hemoglobin
     };
     
     if (this.isCalibrating) {
@@ -236,6 +243,21 @@ export class VitalSignsProcessor {
     }
 
     return result;
+  }
+
+  private calculateHemoglobin(ppgValues: number[]): number {
+    if (ppgValues.length < 50) return 0;
+    
+    const peak = Math.max(...ppgValues);
+    const valley = Math.min(...ppgValues);
+    const ac = peak - valley;
+    const dc = ppgValues.reduce((a, b) => a + b, 0) / ppgValues.length;
+    
+    const ratio = ac / dc;
+    const baseHemoglobin = 12.5;
+    const hemoglobin = baseHemoglobin + (ratio - 1) * 2.5;
+    
+    return Math.max(8, Math.min(18, Number(hemoglobin.toFixed(1))));
   }
 
   public isCurrentlyCalibrating(): boolean {
