@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -215,19 +216,21 @@ const VitalSign: React.FC<VitalSignProps> = ({
   return (
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
-    }`}>
+    }`} style={{ minHeight: '140px', height: '140px', width: '100%' }}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       
       {isCalibrating && (
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-2">
-        <h3 className={`text-white text-[13px] font-medium text-center tracking-wide uppercase ${highlighted ? 'text-cyan-400/90' : ''}`}>
-          {label === "COLESTEROL/TRIGL." ? "COLESTEROL/TRIG." : label}
-        </h3>
+      <div className="flex flex-col items-center justify-center h-full gap-2">
+        <div className="w-full text-center px-1">
+          <h3 className={`text-white text-[13px] font-medium tracking-wide uppercase leading-tight min-h-[32px] flex items-center justify-center ${highlighted ? 'text-cyan-400/90' : ''}`}>
+            {label}
+          </h3>
+        </div>
         
-        <div className="flex flex-col items-center justify-center gap-1.5">
+        <div className="flex flex-col items-center justify-center gap-1.5 flex-1">
           <span 
             className={`font-bold text-center ${color} transition-colors duration-300 
               ${isArrhythmiaDisplay ? 'text-[13px] leading-tight tracking-wide' : ''}
@@ -236,7 +239,11 @@ const VitalSign: React.FC<VitalSignProps> = ({
               ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[20px] leading-tight tracking-wide' : ''}
               ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
-              textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
+              textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none',
+              minHeight: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
           >
             {text}
@@ -249,7 +256,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
           )}
           
           {condition && !isCalibrating && (
-            <span className={`${color} text-[12px] font-medium leading-tight mt-1 tracking-wide uppercase text-center max-w-full px-1`}>
+            <span 
+              className={`${color} text-[12px] font-medium leading-tight mt-1 tracking-wide uppercase text-center w-full px-1`}
+              style={{ minHeight: '16px' }}
+            >
               {condition}
             </span>
           )}
