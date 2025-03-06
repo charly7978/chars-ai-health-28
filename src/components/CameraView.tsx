@@ -17,24 +17,29 @@ const CameraView = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const streamAttemptedRef = useRef<boolean>(false);
+  const streamStartTimeRef = useRef<number>(0);
 
   const stopCamera = async () => {
     if (stream) {
       console.log("Stopping camera stream and turning off torch");
-      stream.getTracks().forEach(track => {
-        // Turn off torch if it's available
-        if (track.kind === 'video' && track.getCapabilities()?.torch) {
-          track.applyConstraints({
-            advanced: [{ torch: false }]
-          }).catch(err => console.error("Error desactivando linterna:", err));
-        }
+      try {
+        stream.getTracks().forEach(track => {
+          // Turn off torch if it's available
+          if (track.kind === 'video' && track.getCapabilities()?.torch) {
+            track.applyConstraints({
+              advanced: [{ torch: false }]
+            }).catch(err => console.error("Error desactivando linterna:", err));
+          }
+          
+          // Stop the track
+          track.stop();
+        });
         
-        // Stop the track
-        track.stop();
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+      } catch (err) {
+        console.error("Error stopping camera:", err);
       }
       
       setStream(null);
@@ -44,8 +49,22 @@ const CameraView = ({
 
   const startCamera = async () => {
     try {
+      // Don't try to restart if we just tried less than a second ago
+      const now = Date.now();
+      if (now - streamStartTimeRef.current < 1000) {
+        console.log("Avoiding rapid camera restart");
+        return;
+      }
+      
+      streamStartTimeRef.current = now;
+      
       // Mark that we attempted to start a stream
       streamAttemptedRef.current = true;
+      
+      if (stream) {
+        console.log("Stream already exists, stopping before restarting");
+        await stopCamera();
+      }
       
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("getUserMedia no está soportado");
@@ -75,6 +94,10 @@ const CameraView = ({
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log("Camera access granted, got stream:", newStream ? "Stream object" : "No stream");
       
+      if (!newStream) {
+        throw new Error("No stream returned from getUserMedia");
+      }
+      
       const videoTrack = newStream.getVideoTracks()[0];
 
       if (videoTrack && isAndroid) {
@@ -97,11 +120,6 @@ const CameraView = ({
               advanced: advancedConstraints
             });
           }
-
-          if (videoRef.current) {
-            videoRef.current.style.transform = 'translateZ(0)';
-            videoRef.current.style.backfaceVisibility = 'hidden';
-          }
         } catch (err) {
           console.log("No se pudieron aplicar algunas optimizaciones:", err);
         }
@@ -117,10 +135,9 @@ const CameraView = ({
           }
         };
         
-        if (isAndroid) {
-          videoRef.current.style.willChange = 'transform';
-          videoRef.current.style.transform = 'translateZ(0)';
-        }
+        videoRef.current.style.willChange = 'transform';
+        videoRef.current.style.transform = 'translateZ(0)';
+        videoRef.current.style.backfaceVisibility = 'hidden';
       }
 
       setStream(newStream);

@@ -1,11 +1,12 @@
 
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import VitalSignsPanel from "@/components/VitalSignsPanel";
 import CameraView from "@/components/CameraView";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import TimerDisplay from "@/components/TimerDisplay";
 import ControlButtons from "@/components/ControlButtons";
 import { useMonitoringControl } from "@/hooks/useMonitoringControl";
+import { toast } from "sonner";
 
 const Index = () => {
   const {
@@ -21,6 +22,8 @@ const Index = () => {
     processFrame,
     lastSignal
   } = useMonitoringControl();
+  
+  const [cameraError, setCameraError] = useState(false);
   
   // Prevent page scrolling
   useEffect(() => {
@@ -42,10 +45,12 @@ const Index = () => {
     }
     
     try {
+      setCameraError(false);
       const videoTrack = stream.getVideoTracks()[0];
       
       if (!videoTrack) {
         console.error("No video track found in stream");
+        setCameraError(true);
         return;
       }
       
@@ -65,8 +70,18 @@ const Index = () => {
         return;
       }
       
+      let isProcessingFrame = false;
+      
       const processImage = async () => {
         if (!isMonitoring) return;
+        
+        // Only grab a new frame if we're not already processing one
+        if (isProcessingFrame) {
+          requestAnimationFrame(processImage);
+          return;
+        }
+        
+        isProcessingFrame = true;
         
         try {
           const frame = await imageCapture.grabFrame();
@@ -76,11 +91,15 @@ const Index = () => {
           const imageData = tempCtx.getImageData(0, 0, frame.width, frame.height);
           processFrame(imageData);
           
+          isProcessingFrame = false;
+          
           if (isMonitoring) {
             requestAnimationFrame(processImage);
           }
         } catch (error) {
           console.error("Error capturing frame:", error);
+          isProcessingFrame = false;
+          
           if (isMonitoring) {
             requestAnimationFrame(processImage);
           }
@@ -90,8 +109,18 @@ const Index = () => {
       processImage();
     } catch (error) {
       console.error("Error in stream ready handler:", error);
+      setCameraError(true);
+      toast.error("Error al acceder a la cámara. Por favor, intente de nuevo.");
     }
   }, [isMonitoring, processFrame]);
+
+  // Handle camera errors
+  useEffect(() => {
+    if (cameraError && isMonitoring) {
+      toast.error("Error al acceder a la cámara. Por favor, intente de nuevo.");
+      handleReset();
+    }
+  }, [cameraError, isMonitoring, handleReset]);
 
   return (
     <div 

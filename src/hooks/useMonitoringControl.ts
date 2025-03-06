@@ -55,6 +55,7 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   
   const measurementTimerRef = useRef<number | null>(null);
   const processingRef = useRef<boolean>(false);
+  const startTimeRef = useRef<number>(0);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
@@ -118,35 +119,56 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
 
   const startMonitoring = useCallback(() => {
     console.log("Starting monitoring");
+    
+    // If already monitoring, stop first
     if (isMonitoring) {
+      console.log("Already monitoring, stopping first");
       handleReset();
+      // Give some time for everything to reset
+      setTimeout(() => {
+        startMonitoring();
+      }, 500);
       return;
     }
     
     try {
-      enterFullScreen();
-      setIsMonitoring(true);
-      setIsCameraOn(true);
-      startProcessing();
-      setElapsedTime(0);
-      setVitalSigns(prev => ({
-        ...prev,
-        arrhythmiaStatus: "CALIBRANDO...|0"
-      }));
-      
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
+      // Prevent rapid restarts
+      const now = Date.now();
+      if (now - startTimeRef.current < 1000) {
+        console.log("Preventing rapid restart");
+        return;
       }
+      startTimeRef.current = now;
       
-      measurementTimerRef.current = window.setInterval(() => {
-        setElapsedTime(prev => {
-          if (prev >= 30) {
-            handleReset();
-            return 30;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+      enterFullScreen();
+      
+      // First turn on camera
+      setIsCameraOn(true);
+      
+      // Wait a bit before setting isMonitoring
+      setTimeout(() => {
+        setIsMonitoring(true);
+        startProcessing();
+        setElapsedTime(0);
+        setVitalSigns(prev => ({
+          ...prev,
+          arrhythmiaStatus: "CALIBRANDO...|0"
+        }));
+        
+        if (measurementTimerRef.current) {
+          clearInterval(measurementTimerRef.current);
+        }
+        
+        measurementTimerRef.current = window.setInterval(() => {
+          setElapsedTime(prev => {
+            if (prev >= 30) {
+              handleReset();
+              return 30;
+            }
+            return prev + 1;
+          });
+        }, 1000);
+      }, 500);
     } catch (error) {
       console.error("Error starting monitoring:", error);
       handleReset();
@@ -155,9 +177,17 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
 
   const handleReset = useCallback(() => {
     console.log("Handling reset: turning off camera and stopping processing");
-    setIsMonitoring(false);
-    setIsCameraOn(false); // This is crucial to turn off the camera
+    
+    // First stop processing
     stopProcessing();
+    
+    // Then update states
+    setIsMonitoring(false);
+    
+    // Give a little time before turning off camera
+    setTimeout(() => {
+      setIsCameraOn(false);
+    }, 100);
     
     if (measurementTimerRef.current) {
       clearInterval(measurementTimerRef.current);
