@@ -35,12 +35,12 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   
   const WINDOW_WIDTH_MS = 3000; // Reducido para mejor rendimiento
-  const CANVAS_WIDTH = 1000;
-  const CANVAS_HEIGHT = 200;
+  const CANVAS_WIDTH = 800;
+  const CANVAS_HEIGHT = 500;
   const GRID_SIZE_X = 50;
   const GRID_SIZE_Y = 25;
   const verticalScale = 28.0;
-  const SMOOTHING_FACTOR = 0.75; // Ajustado para menor latencia
+  const SMOOTHING_FACTOR = 1.1; // Ajustado para menor latencia
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600; // Reducido para mejor rendimiento
