@@ -30,6 +30,14 @@ const VitalSign: React.FC<VitalSignProps> = ({
       };
     }
     
+    // Si no hay valor o es 0, mostrar "--"
+    if (!value || value === 0) {
+      return {
+        text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
+        color: "text-white"
+      };
+    }
+    
     if (isArrhythmiaDisplay) {
       if (value === "--") {
         return { 
@@ -63,7 +71,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (isGlucoseDisplay) {
       const numValue = Number(value);
       
-      if (value === "--" || numValue === 0) {
+      if (numValue === 0) {
         return {
           text: "--",
           color: "text-white"
@@ -89,7 +97,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     }
     
     if (isLipidsDisplay) {
-      if (value === "--" || value === "0/0" || value === "--/--") {
+      if (value === "0/0") {
         return {
           text: "--/--",
           color: "text-white"
