@@ -453,68 +453,58 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black">
-            <div className={`h-full ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
-              <div className={`grid grid-cols-3 gap-2 h-full ${showResults ? 'opacity-100' : ''}`}>
-                <VitalSign 
-                  label="FRECUENCIA CARDÍACA"
-                  value={heartRate || "--"}
-                  unit="BPM"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.heartRate}
-                />
-                <VitalSign 
-                  label="SPO2"
-                  value={vitalSigns.spo2 || "--"}
-                  unit="%"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.spo2}
-                />
-                <VitalSign 
-                  label="PRESIÓN ARTERIAL"
-                  value={vitalSigns.pressure}
-                  unit="mmHg"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.pressure}
-                />
-                <VitalSign 
-                  label="HEMOGLOBINA"
-                  value={vitalSigns.hemoglobin || "--"}
-                  unit="g/dL"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.hemoglobin}
-                />
-                <VitalSign 
-                  label="GLUCOSA"
-                  value={vitalSigns.glucose || "--"}
-                  unit="mg/dL"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.glucose}
-                />
-                <VitalSign 
-                  label="COLESTEROL/TRIGL."
-                  value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                  unit="mg/dL"
-                  highlighted={showResults}
-                  calibrationProgress={calibrationProgress?.progress.lipids}
-                />
-              </div>
+          {isCalibrating && (
+            <div className="absolute bottom-[55%] left-0 right-0 text-center">
+              <span className="text-sm font-medium text-gray-400">
+                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
+              </span>
+            </div>
+          )}
 
-              {isCalibrating && (
-                <div className="absolute -top-6 right-3">
-                  <span className="text-xs text-yellow-400 bg-black/80 font-medium px-2 py-0.5 rounded-t-md">
-                    Calibrando mediciones...
-                  </span>
-                </div>
-              )}
-              
-              {showResults && !isCalibrating && (
-                <div className="absolute -top-6 right-3">
-                  <span className="text-xs text-cyan-400/90 font-medium px-2 py-0.5 rounded-t-md bg-transparent">
-                    Resultados disponibles
-                  </span>
-                </div>
-              )}
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black">
+            <div className="grid grid-cols-3 gap-2 h-full">
+              <VitalSign 
+                label="FRECUENCIA CARDÍACA"
+                value={heartRate || "--"}
+                unit="BPM"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.heartRate}
+              />
+              <VitalSign 
+                label="SPO2"
+                value={vitalSigns.spo2 || "--"}
+                unit="%"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.spo2}
+              />
+              <VitalSign 
+                label="PRESIÓN ARTERIAL"
+                value={vitalSigns.pressure}
+                unit="mmHg"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.pressure}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.hemoglobin}
+              />
+              <VitalSign 
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.glucose}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
+                highlighted={showResults}
+                calibrationProgress={calibrationProgress?.progress.lipids}
+              />
             </div>
           </div>
 
