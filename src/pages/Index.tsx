@@ -468,42 +468,36 @@ const Index = () => {
                 value={heartRate || "--"}
                 unit="BPM"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.heartRate}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.spo2}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.pressure}
               />
               <VitalSign 
                 label="HEMOGLOBINA"
                 value={vitalSigns.hemoglobin || "--"}
                 unit="g/dL"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.hemoglobin}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.glucose}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
                 value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
                 highlighted={showResults}
-                calibrationProgress={calibrationProgress?.progress.lipids}
               />
             </div>
           </div>

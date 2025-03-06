@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+
+import React from 'react';
 
 interface VitalSignProps {
   label: string;
@@ -152,7 +153,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="flex flex-col items-center justify-center h-full">
-        <h3 className={`text-white text-[11px] font-medium mb-1 text-center w-full ${
+        <h3 className={`text-white text-[13px] font-medium mb-2 text-center w-full leading-tight ${
           highlighted ? 'text-cyan-400/90' : ''
         }`}>
           {label}
@@ -161,9 +162,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="flex items-center justify-center gap-1 min-h-[32px]">
           <span 
             className={`font-bold ${color} transition-colors duration-300 
-              ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : ''}
-              ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
-              ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-sm leading-none' : ''}
+              ${isArrhythmiaDisplay ? 'text-[12px] leading-tight' : ''}
+              ${isLipidsDisplay || isPressureDisplay ? 'text-[15px] leading-tight' : ''}
+              ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[16px] leading-tight' : ''}
               ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
               textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
@@ -173,7 +174,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           </span>
           
           {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-            <span className={`text-gray-400/90 text-[10px] font-medium leading-none ${highlighted ? 'text-cyan-400/90' : ''}`}>
+            <span className={`text-gray-400/90 text-[11px] font-medium leading-tight ${highlighted ? 'text-cyan-400/90' : ''}`}>
               {unit}
             </span>
           )}
