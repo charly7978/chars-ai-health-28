@@ -236,14 +236,6 @@ const PPGSignalMeter = ({
     drawGrid(ctx);
     
     if (preserveResults && !isFingerDetected) {
-      ctx.font = 'bold 18px Inter';
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.7)';
-      ctx.textAlign = 'center';
-      ctx.fillText('RESULTADOS DE LA ÚLTIMA MEDICIÓN', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
-      ctx.font = '14px Inter';
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
-      ctx.fillText('Coloque su dedo para iniciar una nueva medición', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-      
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
