@@ -21,12 +21,23 @@ const CameraView = ({
 
   const stopCamera = async () => {
     if (stream) {
+      console.log("Stopping camera stream and turning off torch");
       stream.getTracks().forEach(track => {
-        track.stop();
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
+        // Turn off torch if it's available
+        if (track.kind === 'video' && track.getCapabilities()?.torch) {
+          track.applyConstraints({
+            advanced: [{ torch: false }]
+          }).catch(err => console.error("Error desactivando linterna:", err));
         }
+        
+        // Stop the track
+        track.stop();
       });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      
       setStream(null);
     }
   };
@@ -110,11 +121,15 @@ const CameraView = ({
 
   useEffect(() => {
     if (isMonitoring && !stream) {
+      console.log("Starting camera because isMonitoring=true");
       startCamera();
     } else if (!isMonitoring && stream) {
+      console.log("Stopping camera because isMonitoring=false");
       stopCamera();
     }
+    
     return () => {
+      console.log("CameraView component unmounting, stopping camera");
       stopCamera();
     };
   }, [isMonitoring]);

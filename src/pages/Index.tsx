@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -86,8 +87,9 @@ const Index = () => {
   };
 
   const handleReset = () => {
+    console.log("Handling reset: turning off camera and stopping processing");
     setIsMonitoring(false);
-    setIsCameraOn(false);
+    setIsCameraOn(false); // This is crucial to turn off the camera
     stopProcessing();
     
     if (measurementTimerRef.current) {
