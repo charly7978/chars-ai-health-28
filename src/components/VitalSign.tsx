@@ -139,27 +139,29 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <h3 className={`text-white text-[11px] font-medium mb-1.5 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
-        {label}
-      </h3>
-      
-      <div className="flex items-center justify-center gap-1 min-h-[32px]">
-        <span 
-          className={`font-bold ${color} transition-colors duration-300 
-            ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : 'text-sm leading-none'}
-            ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
-            ${highlighted ? 'drop-shadow-glow' : ''}`}
-          style={{
-            textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
-          }}
-        >
-          {text}
-        </span>
-        {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
-          <span className={`text-gray-400/90 text-[10px] font-medium leading-none ${highlighted ? 'text-cyan-400/90' : ''}`}>
-            {unit}
+      <div className="flex flex-col items-center justify-center h-full">
+        <h3 className={`text-white text-[11px] font-medium mb-1.5 text-center w-full ${highlighted ? 'text-cyan-400/90' : ''}`}>
+          {label}
+        </h3>
+        
+        <div className="flex items-center justify-center gap-1 min-h-[32px]">
+          <span 
+            className={`font-bold ${color} transition-colors duration-300 
+              ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : 'text-sm leading-none'}
+              ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
+              ${highlighted ? 'drop-shadow-glow' : ''}`}
+            style={{
+              textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
+            }}
+          >
+            {text}
           </span>
-        )}
+          {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
+            <span className={`text-gray-400/90 text-[10px] font-medium leading-none ${highlighted ? 'text-cyan-400/90' : ''}`}>
+              {unit}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
