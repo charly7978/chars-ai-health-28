@@ -253,9 +253,9 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute bottom-[80px] left-0 right-0 px-4">
-            <div className={`bg-gray-900/30 backdrop-blur-sm rounded-xl p-4 ${showResults ? 'border-2 border-cyan-500/30' : ''}`}>
-              <div className={`grid grid-cols-3 gap-4 ${showResults ? 'opacity-100' : ''}`}>
+          <div className="absolute bottom-[70px] left-0 right-0">
+            <div className={`bg-gray-900/40 backdrop-blur-sm p-3 ${showResults ? 'border-t-2 border-cyan-500/30' : ''}`}>
+              <div className={`grid grid-cols-3 gap-3 ${showResults ? 'opacity-100' : ''}`}>
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
