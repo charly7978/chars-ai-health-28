@@ -176,7 +176,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, secondaryText, secondaryColor, isCalibrating: isDisplayCalibrating } = getDisplayContent();
 
   return (
-    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
+    <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-2.5 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
     } ${isCalibrating ? 'ring-1 ring-yellow-500' : ''}`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -192,17 +192,17 @@ const VitalSign: React.FC<VitalSignProps> = ({
       )}
       
       <div className="flex flex-col items-center justify-center h-full">
-        <h3 className={`text-white text-[11px] font-medium mb-1 text-center w-full ${highlighted ? 'text-cyan-400/90' : ''}`}>
+        <h3 className={`text-white text-xs font-medium mb-0.5 text-center w-full ${highlighted ? 'text-cyan-400/90' : ''}`}>
           {label}
         </h3>
         
-        <div className="flex items-center justify-center gap-1 min-h-[32px]">
+        <div className="flex items-center justify-center gap-1 min-h-[28px]">
           <span 
             className={`font-bold ${color} transition-colors duration-300 
-              ${isArrhythmiaDisplay ? 'text-[10px] leading-tight' : ''}
-              ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-[11px]' : ''}
-              ${isLipidsDisplay || isPressureDisplay ? 'text-[13px] leading-none' : ''}
-              ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-sm leading-none' : ''}
+              ${isArrhythmiaDisplay ? 'text-xs leading-tight' : ''}
+              ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-sm' : ''}
+              ${isLipidsDisplay || isPressureDisplay ? 'text-sm leading-none' : ''}
+              ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-base leading-none' : ''}
               ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
               textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
@@ -212,7 +212,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           </span>
           
           {secondaryText && (
-            <span className={`${secondaryColor || 'text-yellow-500'} text-[9px] font-medium leading-none ml-0.5`}>
+            <span className={`${secondaryColor || 'text-yellow-500'} text-[10px] font-medium leading-none ml-0.5`}>
               {secondaryText}
             </span>
           )}
