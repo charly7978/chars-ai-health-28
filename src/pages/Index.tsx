@@ -243,14 +243,8 @@ const Index = () => {
         
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          
           const [status, count] = vitals.arrhythmiaStatus.split('|');
           setArrhythmiaCount(count || "0");
-          
-          setVitalSigns(current => ({
-            ...current,
-            arrhythmiaStatus: vitals.arrhythmiaStatus
-          }));
         }
       }
       

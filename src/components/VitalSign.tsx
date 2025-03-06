@@ -48,8 +48,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const [status, count] = String(value).split('|');
       
       if (status === "ARRITMIA DETECTADA") {
+        const displayCount = count ? `(${count})` : "";
         return {
-          text: count ? `ARRITMIA DETECTADA (${count})` : "ARRITMIA DETECTADA",
+          text: `ARRITMIA DETECTADA ${displayCount}`.trim(),
           color: "text-red-500"
         };
       }
@@ -61,8 +62,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
         };
       }
       
+      const noArrhythmiaCount = count ? `(${count})` : "";
       return {
-        text: "SIN ARRITMIA DETECTADA",
+        text: `SIN ARRITMIAS ${noArrhythmiaCount}`.trim(),
         color: "text-cyan-500"
       };
     }
