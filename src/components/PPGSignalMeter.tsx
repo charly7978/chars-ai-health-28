@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import SignalHeader from './ppg/SignalHeader';
 import SignalCanvas from './ppg/SignalCanvas';
 import SignalButtons from './ppg/SignalButtons';
@@ -40,6 +40,10 @@ const PPGSignalMeter = ({
   const SMOOTHING_FACTOR = 1.3;
   const MAX_PEAKS_TO_DISPLAY = 25;
   
+  // Animation frame reference
+  const animationFrameRef = useRef<number>();
+  const lastRenderTimeRef = useRef<number>(0);
+  
   // Use the signal processing hook
   const { processValue, reset: resetSignal, peaks } = useSignalProcessing({
     bufferSize: BUFFER_SIZE,
@@ -51,21 +55,37 @@ const PPGSignalMeter = ({
     verticalScale: VERTICAL_SCALE
   });
 
+  // Handle the rendering loop
+  const renderSignal = () => {
+    const now = Date.now();
+    const { points } = processValue(value, arrhythmiaStatus, rawArrhythmiaData);
+    
+    lastRenderTimeRef.current = performance.now();
+    animationFrameRef.current = requestAnimationFrame(renderSignal);
+  };
+
+  // Start the rendering loop
+  useEffect(() => {
+    renderSignal();
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
+
   // Handle reset button click
   const handleReset = () => {
     resetSignal();
     onReset();
   };
 
-  // Process the current value and prepare data for rendering
-  const processedData = processValue(value, arrhythmiaStatus, rawArrhythmiaData);
-
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
       <SignalHeader quality={quality} isFingerDetected={isFingerDetected} />
       
       <SignalCanvas 
-        points={processedData.points}
+        points={processValue(value, arrhythmiaStatus, rawArrhythmiaData).points}
         peaks={peaks}
         now={Date.now()}
         width={CANVAS_WIDTH}

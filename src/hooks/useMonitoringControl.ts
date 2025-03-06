@@ -54,56 +54,39 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   } | null>(null);
   
   const measurementTimerRef = useRef<number | null>(null);
-  const processingRef = useRef<boolean>(false);
-  const startTimeRef = useRef<number>(0);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
 
-  // Clean up on unmount
+  // Efecto para procesar las señales y actualizar los signos vitales
   useEffect(() => {
-    return () => {
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-        measurementTimerRef.current = null;
-      }
-      stopProcessing();
-      setIsMonitoring(false);
-      setIsCameraOn(false);
-    };
-  }, [stopProcessing]);
-
-  // Process signals and update vital signs
-  useEffect(() => {
-    if (!lastSignal || !lastSignal.fingerDetected || !isMonitoring) {
-      return;
-    }
-    
-    try {
-      // Process heart beat
-      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      if (heartBeatResult && heartBeatResult.bpm) {
-        setHeartRate(heartBeatResult.bpm);
-        
-        // Process vital signs
-        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-        if (vitals) {
-          setVitalSigns(vitals);
-          // Extract arrhythmia counter if available
-          const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(arrhythmiaInfo[1] || "--");
+    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      try {
+        // Procesar latido cardíaco
+        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+        if (heartBeatResult && heartBeatResult.bpm) {
+          setHeartRate(heartBeatResult.bpm);
           
-          // Save arrhythmia data for visualization
-          if (vitals.lastArrhythmiaData) {
-            setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          // Procesar signos vitales
+          const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+          if (vitals) {
+            setVitalSigns(vitals);
+            // Extraer el contador de arritmias si está disponible
+            const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
+            setArrhythmiaCount(arrhythmiaInfo[1] || "--");
+            
+            // Guardar datos de arritmia para visualización
+            if (vitals.lastArrhythmiaData) {
+              setLastArrhythmiaData(vitals.lastArrhythmiaData);
+            }
           }
         }
+        
+        setSignalQuality(lastSignal.quality);
+      } catch (error) {
+        console.error("Error al procesar señal:", error);
       }
-      
-      setSignalQuality(lastSignal.quality);
-    } catch (error) {
-      console.error("Error processing signal:", error);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
@@ -113,81 +96,46 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
         await document.documentElement.requestFullscreen();
       }
     } catch (err) {
-      console.log('Error entering fullscreen mode:', err);
+      console.log('Error al entrar en pantalla completa:', err);
     }
   };
 
   const startMonitoring = useCallback(() => {
-    console.log("Starting monitoring");
-    
-    // If already monitoring, stop first
+    console.log("Iniciando monitoreo");
     if (isMonitoring) {
-      console.log("Already monitoring, stopping first");
       handleReset();
-      // Give some time for everything to reset
-      setTimeout(() => {
-        startMonitoring();
-      }, 500);
-      return;
-    }
-    
-    try {
-      // Prevent rapid restarts
-      const now = Date.now();
-      if (now - startTimeRef.current < 1000) {
-        console.log("Preventing rapid restart");
-        return;
-      }
-      startTimeRef.current = now;
-      
+    } else {
       enterFullScreen();
-      
-      // First turn on camera
+      setIsMonitoring(true);
       setIsCameraOn(true);
+      startProcessing();
+      setElapsedTime(0);
+      setVitalSigns(prev => ({
+        ...prev,
+        arrhythmiaStatus: "CALIBRANDO...|0"
+      }));
       
-      // Wait a bit before setting isMonitoring
-      setTimeout(() => {
-        setIsMonitoring(true);
-        startProcessing();
-        setElapsedTime(0);
-        setVitalSigns(prev => ({
-          ...prev,
-          arrhythmiaStatus: "CALIBRANDO...|0"
-        }));
-        
-        if (measurementTimerRef.current) {
-          clearInterval(measurementTimerRef.current);
-        }
-        
-        measurementTimerRef.current = window.setInterval(() => {
-          setElapsedTime(prev => {
-            if (prev >= 30) {
-              handleReset();
-              return 30;
-            }
-            return prev + 1;
-          });
-        }, 1000);
-      }, 500);
-    } catch (error) {
-      console.error("Error starting monitoring:", error);
-      handleReset();
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+      }
+      
+      measurementTimerRef.current = window.setInterval(() => {
+        setElapsedTime(prev => {
+          if (prev >= 30) {
+            handleReset();
+            return 30;
+          }
+          return prev + 1;
+        });
+      }, 1000);
     }
   }, [isMonitoring, startProcessing]);
 
   const handleReset = useCallback(() => {
     console.log("Handling reset: turning off camera and stopping processing");
-    
-    // First stop processing
-    stopProcessing();
-    
-    // Then update states
     setIsMonitoring(false);
-    
-    // Give a little time before turning off camera
-    setTimeout(() => {
-      setIsCameraOn(false);
-    }, 100);
+    setIsCameraOn(false); // This is crucial to turn off the camera
+    stopProcessing();
     
     if (measurementTimerRef.current) {
       clearInterval(measurementTimerRef.current);

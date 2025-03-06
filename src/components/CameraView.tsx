@@ -1,59 +1,138 @@
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
+  onStreamReady?: (stream: MediaStream) => void;
   isMonitoring: boolean;
   isFingerDetected?: boolean;
   signalQuality?: number;
-  stream: MediaStream | null;
 }
 
 const CameraView = ({ 
+  onStreamReady, 
   isMonitoring, 
   isFingerDetected = false, 
   signalQuality = 0,
-  stream
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
+  const lastFrameTimeRef = useRef<number>(0);
 
-  // Connect video element to stream when stream changes
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      console.log("CameraView: Setting stream to video element");
-      videoRef.current.srcObject = stream;
-      
-      videoRef.current.onloadedmetadata = () => {
-        if (videoRef.current) {
-          videoRef.current.play().catch(err => 
-            console.error("Error playing video:", err)
-          );
+  const stopCamera = async () => {
+    if (stream) {
+      console.log("Stopping camera stream and turning off torch");
+      stream.getTracks().forEach(track => {
+        // Turn off torch if it's available
+        if (track.kind === 'video' && track.getCapabilities()?.torch) {
+          track.applyConstraints({
+            advanced: [{ torch: false }]
+          }).catch(err => console.error("Error desactivando linterna:", err));
         }
-      };
-      
-      // Handle potential stream track ending
-      const tracks = stream.getTracks();
-      tracks.forEach(track => {
-        track.onended = () => {
-          console.warn("CameraView: Track ended unexpectedly");
-        };
+        
+        // Stop the track
+        track.stop();
       });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      
+      setStream(null);
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("getUserMedia no está soportado");
+      }
+
+      const isAndroid = /android/i.test(navigator.userAgent);
+
+      const baseVideoConstraints: MediaTrackConstraints = {
+        facingMode: 'environment',
+        width: { ideal: 720 },
+        height: { ideal: 480 }
+      };
+
+      if (isAndroid) {
+        // Ajustes para mejorar la extracción de señal en Android
+        Object.assign(baseVideoConstraints, {
+          frameRate: { ideal: 30, max: 30 }, // Limitamos explícitamente a 30 FPS
+          resizeMode: 'crop-and-scale'
+        });
+      }
+
+      const constraints: MediaStreamConstraints = {
+        video: baseVideoConstraints
+      };
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const videoTrack = newStream.getVideoTracks()[0];
+
+      if (videoTrack && isAndroid) {
+        try {
+          const capabilities = videoTrack.getCapabilities();
+          const advancedConstraints: MediaTrackConstraintSet[] = [];
+          
+          if (capabilities.exposureMode) {
+            advancedConstraints.push({ exposureMode: 'continuous' });
+          }
+          if (capabilities.focusMode) {
+            advancedConstraints.push({ focusMode: 'continuous' });
+          }
+          if (capabilities.whiteBalanceMode) {
+            advancedConstraints.push({ whiteBalanceMode: 'continuous' });
+          }
+
+          if (advancedConstraints.length > 0) {
+            await videoTrack.applyConstraints({
+              advanced: advancedConstraints
+            });
+          }
+
+          if (videoRef.current) {
+            videoRef.current.style.transform = 'translateZ(0)';
+            videoRef.current.style.backfaceVisibility = 'hidden';
+          }
+        } catch (err) {
+          console.log("No se pudieron aplicar algunas optimizaciones:", err);
+        }
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+        if (isAndroid) {
+          videoRef.current.style.willChange = 'transform';
+          videoRef.current.style.transform = 'translateZ(0)';
+        }
+      }
+
+      setStream(newStream);
+      
+      if (onStreamReady) {
+        onStreamReady(newStream);
+      }
+    } catch (err) {
+      console.error("Error al iniciar la cámara:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (isMonitoring && !stream) {
+      console.log("Starting camera because isMonitoring=true");
+      startCamera();
+    } else if (!isMonitoring && stream) {
+      console.log("Stopping camera because isMonitoring=false");
+      stopCamera();
     }
     
     return () => {
-      if (videoRef.current) {
-        console.log("CameraView: Cleaning up video element");
-        const oldStream = videoRef.current.srcObject as MediaStream;
-        if (oldStream) {
-          try {
-            // Don't stop tracks here, let the parent component manage this
-            videoRef.current.srcObject = null;
-          } catch (err) {
-            console.error("Error cleaning up video:", err);
-          }
-        }
-      }
+      console.log("CameraView component unmounting, stopping camera");
+      stopCamera();
     };
-  }, [stream]); // Only depend on stream changes
+  }, [isMonitoring]);
 
   return (
     <video
@@ -65,9 +144,7 @@ const CameraView = ({
       style={{
         willChange: 'transform',
         transform: 'translateZ(0)',
-        backfaceVisibility: 'hidden',
-        opacity: isMonitoring ? 1 : 0,
-        transition: 'opacity 0.3s ease-in-out'
+        backfaceVisibility: 'hidden'
       }}
     />
   );
