@@ -4,12 +4,6 @@ import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 
-/**
- * VitalSignsProcessor
- * 
- * Procesador integrado de signos vitales que implementa algoritmos avanzados
- * para el análisis de señales PPG en tiempo real.
- */
 export class VitalSignsProcessor {
   private spo2Processor: SpO2Processor;
   private bpProcessor: BloodPressureProcessor;
@@ -24,25 +18,19 @@ export class VitalSignsProcessor {
   }
 
   /**
-   * Procesa una señal PPG entrante y calcula los signos vitales
+   * Process an incoming PPG signal and calculate vital signs
    */
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
   ) {
-    // Filtrar señal usando algoritmos avanzados
+    // Filter signal
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     
-    // Calcular características fisiológicas
-    const physFeatures = this.signalProcessor.calculatePhysiologicalFeatures();
-    
-    // Detectar picos para análisis de ritmo cardíaco
-    const peaks = this.signalProcessor.detectPeaks();
-    
-    // Procesar datos de arritmia con algoritmo mejorado
+    // Process arrhythmia data
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     
-    // Calcular signos vitales basados en la señal filtrada
+    // Calculate vital signs
     const ppgValues = this.signalProcessor.getPPGValues();
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
@@ -52,14 +40,12 @@ export class VitalSignsProcessor {
       spo2,
       pressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
-      lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
-      signalQuality: physFeatures.signalQuality,
-      perfusionIndex: physFeatures.perfusionIndex
+      lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData
     };
   }
 
   /**
-   * Reinicia todos los procesadores a su estado inicial
+   * Reset all processors to their initial state
    */
   public reset(): void {
     this.spo2Processor.reset();
