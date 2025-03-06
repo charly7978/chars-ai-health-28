@@ -162,10 +162,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
     <div className={`relative overflow-hidden group bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 ${
       highlighted ? 'from-black to-black' : ''
     }`}>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
       {isCalibrating && (
-        <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
+        <div className="absolute bottom-0 left-0 h-1 bg-yellow-500 transition-all duration-300" 
+             style={{ width: `${calibrationProgress}%` }}>
+        </div>
       )}
       
       <div className="flex flex-col items-center justify-center h-full">
