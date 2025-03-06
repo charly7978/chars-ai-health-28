@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -37,19 +38,39 @@ export const useSignalProcessor = () => {
     return () => {
       console.log("useSignalProcessor: Limpiando");
       processor.stop();
+      setIsProcessing(false);
     };
   }, [processor]);
 
   const startProcessing = useCallback(() => {
-    console.log("useSignalProcessor: Iniciando procesamiento");
-    setIsProcessing(true);
-    processor.start();
+    try {
+      console.log("useSignalProcessor: Iniciando procesamiento");
+      setIsProcessing(true);
+      processor.start();
+    } catch (error) {
+      console.error("Error starting processing:", error);
+      setIsProcessing(false);
+      setError({ 
+        code: "START_ERROR", 
+        message: "Error al iniciar el procesamiento", 
+        timestamp: Date.now() 
+      });
+    }
   }, [processor]);
 
   const stopProcessing = useCallback(() => {
-    console.log("useSignalProcessor: Deteniendo procesamiento");
-    setIsProcessing(false);
-    processor.stop();
+    try {
+      console.log("useSignalProcessor: Deteniendo procesamiento");
+      setIsProcessing(false);
+      processor.stop();
+    } catch (error) {
+      console.error("Error stopping processing:", error);
+      setError({ 
+        code: "STOP_ERROR", 
+        message: "Error al detener el procesamiento", 
+        timestamp: Date.now() 
+      });
+    }
   }, [processor]);
 
   const calibrate = useCallback(async () => {
@@ -60,16 +81,30 @@ export const useSignalProcessor = () => {
       return true;
     } catch (error) {
       console.error("useSignalProcessor: Error de calibración:", error);
+      setError({ 
+        code: "CALIBRATION_ERROR", 
+        message: "Error durante la calibración", 
+        timestamp: Date.now() 
+      });
       return false;
     }
   }, [processor]);
 
   const processFrame = useCallback((imageData: ImageData) => {
-    if (isProcessing) {
-      console.log("useSignalProcessor: Procesando nuevo frame");
-      processor.processFrame(imageData);
-    } else {
+    if (!isProcessing) {
       console.log("useSignalProcessor: Frame ignorado (no está procesando)");
+      return;
+    }
+    
+    try {
+      processor.processFrame(imageData);
+    } catch (error) {
+      console.error("Error processing frame:", error);
+      setError({ 
+        code: "PROCESS_ERROR", 
+        message: "Error al procesar el frame", 
+        timestamp: Date.now() 
+      });
     }
   }, [isProcessing, processor]);
 

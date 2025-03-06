@@ -36,54 +36,61 @@ const Index = () => {
 
   // Handle stream ready callback
   const handleStreamReady = useCallback((stream: MediaStream) => {
-    if (!isMonitoring) return;
-    
-    const videoTrack = stream.getVideoTracks()[0];
-    
-    if (!videoTrack) {
-      console.error("No video track found in stream");
+    if (!stream || !isMonitoring) {
+      console.log("Stream not ready or monitoring off");
       return;
     }
     
-    const imageCapture = new ImageCapture(videoTrack);
-    
-    // Try to enable torch if available
-    if (videoTrack.getCapabilities()?.torch) {
-      videoTrack.applyConstraints({
-        advanced: [{ torch: true }]
-      }).catch(err => console.error("Error activating torch:", err));
-    }
-    
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) {
-      console.error("Could not get 2D context");
-      return;
-    }
-    
-    const processImage = async () => {
-      if (!isMonitoring) return;
+    try {
+      const videoTrack = stream.getVideoTracks()[0];
       
-      try {
-        const frame = await imageCapture.grabFrame();
-        tempCanvas.width = frame.width;
-        tempCanvas.height = frame.height;
-        tempCtx.drawImage(frame, 0, 0);
-        const imageData = tempCtx.getImageData(0, 0, frame.width, frame.height);
-        processFrame(imageData);
-        
-        if (isMonitoring) {
-          requestAnimationFrame(processImage);
-        }
-      } catch (error) {
-        console.error("Error capturing frame:", error);
-        if (isMonitoring) {
-          requestAnimationFrame(processImage);
-        }
+      if (!videoTrack) {
+        console.error("No video track found in stream");
+        return;
       }
-    };
+      
+      const imageCapture = new ImageCapture(videoTrack);
+      
+      // Try to enable torch if available
+      if (videoTrack.getCapabilities()?.torch) {
+        videoTrack.applyConstraints({
+          advanced: [{ torch: true }]
+        }).catch(err => console.error("Error activating torch:", err));
+      }
+      
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) {
+        console.error("Could not get 2D context");
+        return;
+      }
+      
+      const processImage = async () => {
+        if (!isMonitoring) return;
+        
+        try {
+          const frame = await imageCapture.grabFrame();
+          tempCanvas.width = frame.width;
+          tempCanvas.height = frame.height;
+          tempCtx.drawImage(frame, 0, 0);
+          const imageData = tempCtx.getImageData(0, 0, frame.width, frame.height);
+          processFrame(imageData);
+          
+          if (isMonitoring) {
+            requestAnimationFrame(processImage);
+          }
+        } catch (error) {
+          console.error("Error capturing frame:", error);
+          if (isMonitoring) {
+            requestAnimationFrame(processImage);
+          }
+        }
+      };
 
-    processImage();
+      processImage();
+    } catch (error) {
+      console.error("Error in stream ready handler:", error);
+    }
   }, [isMonitoring, processFrame]);
 
   return (
@@ -107,10 +114,9 @@ const Index = () => {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex-1">
-            {/* Only render PPGSignalMeter when we have a signal or monitoring is active */}
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
-              quality={lastSignal?.quality || 0}
+              quality={signalQuality}
               isFingerDetected={lastSignal?.fingerDetected || false}
               onStartMeasurement={startMonitoring}
               onReset={handleReset}

@@ -54,39 +54,55 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   } | null>(null);
   
   const measurementTimerRef = useRef<number | null>(null);
+  const processingRef = useRef<boolean>(false);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
 
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+        measurementTimerRef.current = null;
+      }
+      stopProcessing();
+      setIsMonitoring(false);
+      setIsCameraOn(false);
+    };
+  }, [stopProcessing]);
+
   // Process signals and update vital signs
   useEffect(() => {
-    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      try {
-        // Process heart beat
-        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-        if (heartBeatResult && heartBeatResult.bpm) {
-          setHeartRate(heartBeatResult.bpm);
+    if (!lastSignal || !lastSignal.fingerDetected || !isMonitoring) {
+      return;
+    }
+    
+    try {
+      // Process heart beat
+      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+      if (heartBeatResult && heartBeatResult.bpm) {
+        setHeartRate(heartBeatResult.bpm);
+        
+        // Process vital signs
+        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+        if (vitals) {
+          setVitalSigns(vitals);
+          // Extract arrhythmia counter if available
+          const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(arrhythmiaInfo[1] || "--");
           
-          // Process vital signs
-          const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-          if (vitals) {
-            setVitalSigns(vitals);
-            // Extract arrhythmia counter if available
-            const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
-            setArrhythmiaCount(arrhythmiaInfo[1] || "--");
-            
-            // Save arrhythmia data for visualization
-            if (vitals.lastArrhythmiaData) {
-              setLastArrhythmiaData(vitals.lastArrhythmiaData);
-            }
+          // Save arrhythmia data for visualization
+          if (vitals.lastArrhythmiaData) {
+            setLastArrhythmiaData(vitals.lastArrhythmiaData);
           }
         }
-        
-        setSignalQuality(lastSignal.quality);
-      } catch (error) {
-        console.error("Error processing signal:", error);
       }
+      
+      setSignalQuality(lastSignal.quality);
+    } catch (error) {
+      console.error("Error processing signal:", error);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
@@ -104,7 +120,10 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
     console.log("Starting monitoring");
     if (isMonitoring) {
       handleReset();
-    } else {
+      return;
+    }
+    
+    try {
       enterFullScreen();
       setIsMonitoring(true);
       setIsCameraOn(true);
@@ -128,6 +147,9 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
           return prev + 1;
         });
       }, 1000);
+    } catch (error) {
+      console.error("Error starting monitoring:", error);
+      handleReset();
     }
   }, [isMonitoring, startProcessing]);
 

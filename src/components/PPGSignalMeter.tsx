@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import SignalHeader from './ppg/SignalHeader';
 import SignalCanvas from './ppg/SignalCanvas';
 import SignalButtons from './ppg/SignalButtons';

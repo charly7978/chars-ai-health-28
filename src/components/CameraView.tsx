@@ -16,8 +16,7 @@ const CameraView = ({
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
-  const lastFrameTimeRef = useRef<number>(0);
+  const streamAttemptedRef = useRef<boolean>(false);
 
   const stopCamera = async () => {
     if (stream) {
@@ -39,11 +38,15 @@ const CameraView = ({
       }
       
       setStream(null);
+      streamAttemptedRef.current = false;
     }
   };
 
   const startCamera = async () => {
     try {
+      // Mark that we attempted to start a stream
+      streamAttemptedRef.current = true;
+      
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("getUserMedia no está soportado");
       }
@@ -68,7 +71,10 @@ const CameraView = ({
         video: baseVideoConstraints
       };
 
+      console.log("Requesting camera access with constraints:", constraints);
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Camera access granted, got stream:", newStream ? "Stream object" : "No stream");
+      
       const videoTrack = newStream.getVideoTracks()[0];
 
       if (videoTrack && isAndroid) {
@@ -103,6 +109,14 @@ const CameraView = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play().catch(err => 
+              console.error("Error playing video:", err)
+            );
+          }
+        };
+        
         if (isAndroid) {
           videoRef.current.style.willChange = 'transform';
           videoRef.current.style.transform = 'translateZ(0)';
@@ -116,11 +130,13 @@ const CameraView = ({
       }
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
+      // Reset our attempt flag so we can try again
+      streamAttemptedRef.current = false;
     }
   };
 
   useEffect(() => {
-    if (isMonitoring && !stream) {
+    if (isMonitoring && !stream && !streamAttemptedRef.current) {
       console.log("Starting camera because isMonitoring=true");
       startCamera();
     } else if (!isMonitoring && stream) {
@@ -132,7 +148,7 @@ const CameraView = ({
       console.log("CameraView component unmounting, stopping camera");
       stopCamera();
     };
-  }, [isMonitoring]);
+  }, [isMonitoring, stream]);
 
   return (
     <video
