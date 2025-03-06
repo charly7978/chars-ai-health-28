@@ -223,18 +223,18 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <div className="flex flex-col items-center justify-center h-full min-h-[90px]">
-        <h3 className={`text-white text-[11px] font-medium mb-2 text-center tracking-wide uppercase ${highlighted ? 'text-cyan-400/90' : ''}`}>
+      <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-2">
+        <h3 className={`text-white text-[13px] font-medium text-center tracking-wide uppercase ${highlighted ? 'text-cyan-400/90' : ''}`}>
           {label}
         </h3>
         
-        <div className="flex flex-col items-center justify-center gap-1">
+        <div className="flex flex-col items-center justify-center gap-1.5">
           <span 
             className={`font-bold text-center ${color} transition-colors duration-300 
-              ${isArrhythmiaDisplay ? 'text-[11px] leading-tight tracking-wide' : ''}
-              ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-[12px] tracking-wide' : ''}
-              ${isLipidsDisplay || isPressureDisplay ? 'text-[15px] leading-none tracking-wide' : ''}
-              ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[16px] leading-none tracking-wide' : ''}
+              ${isArrhythmiaDisplay ? 'text-[13px] leading-tight tracking-wide' : ''}
+              ${isDisplayCalibrating && !isArrhythmiaDisplay ? 'text-[14px] tracking-wide' : ''}
+              ${isLipidsDisplay || isPressureDisplay ? 'text-[18px] leading-tight tracking-wide' : ''}
+              ${!isDisplayCalibrating && !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[20px] leading-tight tracking-wide' : ''}
               ${highlighted ? 'drop-shadow-glow' : ''}`}
             style={{
               textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
@@ -244,13 +244,13 @@ const VitalSign: React.FC<VitalSignProps> = ({
           </span>
           
           {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
-            <span className={`text-gray-400/90 text-[10px] font-medium leading-none tracking-wide ${highlighted ? 'text-cyan-400/90' : ''}`}>
+            <span className={`text-gray-400/90 text-[12px] font-medium leading-none tracking-wide ${highlighted ? 'text-cyan-400/90' : ''}`}>
               {unit}
             </span>
           )}
           
           {condition && !isCalibrating && (
-            <span className={`${color} text-[10px] font-medium leading-none mt-1 tracking-wide uppercase text-center`}>
+            <span className={`${color} text-[12px] font-medium leading-tight mt-1 tracking-wide uppercase text-center max-w-full px-1`}>
               {condition}
             </span>
           )}
