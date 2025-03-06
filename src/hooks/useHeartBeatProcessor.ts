@@ -79,7 +79,7 @@ export const useHeartBeatProcessor = () => {
       inputValue: value,
       normalizadoValue: value.toFixed(2),
       currentProcessor: !!processorRef.current,
-      processorMethods: processorRef.current ? Object.getOwnPropertyNames(processorRef.current.__proto__) : [],
+      processorMethods: processorRef.current ? Object.getOwnPropertyNames(Object.getPrototypeOf(processorRef.current)) : [],
       sessionId: sessionId.current,
       timestamp: new Date().toISOString()
     });
