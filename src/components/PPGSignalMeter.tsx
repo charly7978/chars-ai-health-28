@@ -155,15 +155,17 @@ const PPGSignalMeter = ({
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
+        ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
       else if (status.includes("ARRITMIA") && Number(count) > 1) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
-        ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
+        
+        // Mostrar el número exacto de arritmias detectadas
+        // Esto muestra el conteo preciso desde el arrhythmiaStatus
+        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
       }
     }
     
@@ -279,9 +281,9 @@ const PPGSignalMeter = ({
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
         arrhythmiaStatus?.includes("ARRITMIA") && 
-        now - rawArrhythmiaData.timestamp < 1000) {
+        now - rawArrhythmiaData.timestamp < 500) {
       isArrhythmia = true;
-      lastArrhythmiaTime.current = now;
+      lastArrhythmiaTime.current = rawArrhythmiaData.timestamp;
     }
 
     const dataPoint: PPGDataPoint = {
@@ -317,22 +319,31 @@ const PPGSignalMeter = ({
           ctx.moveTo(x1, y1);
           firstPoint = false;
         }
-        ctx.lineTo(x2, y2);
         
-        if (point.isArrhythmia) {
+        if (point.isArrhythmia && !firstPoint) {
+          ctx.lineTo(x1, y1);
           ctx.stroke();
+          
           ctx.beginPath();
           ctx.strokeStyle = '#DC2626';
+          ctx.lineWidth = 3;
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
           ctx.stroke();
+          
           ctx.beginPath();
           ctx.strokeStyle = '#0EA5E9';
+          ctx.lineWidth = 2;
           ctx.moveTo(x2, y2);
           firstPoint = true;
+        } else {
+          ctx.lineTo(x2, y2);
         }
       }
-      ctx.stroke();
+      
+      if (!firstPoint) {
+        ctx.stroke();
+      }
 
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);

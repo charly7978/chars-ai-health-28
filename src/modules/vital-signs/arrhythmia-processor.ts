@@ -1,14 +1,13 @@
-
 /**
  * Advanced Arrhythmia Processor based on peer-reviewed cardiac research
  * Implements algorithms from "Assessment of Arrhythmia Vulnerability by Heart Rate Variability Analysis"
  * and "Machine Learning for Arrhythmia Detection" publications
  */
 export class ArrhythmiaProcessor {
-  // Configuration based on Harvard Medical School research on HRV
-  private readonly RR_WINDOW_SIZE = 8; // Increased window for better statistical power
-  private readonly RMSSD_THRESHOLD = 30; // Updated per latest HRV research
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 5000; // Extended learning period
+  // Configuración optimizada para reducir falsos positivos
+  private readonly RR_WINDOW_SIZE = 5; // Reducido para evitar propagación de falsos positivos
+  private RMSSD_THRESHOLD = 45; // Cambiado a variable normal para permitir ajustes
+  private readonly ARRHYTHMIA_LEARNING_PERIOD = 5000; // Periodo de aprendizaje
   private readonly SD1_THRESHOLD = 25; // Poincaré plot SD1 threshold
   private readonly PERFUSION_INDEX_MIN = 0.2; // Minimum PI for reliable detection
   
@@ -16,6 +15,13 @@ export class ArrhythmiaProcessor {
   private readonly PNNX_THRESHOLD = 0.15; // pNN50 threshold
   private readonly SHANNON_ENTROPY_THRESHOLD = 1.5; // Information theory threshold
   private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
+  
+  // Límites de tiempo para evitar múltiples detecciones del mismo evento
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1500; // Al menos 1.5 segundos entre arritmias
+  
+  // Parámetros para evitar falsos positivos en la detección
+  private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
+  private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Máximo 1 latido arrítmico consecutivo
   
   // State variables
   private rrIntervals: number[] = [];
@@ -34,6 +40,11 @@ export class ArrhythmiaProcessor {
   private shannonEntropy: number = 0;
   private sampleEntropy: number = 0;
   private pnnX: number = 0;
+
+  // Nuevo: variables para prevenir falsos positivos consecutivos
+  private consecutiveArrhythmiaFrames: number = 0;
+  private pendingArrhythmiaDetection: boolean = false;
+  private lastArrhythmiaData: { timestamp: number; rmssd: number; rrVariation: number; } | null = null;
 
   /**
    * Processes heart beat data to detect arrhythmias using advanced HRV analysis
@@ -58,8 +69,37 @@ export class ArrhythmiaProcessor {
         }
       }
       
+      // Solo detecta arritmias si ya pasó la fase de aprendizaje y hay suficientes datos
       if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
-        this.detectArrhythmia();
+        // Determinar si este frame debe ser evaluado para arritmia
+        const shouldEvaluateFrame = 
+          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
+          !this.arrhythmiaDetected;
+        
+        if (shouldEvaluateFrame) {
+          // Si hay detección pendiente, desactivarla después de un tiempo
+          if (this.pendingArrhythmiaDetection && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.pendingArrhythmiaDetection = false;
+            this.arrhythmiaDetected = false;
+            this.consecutiveArrhythmiaFrames = 0;
+          }
+          
+          // Solo evalúa arritmias si no hay muchas detecciones consecutivas
+          if (this.consecutiveArrhythmiaFrames < this.MAX_CONSECUTIVE_DETECTIONS) {
+            this.detectArrhythmia();
+          } else if (currentTime - this.lastArrhythmiaTime > 1000) {
+            // Resetear contador después de un tiempo
+            this.consecutiveArrhythmiaFrames = 0;
+            this.arrhythmiaDetected = false;
+          }
+        } else {
+          // Si no es momento de evaluar, no mantener la detección demasiado tiempo
+          if (this.arrhythmiaDetected && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.arrhythmiaDetected = false;
+          }
+        }
       }
     }
 
@@ -73,18 +113,16 @@ export class ArrhythmiaProcessor {
     let arrhythmiaStatus;
     if (this.isLearningPhase) {
       arrhythmiaStatus = "CALIBRANDO...";
-    } else if (this.hasDetectedFirstArrhythmia) {
+    } else if (this.arrhythmiaDetected) { 
+      // Solo muestra detección durante la ventana activa
       arrhythmiaStatus = `ARRITMIA DETECTADA|${this.arrhythmiaCount}`;
     } else {
       arrhythmiaStatus = `SIN ARRITMIAS|${this.arrhythmiaCount}`;
     }
 
-    // Prepare arrhythmia data if detected
-    const lastArrhythmiaData = this.arrhythmiaDetected ? {
-      timestamp: currentTime,
-      rmssd: this.lastRMSSD,
-      rrVariation: this.lastRRVariation
-    } : null;
+    // Solo enviar datos de arritmia si está actualmente detectada
+    const lastArrhythmiaData = this.arrhythmiaDetected ? 
+      this.lastArrhythmiaData : null;
 
     return {
       arrhythmiaStatus,
@@ -128,37 +166,58 @@ export class ArrhythmiaProcessor {
     this.lastRMSSD = rmssd;
     this.lastRRVariation = rrVariation;
     
-    // Multi-parametric decision algorithm based on cardiology research
-    // Combines time-domain (RMSSD), frequency-domain and non-linear metrics
-    const newArrhythmiaState = 
-      // Primary time-domain condition
-      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.20) ||
-      // Secondary non-linear dynamics condition
-      (this.shannonEntropy > this.SHANNON_ENTROPY_THRESHOLD && this.pnnX > this.PNNX_THRESHOLD) ||
-      // Tertiary condition based on coefficient of variation
-      (coefficientOfVariation > 0.15 && rrVariation > 0.18);
+    // Algoritmo de decisión mejorado
+    // Criterios más estrictos para reducir falsos positivos
+    const isArrhythmia = 
+      // Requiere alta variación del último intervalo RR respecto al promedio
+      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.25) ||
+      // O una variación extrema del intervalo R-R
+      (rrVariation > 0.40);
     
-    // If it's a new arrhythmia and enough time has passed since the last one
-    if (newArrhythmiaState && 
-        currentTime - this.lastArrhythmiaTime > 1000) { // Minimum 1 second between arrhythmias
-      this.arrhythmiaCount++;
-      this.lastArrhythmiaTime = currentTime;
-      
-      // Mark that we've detected the first arrhythmia
-      this.hasDetectedFirstArrhythmia = true;
-      
-      console.log('VitalSignsProcessor - Nueva arritmia detectada:', {
-        contador: this.arrhythmiaCount,
-        rmssd,
-        rrVariation,
-        shannonEntropy: this.shannonEntropy,
-        pnnX: this.pnnX,
-        coefficientOfVariation,
-        timestamp: currentTime
-      });
+    // Si detectamos una arritmia potencial
+    if (isArrhythmia) {
+      // Confirmar solo si ha pasado suficiente tiempo desde la última detección
+      if (currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
+        this.arrhythmiaCount++;
+        this.lastArrhythmiaTime = currentTime;
+        this.hasDetectedFirstArrhythmia = true;
+        this.arrhythmiaDetected = true;
+        this.consecutiveArrhythmiaFrames = 1;
+        
+        // Guardar la información de esta arritmia
+        this.lastArrhythmiaData = {
+          timestamp: currentTime,
+          rmssd: rmssd,
+          rrVariation: rrVariation
+        };
+        
+        console.log('ArrhythmiaProcessor - Nueva arritmia real confirmada:', {
+          contador: this.arrhythmiaCount,
+          rmssd: rmssd.toFixed(2),
+          rrVariation: rrVariation.toFixed(2),
+          avgRR: avgRR.toFixed(2),
+          lastRR: lastRR.toFixed(2),
+          timestamp: new Date(currentTime).toISOString()
+        });
+      } else {
+        // Si es muy cercana a la anterior, marcamos como pendiente pero no incrementamos contador
+        this.pendingArrhythmiaDetection = true;
+        this.consecutiveArrhythmiaFrames++;
+        
+        // Límite estricto de detecciones consecutivas
+        if (this.consecutiveArrhythmiaFrames > this.MAX_CONSECUTIVE_DETECTIONS) {
+          this.arrhythmiaDetected = false;
+        }
+      }
+    } else {
+      // Si no hay arritmia en este frame, mantener la detección actual brevemente
+      // y luego desactivarla si no se confirma
+      if (this.arrhythmiaDetected && 
+          currentTime - this.lastArrhythmiaTime > 500) {
+        this.arrhythmiaDetected = false;
+        this.consecutiveArrhythmiaFrames = 0;
+      }
     }
-
-    this.arrhythmiaDetected = newArrhythmiaState;
   }
   
   /**
@@ -251,5 +310,15 @@ export class ArrhythmiaProcessor {
     this.shannonEntropy = 0;
     this.sampleEntropy = 0;
     this.pnnX = 0;
+    this.consecutiveArrhythmiaFrames = 0;
+    this.pendingArrhythmiaDetection = false;
+    this.lastArrhythmiaData = null;
+  }
+
+  /**
+   * Método para ajustar el umbral de variabilidad (usado para calibración)
+   */
+  public setThresholds(rmssdThreshold: number): void {
+    this.RMSSD_THRESHOLD = rmssdThreshold;
   }
 }
