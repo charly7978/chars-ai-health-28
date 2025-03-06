@@ -151,9 +151,9 @@ const PPGSignalMeter = ({
       const [status, count] = arrhythmiaStatus.split('|');
       if (status && count) {
         ctx.fillStyle = status.includes("ARRITMIA") ? '#ef4444' : '#22c55e';
-        ctx.font = '600 12px Inter';
+        ctx.font = 'bold 14px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText(`Arritmias: ${count}`, 35, 25);
+        ctx.fillText(`Arritmias: ${count}`, 45, 35);
       }
     }
     
