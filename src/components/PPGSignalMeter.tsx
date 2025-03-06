@@ -47,10 +47,14 @@ const PPGSignalMeter = ({
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
   
-  // New constants for improved peak detection
-  const PEAK_DETECTION_WINDOW = 15; // Smaller window for higher sensitivity
-  const PEAK_THRESHOLD = 5; // Lower threshold to catch more peaks
-  const MIN_PEAK_DISTANCE_MS = 300; // Minimum time between peaks (300ms ~= 200bpm max)
+  // Enhanced peak detection parameters
+  const PEAK_DETECTION_WINDOW = 8; // Smaller window for even higher sensitivity
+  const PEAK_THRESHOLD = 3; // Lower threshold to catch more peaks
+  const MIN_PEAK_DISTANCE_MS = 250; // Reduced minimum time between peaks (250ms ~= 240bpm max)
+  
+  // New parameters to reduce delays
+  const IMMEDIATE_RENDERING = true; // Force immediate rendering of new peaks
+  const MAX_PEAKS_TO_DISPLAY = 25; // Limit the number of peaks to avoid overwhelming the display
   
   useEffect(() => {
     if (!dataBufferRef.current) {
@@ -138,7 +142,10 @@ const PPGSignalMeter = ({
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
     
-    // Iterate through all points with a sliding window
+    // First pass: identify potential peaks with the sliding window approach
+    const potentialPeaks: {index: number, value: number, time: number, isArrhythmia: boolean}[] = [];
+    
+    // Scan through all points with a sliding window
     for (let i = PEAK_DETECTION_WINDOW; i < points.length - PEAK_DETECTION_WINDOW; i++) {
       const currentPoint = points[i];
       
@@ -172,21 +179,39 @@ const PPGSignalMeter = ({
       
       // Require minimum amplitude to be considered a peak
       if (isPeak && Math.abs(currentPoint.value) > PEAK_THRESHOLD) {
-        const isArrhythmia = currentPoint.isArrhythmia;
-        
-        // Add to peaks collection if it's a valid peak
-        peaksRef.current.push({
-          time: currentPoint.time,
+        potentialPeaks.push({
+          index: i,
           value: currentPoint.value,
-          isArrhythmia
+          time: currentPoint.time,
+          isArrhythmia: currentPoint.isArrhythmia
         });
       }
     }
     
-    // Cleanup old peaks outside the visible window
-    peaksRef.current = peaksRef.current.filter(
-      peak => now - peak.time < WINDOW_WIDTH_MS
-    );
+    // Second pass: ensure peaks are significant and not too close to each other
+    for (const peak of potentialPeaks) {
+      // Verify this peak is not too close to existing peaks
+      const tooClose = peaksRef.current.some(
+        existingPeak => Math.abs(existingPeak.time - peak.time) < MIN_PEAK_DISTANCE_MS
+      );
+      
+      if (!tooClose) {
+        // Add to peaks collection
+        peaksRef.current.push({
+          time: peak.time,
+          value: peak.value,
+          isArrhythmia: peak.isArrhythmia
+        });
+      }
+    }
+    
+    // Sort peaks by time to maintain chronological order
+    peaksRef.current.sort((a, b) => a.time - b.time);
+    
+    // Cleanup old peaks outside the visible window and limit the total number
+    peaksRef.current = peaksRef.current
+      .filter(peak => now - peak.time < WINDOW_WIDTH_MS)
+      .slice(-MAX_PEAKS_TO_DISPLAY); // Keep only the most recent peaks
   }, []);
 
   const renderSignal = useCallback(() => {
@@ -198,7 +223,8 @@ const PPGSignalMeter = ({
     const currentTime = performance.now();
     const timeSinceLastRender = currentTime - lastRenderTimeRef.current;
 
-    if (timeSinceLastRender < FRAME_TIME) {
+    // For more consistent rendering, only limit framerate if not in immediate rendering mode
+    if (!IMMEDIATE_RENDERING && timeSinceLastRender < FRAME_TIME) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
@@ -241,12 +267,21 @@ const PPGSignalMeter = ({
     dataBufferRef.current.push(dataPoint);
     const points = dataBufferRef.current.getPoints();
     
+    // Run peak detection immediately for every frame to reduce delay
     detectPeaks(points, now);
 
     drawGrid(ctx);
 
     if (points.length > 1) {
-      // Draw signal line
+      // Draw signal line with improved rendering
+      ctx.beginPath();
+      ctx.strokeStyle = '#0EA5E9';
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      
+      let firstPoint = true;
+      
       for (let i = 1; i < points.length; i++) {
         const prevPoint = points[i - 1];
         const point = points[i];
@@ -256,42 +291,57 @@ const PPGSignalMeter = ({
         const x2 = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
         const y2 = canvas.height / 2 - point.value;
 
-        ctx.beginPath();
-        ctx.strokeStyle = point.isArrhythmia ? '#DC2626' : '#0EA5E9';
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.moveTo(x1, y1);
+        // Use a single path for better performance
+        if (firstPoint) {
+          ctx.moveTo(x1, y1);
+          firstPoint = false;
+        }
         ctx.lineTo(x2, y2);
-        ctx.stroke();
+        
+        // If this point is an arrhythmia, change color immediately
+        if (point.isArrhythmia) {
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = '#DC2626';
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.strokeStyle = '#0EA5E9';
+          ctx.moveTo(x2, y2);
+          firstPoint = true;
+        }
       }
+      ctx.stroke();
 
-      // Draw peak markers
+      // Draw peak markers - render all peaks immediately for better visibility
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
-          // Draw peak circle
+          // Draw peak circle with improved visibility
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
+            // Draw yellow circumference for arrhythmia
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
+            // Add ARRITMIA label with improved visibility
             ctx.font = 'bold 12px Inter';
             ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
 
-          // Show peak amplitude
+          // Show peak amplitude with better contrast
           ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
