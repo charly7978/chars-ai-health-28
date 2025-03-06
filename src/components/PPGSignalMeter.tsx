@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
@@ -33,6 +33,7 @@ const PPGSignalMeter = ({
   const lastRenderTimeRef = useRef<number>(0);
   const lastArrhythmiaTime = useRef<number>(0);
   const arrhythmiaCountRef = useRef<number>(0);
+  const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -128,6 +129,44 @@ const PPGSignalMeter = ({
     ctx.stroke();
   }, []);
 
+  const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
+    if (points.length < 30) return;
+    
+    const startIndex = Math.floor(points.length * 0.8);
+    
+    let maxValIdx = startIndex;
+    let maxVal = points[startIndex].value;
+    
+    for (let i = startIndex; i < points.length - 1; i++) {
+      if (points[i].value > maxVal) {
+        maxVal = points[i].value;
+        maxValIdx = i;
+      }
+    }
+    
+    if (maxValIdx > 0 && maxValIdx < points.length - 1) {
+      if (points[maxValIdx].value > points[maxValIdx-1].value && 
+          points[maxValIdx].value > points[maxValIdx+1].value) {
+          
+        const isPeakAlreadyDetected = peaksRef.current.some(peak => 
+          Math.abs(peak.time - points[maxValIdx].time) < 300
+        );
+        
+        if (!isPeakAlreadyDetected && points[maxValIdx].value > 10) {
+          peaksRef.current.push({
+            time: points[maxValIdx].time,
+            value: points[maxValIdx].value,
+            isArrhythmia: points[maxValIdx].isArrhythmia
+          });
+          
+          peaksRef.current = peaksRef.current.filter(
+            peak => now - peak.time < WINDOW_WIDTH_MS
+          );
+        }
+      }
+    }
+  }, []);
+
   const renderSignal = useCallback(() => {
     if (!canvasRef.current || !dataBufferRef.current) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
@@ -178,10 +217,12 @@ const PPGSignalMeter = ({
     };
     
     dataBufferRef.current.push(dataPoint);
+    const points = dataBufferRef.current.getPoints();
+    
+    detectPeaks(points, now);
 
     drawGrid(ctx);
 
-    const points = dataBufferRef.current.getPoints();
     if (points.length > 1) {
       for (let i = 1; i < points.length; i++) {
         const prevPoint = points[i - 1];
@@ -202,48 +243,27 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      const windowSize = 30;
-      const peaks: number[] = [];
-      
-      for (let i = windowSize; i < points.length - windowSize; i += windowSize) {
-        let maxIdx = i;
-        let maxVal = points[i].value;
+      peaksRef.current.forEach(peak => {
+        const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
+        const y = canvas.height / 2 - peak.value;
         
-        for (let j = i - windowSize/2; j < i + windowSize/2; j++) {
-          if (j >= 0 && j < points.length && points[j].value > maxVal) {
-            maxVal = points[j].value;
-            maxIdx = j;
-          }
-        }
-        
-        if (maxIdx > 0 && maxIdx < points.length - 1) {
-          if (points[maxIdx].value > points[maxIdx-1].value && 
-              points[maxIdx].value > points[maxIdx+1].value) {
-            peaks.push(maxIdx);
-          }
-        }
-      }
+        if (x >= 0 && x <= canvas.width) {
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          ctx.fill();
 
-      peaks.forEach(peakIdx => {
-        const point = points[peakIdx];
-        const x = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
-        const y = canvas.height / 2 - point.value;
-        
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = point.isArrhythmia ? '#DC2626' : '#0EA5E9';
-        ctx.fill();
-
-        ctx.font = 'bold 12px Inter';
-        ctx.fillStyle = '#000000';
-        ctx.textAlign = 'center';
-        ctx.fillText(Math.abs(point.value / verticalScale).toFixed(2), x, y - 20);
+          ctx.font = 'bold 12px Inter';
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'center';
+          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
+        }
       });
     }
 
     lastRenderTimeRef.current = currentTime;
     animationFrameRef.current = requestAnimationFrame(renderSignal);
-  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus]);
+  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus, drawGrid, detectPeaks, smoothValue]);
 
   useEffect(() => {
     renderSignal();
@@ -253,6 +273,11 @@ const PPGSignalMeter = ({
       }
     };
   }, [renderSignal]);
+
+  const handleReset = useCallback(() => {
+    peaksRef.current = [];
+    onReset();
+  }, [onReset]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
@@ -307,7 +332,7 @@ const PPGSignalMeter = ({
         </button>
 
         <button 
-          onClick={onReset}
+          onClick={handleReset}
           className="bg-white text-slate-700 hover:bg-gray-50 active:bg-gray-100 transition-colors duration-200"
         >
           <span className="text-lg font-semibold">
