@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -26,6 +27,8 @@ const Index = () => {
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration']>();
   const measurementTimerRef = useRef<number | null>(null);
   const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
     timestamp: number;
@@ -39,7 +42,8 @@ const Index = () => {
     processSignal: processVitalSigns, 
     reset: resetVitalSigns,
     fullReset: fullResetVitalSigns,
-    lastValidResults 
+    lastValidResults,
+    startCalibration
   } = useVitalSignsProcessor();
 
   const enterFullScreen = async () => {
@@ -83,6 +87,9 @@ const Index = () => {
         arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
+      // Start calibration automatically
+      startAutoCalibration();
+      
       if (measurementTimerRef.current) {
         clearInterval(measurementTimerRef.current);
       }
@@ -99,10 +106,17 @@ const Index = () => {
     }
   };
 
+  const startAutoCalibration = () => {
+    console.log("Iniciando auto-calibración de todos los parámetros");
+    setIsCalibrating(true);
+    startCalibration();
+  };
+
   const finalizeMeasurement = () => {
     console.log("Finalizando medición: manteniendo resultados");
     setIsMonitoring(false);
     setIsCameraOn(false);
+    setIsCalibrating(false);
     stopProcessing();
     
     if (measurementTimerRef.current) {
@@ -125,6 +139,7 @@ const Index = () => {
     setIsMonitoring(false);
     setIsCameraOn(false);
     setShowResults(false);
+    setIsCalibrating(false);
     stopProcessing();
     
     if (measurementTimerRef.current) {
@@ -203,6 +218,15 @@ const Index = () => {
       if (vitals) {
         setVitalSigns(vitals);
         
+        // Update calibration status
+        if (vitals.calibration) {
+          setCalibrationProgress(vitals.calibration);
+          setIsCalibrating(vitals.calibration.isCalibrating);
+        } else if (isCalibrating) {
+          setIsCalibrating(false);
+          setCalibrationProgress(undefined);
+        }
+        
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
           
@@ -261,39 +285,53 @@ const Index = () => {
                   value={heartRate || "--"}
                   unit="BPM"
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.heartRate}
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.spo2}
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.pressure}
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.arrhythmia}
                 />
                 <VitalSign 
                   label="GLUCOSA"
                   value={vitalSigns.glucose || "--"}
                   unit="mg/dL"
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.glucose}
                 />
                 <VitalSign 
                   label="COLESTEROL/TRIGL."
                   value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                   unit="mg/dL"
                   highlighted={showResults}
+                  calibrationProgress={calibrationProgress?.progress.lipids}
                 />
               </div>
               
-              {showResults && (
+              {isCalibrating && (
+                <div className="absolute -top-6 right-3">
+                  <span className="text-xs text-yellow-400 bg-black/80 font-medium px-2 py-0.5 rounded-t-md">
+                    Calibrando mediciones...
+                  </span>
+                </div>
+              )}
+              
+              {showResults && !isCalibrating && (
                 <div className="absolute -top-6 right-3">
                   <span className="text-xs text-cyan-400/90 font-medium px-2 py-0.5 rounded-t-md bg-transparent">
                     Resultados disponibles

@@ -6,15 +6,31 @@ interface VitalSignProps {
   value: string | number;
   unit?: string;
   highlighted?: boolean;
+  calibrationProgress?: number; // Add calibration progress prop
 }
 
-const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted = false }) => {
+const VitalSign: React.FC<VitalSignProps> = ({ 
+  label, 
+  value, 
+  unit, 
+  highlighted = false,
+  calibrationProgress 
+}) => {
   const isArrhythmiaDisplay = label === "ARRITMIAS";
   const isLipidsDisplay = label === "COLESTEROL/TRIGL.";
   const isPressureDisplay = label === "PRESIÓN ARTERIAL";
   const isGlucoseDisplay = label === "GLUCOSA";
+  const isCalibrating = calibrationProgress !== undefined && calibrationProgress < 100;
   
   const getDisplayContent = () => {
+    // Si está calibrando, mostrar estado de calibración
+    if (isCalibrating) {
+      return {
+        text: `CALIBRANDO ${Math.round(calibrationProgress)}%`,
+        color: "text-yellow-500"
+      };
+    }
+    
     // Para arritmias
     if (isArrhythmiaDisplay) {
       if (value === "--") {
@@ -118,6 +134,12 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
       highlighted ? 'from-black to-black' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      
+      {/* Barra de calibración */}
+      {isCalibrating && (
+        <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
+      )}
+      
       <h3 className={`text-white text-sm text-center pt-1 mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
       <div className="flex items-baseline gap-1 justify-center min-h-[45px]">
         <span 
@@ -130,7 +152,7 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
         >
           {text}
         </span>
-        {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
+        {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
           <span className={`text-gray-400/90 text-sm ${highlighted ? 'text-cyan-400/90' : ''}`}>{unit}</span>
         )}
       </div>

@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -48,6 +47,18 @@ export const useVitalSignsProcessor = () => {
     };
   }, []);
   
+  /**
+   * Start calibration for all vital signs
+   */
+  const startCalibration = useCallback(() => {
+    console.log("useVitalSignsProcessor: Iniciando calibración de todos los parámetros", {
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId.current
+    });
+    
+    processor.startCalibration();
+  }, [processor]);
+  
   // Process the signal with improved algorithms
   const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
@@ -60,7 +71,9 @@ export const useVitalSignsProcessor = () => {
       contadorArritmias: arrhythmiaCounter,
       señalNúmero: processedSignals.current,
       sessionId: sessionId.current,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      calibrando: processor.isCurrentlyCalibrating(),
+      progresoCalibración: processor.getCalibrationProgress()
     });
     
     // Process signal through the vital signs processor
@@ -274,6 +287,7 @@ export const useVitalSignsProcessor = () => {
     processSignal,
     reset,
     fullReset,
+    startCalibration,
     arrhythmiaCounter,
     lastValidResults,
     debugInfo: {
