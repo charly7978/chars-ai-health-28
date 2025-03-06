@@ -1,11 +1,11 @@
 import React from 'react';
 
-interface MonitorButtonProps {
+interface MeasurementButtonProps {
   isMonitoring: boolean;
   onClick: () => void;
 }
 
-const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
+const MeasurementButton = ({ isMonitoring, onClick }: MeasurementButtonProps) => {
   return (
     <button 
       onClick={onClick}
@@ -23,4 +23,4 @@ const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
   );
 };
 
-export default MonitorButton;
+export default MeasurementButton; 

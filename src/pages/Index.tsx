@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -6,7 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import MonitorButton from "@/components/MonitorButton";
+import MeasurementButton from "@/components/MeasurementButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
 const Index = () => {
@@ -305,7 +304,7 @@ const Index = () => {
           </div>
 
           <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <MonitorButton 
+            <MeasurementButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
