@@ -12,8 +12,8 @@ const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [signalQuality, setSignalQuality] = useState(0);
-  const [vitalSigns, setVitalSigns] = useState<VitalSignsResult>({ 
-    spo2: 0, 
+  const [vitalSigns, setVitalSigns] = useState<VitalSignsResult>({
+    spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
     glucose: 0,
@@ -461,8 +461,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-5 py-6">
-            <div className="grid grid-cols-3 gap-5 h-full">
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
+            <div className="grid grid-cols-3 gap-3 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
