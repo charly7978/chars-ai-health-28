@@ -303,12 +303,6 @@ const Index = () => {
             </div>
           </div>
 
-          {isMonitoring && (
-            <div className="absolute bottom-8 left-0 right-0 text-center">
-              <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
-            </div>
-          )}
-
           <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
