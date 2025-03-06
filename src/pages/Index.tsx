@@ -233,14 +233,6 @@ const Index = () => {
       if (vitals) {
         setVitalSigns(vitals);
         
-        if (vitals.calibration) {
-          setCalibrationProgress(vitals.calibration);
-          setIsCalibrating(vitals.calibration.isCalibrating);
-        } else if (isCalibrating) {
-          setIsCalibrating(false);
-          setCalibrationProgress(undefined);
-        }
-        
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
           const [status, count] = vitals.arrhythmiaStatus.split('|');
