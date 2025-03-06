@@ -17,7 +17,7 @@ interface PPGSignalMeterProps {
   preserveResults?: boolean;
 }
 
-const PPGSignalMeter = ({ 
+const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({ 
   value, 
   quality, 
   isFingerDetected,
@@ -147,28 +147,19 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Solo mostrar alertas de arritmia
+    // Solo mostrar contador de arritmias
     if (arrhythmiaStatus) {
-      const [status, count] = arrhythmiaStatus.split('|');
-      
-      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
+      const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
+      if (redPeaksCount > 0) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
-        setShowArrhythmiaAlert(true);
-      } 
-      else if (status.includes("ARRITMIA") && Number(count) > 1) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 16px Inter';
-        ctx.textAlign = 'left';
-        const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
         ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
       }
     }
     
     ctx.stroke();
-  }, [arrhythmiaStatus, showArrhythmiaAlert]);
+  }, [arrhythmiaStatus]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
