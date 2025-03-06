@@ -1,7 +1,8 @@
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSignalProcessor } from './useSignalProcessor';
 import { useVitalSignsProcessor } from './useVitalSignsProcessor';
+import { useHeartBeatProcessor } from './useHeartBeatProcessor';
 
 interface MonitoringControlReturn {
   isMonitoring: boolean;
@@ -11,6 +12,8 @@ interface MonitoringControlReturn {
     spo2: number;
     pressure: string;
     arrhythmiaStatus: string;
+    signalQuality?: number;
+    perfusionIndex?: number;
   };
   heartRate: number;
   arrhythmiaCount: string | number;
@@ -33,7 +36,9 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   const [vitalSigns, setVitalSigns] = useState<{ 
     spo2: number; 
     pressure: string;
-    arrhythmiaStatus: string; 
+    arrhythmiaStatus: string;
+    signalQuality?: number;
+    perfusionIndex?: number;
   }>({ 
     spo2: 0, 
     pressure: "--/--",
@@ -52,6 +57,32 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
+  const { processSignal: processHeartBeat } = useHeartBeatProcessor();
+
+  // Efecto para procesar las señales y actualizar los signos vitales
+  useEffect(() => {
+    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      // Procesar latido cardíaco
+      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+      setHeartRate(heartBeatResult.bpm);
+      
+      // Procesar signos vitales
+      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+      if (vitals) {
+        setVitalSigns(vitals);
+        // Extraer el contador de arritmias si está disponible
+        const arrhythmiaInfo = vitals.arrhythmiaStatus.split('|');
+        setArrhythmiaCount(arrhythmiaInfo[1] || "--");
+        
+        // Guardar datos de arritmia para visualización
+        if (vitals.lastArrhythmiaData) {
+          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+        }
+      }
+      
+      setSignalQuality(lastSignal.quality);
+    }
+  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   const enterFullScreen = async () => {
     try {
@@ -72,7 +103,7 @@ export const useMonitoringControl = (): MonitoringControlReturn => {
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0"
+        arrhythmiaStatus: "CALIBRANDO...|0"
       }));
       
       if (measurementTimerRef.current) {

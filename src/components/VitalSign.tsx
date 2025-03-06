@@ -20,8 +20,9 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit }) => {
       };
     }
     
-    const [status, count] = String(value).split('|');
-    console.log('Procesando display de arritmias:', { status, count, value });
+    const parts = String(value).split('|');
+    const status = parts[0];
+    const count = parts[1];
     
     if (status === "ARRITMIA DETECTADA") {
       return {

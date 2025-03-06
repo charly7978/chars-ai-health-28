@@ -6,7 +6,6 @@ import PPGSignalMeter from "@/components/PPGSignalMeter";
 import TimerDisplay from "@/components/TimerDisplay";
 import ControlButtons from "@/components/ControlButtons";
 import { useMonitoringControl } from "@/hooks/useMonitoringControl";
-import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 
 const Index = () => {
   const {
@@ -23,8 +22,6 @@ const Index = () => {
     lastSignal
   } = useMonitoringControl();
   
-  const { processSignal: processVitalSigns } = useVitalSignsProcessor();
-
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
     document.body.addEventListener('touchmove', preventScroll, { passive: false });
@@ -79,12 +76,6 @@ const Index = () => {
 
     processImage();
   }, [isMonitoring, processFrame]);
-
-  useEffect(() => {
-    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // This is handled internally by useMonitoringControl now
-    }
-  }, [lastSignal, isMonitoring]);
 
   return (
     <div 
