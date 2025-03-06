@@ -117,10 +117,10 @@ const VitalSign: React.FC<VitalSignProps> = ({ label, value, unit, highlighted =
       highlighted ? 'ring-1 ring-cyan-500/50 from-gray-800/60 to-gray-900/70' : ''
     }`}>
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[progress_2s_ease-in-out_infinite] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      <h3 className={`text-white text-xs text-center pt-0 mt-0 mb-4 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
+      <h3 className={`text-white text-xs text-center pt-0 mt-0 -mb-1 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>{label}</h3>
       <div className="flex items-baseline gap-1 justify-center min-h-[40px]">
         <span 
-          className={`${isArrhythmiaDisplay ? 'text-sm' : isLipidsDisplay ? 'text-sm' : 'text-2xl'} font-bold truncate ${color} transition-colors duration-300 ${
+          className={`${isArrhythmiaDisplay ? 'text-xs' : isLipidsDisplay ? 'text-xs' : 'text-xl'} font-bold truncate ${color} transition-colors duration-300 ${
             highlighted ? 'drop-shadow-glow' : ''
           }`}
           style={{
