@@ -131,15 +131,15 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="absolute bottom-0 left-0 h-1 bg-yellow-500" style={{ width: `${calibrationProgress}%` }}></div>
       )}
       
-      <h3 className={`text-white text-sm font-medium mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
+      <h3 className={`text-white text-xs font-medium mb-2 truncate ${highlighted ? 'text-cyan-400/90' : ''}`}>
         {label}
       </h3>
       
-      <div className="flex items-center justify-center gap-1 min-h-[36px]">
+      <div className="flex items-center justify-center gap-1 min-h-[40px]">
         <span 
           className={`font-bold truncate ${color} transition-colors duration-300 
-            ${isArrhythmiaDisplay ? 'text-sm' : 'text-lg'}
-            ${isLipidsDisplay || isPressureDisplay ? 'text-base' : ''}
+            ${isArrhythmiaDisplay ? 'text-xs' : 'text-base'}
+            ${isLipidsDisplay || isPressureDisplay ? 'text-sm' : ''}
             ${highlighted ? 'drop-shadow-glow' : ''}`}
           style={{
             textShadow: highlighted ? '0 0 8px rgba(6, 182, 212, 0.5)' : 'none'
@@ -148,7 +148,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
           {text}
         </span>
         {!isArrhythmiaDisplay && !isLipidsDisplay && !isCalibrating && unit && (
-          <span className={`text-gray-400/90 text-sm font-medium ${highlighted ? 'text-cyan-400/90' : ''}`}>
+          <span className={`text-gray-400/90 text-xs font-medium ${highlighted ? 'text-cyan-400/90' : ''}`}>
             {unit}
           </span>
         )}
