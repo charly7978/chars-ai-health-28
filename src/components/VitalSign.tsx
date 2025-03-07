@@ -6,6 +6,7 @@ interface VitalSignProps {
   value: string | number;
   unit?: string;
   highlighted?: boolean;
+  calibrationProgress?: number;
 }
 
 const VitalSign: React.FC<VitalSignProps> = ({ 
@@ -163,9 +164,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full">
+    <div className="relative overflow-hidden bg-gradient-to-br from-[#0c1c2e] via-[#0e2238] to-[#0a1a2d] backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full shadow-[0_4px_15px_-3px_rgba(2,19,45,0.7)]">
       <div className="flex flex-col items-center justify-center flex-1 gap-2">
-        <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
+        <h3 className="text-white/90 text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
         
@@ -181,7 +182,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gray-400/90 text-[13px] font-medium">
+              <span className="text-gray-400/80 text-[13px] font-medium">
                 {unit}
               </span>
             )}
