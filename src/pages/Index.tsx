@@ -477,11 +477,6 @@ const Index = () => {
                 calibrationProgress={calibrationProgress?.progress.pressure}
               />
               <VitalSign 
-                label="ARRITMIAS"
-                value={vitalSigns.arrhythmiaStatus}
-                calibrationProgress={calibrationProgress?.progress.arrhythmia}
-              />
-              <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
@@ -492,6 +487,12 @@ const Index = () => {
                 value={`${vitalSigns.lipids.totalCholesterol || "--"}/${vitalSigns.lipids.triglycerides || "--"}`}
                 unit="mg/dL"
                 calibrationProgress={calibrationProgress?.progress.lipids}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                calibrationProgress={calibrationProgress?.progress.hemoglobin}
               />
             </div>
           </div>
