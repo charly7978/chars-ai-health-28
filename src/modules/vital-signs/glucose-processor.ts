@@ -1,3 +1,4 @@
+
 /**
  * Advanced non-invasive glucose estimation based on PPG signal analysis
  * Implementation based on research papers from MIT, Stanford and University of Washington
@@ -20,8 +21,8 @@ export class GlucoseProcessor {
   private medianBuffer: number[] = []; // Buffer for median filtering
   
   constructor() {
-    // Initialize with conservative baseline
-    this.lastEstimate = 100; // Start with normal baseline (100 mg/dL)
+    // Initialize with zero instead of normal baseline
+    this.lastEstimate = 0; // Start with zero, not 100
   }
   
   /**
@@ -55,14 +56,26 @@ export class GlucoseProcessor {
     // Calculate confidence based on signal quality and physiological coherence
     this.confidenceScore = this.calculateConfidence(features, recentPPG);
     
+    // Return 0 if confidence is below threshold - this ensures we don't show values until we have good readings
+    if (this.confidenceScore <= this.CONFIDENCE_THRESHOLD) {
+      return 0;
+    }
+    
     // Apply physiological constraints with expanded range
     const maxAllowedChange = 30; // Increased allowed change for wider ranges
     let constrainedEstimate = this.lastEstimate;
     
+    // Only update estimate if we have reasonable confidence
     if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
       const change = glucoseEstimate - this.lastEstimate;
       const allowedChange = Math.min(Math.abs(change), maxAllowedChange) * Math.sign(change);
       constrainedEstimate = this.lastEstimate + allowedChange;
+    }
+    
+    // If we previously had no reading (lastEstimate == 0) and now have enough confidence,
+    // use the current estimate directly instead of constraining changes
+    if (this.lastEstimate === 0 && this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
+      constrainedEstimate = glucoseEstimate;
     }
     
     // Ensure result is within expanded physiologically relevant range
@@ -292,7 +305,7 @@ export class GlucoseProcessor {
    * Reset processor state
    */
   public reset(): void {
-    this.lastEstimate = 100;
+    this.lastEstimate = 0; // Reset to 0 instead of 100
     this.confidenceScore = 0;
     this.calibrationOffset = 0;
     this.medianBuffer = [];
