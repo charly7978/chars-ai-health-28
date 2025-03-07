@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -91,9 +92,10 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
+    // Create a cream-colored gradient for the background
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#FEF7CD');
-    gradient.addColorStop(1, '#FDE1D3');
+    gradient.addColorStop(0, '#FEF7CD'); // Soft cream color
+    gradient.addColorStop(1, '#FDE1D3'); // Slightly darker cream
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -147,16 +149,26 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
+    // Solo mostrar alertas de arritmia
     if (arrhythmiaStatus) {
-      const [status, _] = arrhythmiaStatus.split('|');
+      const [status, count] = arrhythmiaStatus.split('|');
       
-      if (status.includes("ARRITMIA") && !showArrhythmiaAlert) {
+      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
+      else if (status.includes("ARRITMIA") && Number(count) > 1) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        
+        // Mostrar el número exacto de arritmias detectadas
+        // Esto muestra el conteo preciso desde el arrhythmiaStatus
+        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
+      }
     }
     
     ctx.stroke();

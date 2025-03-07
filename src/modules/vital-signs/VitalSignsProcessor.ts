@@ -264,11 +264,6 @@ export class VitalSignsProcessor {
     
     // Calculate SpO2 using real signal data
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
-    console.log("[VITAL_SIGNS] SpO2 calculado:", {
-      valor: spo2,
-      muestras: ppgValues.length,
-      filtrado: filtered
-    });
     
     // Calculate blood pressure using real waveform analysis
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
