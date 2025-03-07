@@ -63,12 +63,10 @@ export class ArrhythmiaProcessor {
   } {
     const currentTime = Date.now();
 
-    // Update RR intervals if available
     if (rrData?.intervals && rrData.intervals.length > 0) {
       this.rrIntervals = rrData.intervals;
       this.lastPeakTime = rrData.lastPeakTime;
       
-      // Compute RR differences for variability analysis
       if (this.rrIntervals.length >= 2) {
         this.rrDifferences = [];
         for (let i = 1; i < this.rrIntervals.length; i++) {
@@ -76,58 +74,34 @@ export class ArrhythmiaProcessor {
         }
       }
       
-      // Solo detecta arritmias si ya pasó la fase de aprendizaje y hay suficientes datos
       if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
-        // Determinar si este frame debe ser evaluado para arritmia
         const shouldEvaluateFrame = 
-          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
-          !this.arrhythmiaDetected;
+          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS;
         
         if (shouldEvaluateFrame) {
-          // Si hay detección pendiente, desactivarla después de un tiempo
-          if (this.pendingArrhythmiaDetection && 
-              currentTime - this.lastArrhythmiaTime > 800) {
-            this.pendingArrhythmiaDetection = false;
-            this.arrhythmiaDetected = false;
-            this.consecutiveArrhythmiaFrames = 0;
-          }
-          
-          // Solo evalúa arritmias si no hay muchas detecciones consecutivas
-          if (this.consecutiveArrhythmiaFrames < this.MAX_CONSECUTIVE_DETECTIONS) {
-            this.detectArrhythmia();
-          } else if (currentTime - this.lastArrhythmiaTime > 1000) {
-            // Resetear contador después de un tiempo
-            this.consecutiveArrhythmiaFrames = 0;
-            this.arrhythmiaDetected = false;
-          }
-        } else {
-          // Si no es momento de evaluar, no mantener la detección demasiado tiempo
-          if (this.arrhythmiaDetected && 
-              currentTime - this.lastArrhythmiaTime > 800) {
-            this.arrhythmiaDetected = false;
-          }
+          this.detectArrhythmia();
         }
       }
     }
 
-    // Check if learning phase is complete
     const timeSinceStart = currentTime - this.measurementStartTime;
     if (timeSinceStart > this.ARRHYTHMIA_LEARNING_PERIOD) {
       this.isLearningPhase = false;
     }
 
-    // Determine arrhythmia status message
     let arrhythmiaStatus;
     if (this.isLearningPhase) {
       arrhythmiaStatus = "CALIBRANDO...";
-    } else if (this.arrhythmiaDetected) { 
-      // Solo muestra detección durante la ventana activa
-      arrhythmiaStatus = `ARRITMIA|${this.arrhythmiaCount}`;
+    } else if (this.hasDetectedFirstArrhythmia) {
+      if (this.arrhythmiaCount > 1) {
+        arrhythmiaStatus = `ARRITMIA_DETECTADA|${this.arrhythmiaCount}`;
+      } else {
+        arrhythmiaStatus = "ARRITMIA_DETECTADA|1";
+      }
     } else {
-      arrhythmiaStatus = `NORMAL|${this.arrhythmiaCount}`;
+      arrhythmiaStatus = "LATIDO_NORMAL|0";
     }
 
-    // Solo enviar datos de arritmia si está actualmente detectada
     const lastArrhythmiaData = this.arrhythmiaDetected ? 
       this.lastArrhythmiaData : null;
 
@@ -147,8 +121,6 @@ export class ArrhythmiaProcessor {
     const currentTime = Date.now();
     const recentRR = this.rrIntervals.slice(-this.RR_WINDOW_SIZE);
     
-    // Calculate RMSSD (Root Mean Square of Successive Differences)
-    // Validated metric for parasympathetic modulation assessment
     let sumSquaredDiff = 0;
     for (let i = 1; i < recentRR.length; i++) {
       const diff = recentRR[i] - recentRR[i-1];
@@ -157,81 +129,43 @@ export class ArrhythmiaProcessor {
     
     const rmssd = Math.sqrt(sumSquaredDiff / (recentRR.length - 1));
     
-    // Calculate mean RR and standard deviation
     const avgRR = recentRR.reduce((a, b) => a + b, 0) / recentRR.length;
     const lastRR = recentRR[recentRR.length - 1];
     
-    // Calculate coefficient of variation and relative RR variation
     const rrStandardDeviation = Math.sqrt(recentRR.reduce((sum, val) => 
       sum + Math.pow(val - avgRR, 2), 0) / recentRR.length);
     const coefficientOfVariation = rrStandardDeviation / avgRR;
     const rrVariation = Math.abs(lastRR - avgRR) / avgRR;
     
-    // Añadir valores al buffer de mediana para estabilización
     this.addToMedianBuffer(this.rmssdBuffer, rmssd);
     this.addToMedianBuffer(this.rrVariationBuffer, rrVariation);
     
-    // Calcular medianas para mayor estabilidad en la detección
     const medianRMSSD = this.calculateMedian(this.rmssdBuffer);
     const medianRRVariation = this.calculateMedian(this.rrVariationBuffer);
     
-    // Advanced non-linear dynamics metrics
     this.calculateNonLinearMetrics(recentRR);
     
     this.lastRMSSD = medianRMSSD;
     this.lastRRVariation = medianRRVariation;
     
-    // Algoritmo de decisión mejorado con uso de mediana
-    // Criterios más estrictos para reducir falsos positivos
     const isArrhythmia = 
-      // Requiere alta variación del último intervalo RR respecto al promedio
       (medianRMSSD > this.RMSSD_THRESHOLD && medianRRVariation > 0.25) ||
-      // O una variación extrema del intervalo R-R
       (medianRRVariation > 0.40);
     
-    // Si detectamos una arritmia potencial
-    if (isArrhythmia) {
-      // Confirmar solo si ha pasado suficiente tiempo desde la última detección
-      if (currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
-        this.arrhythmiaCount++;
-        this.lastArrhythmiaTime = currentTime;
-        this.hasDetectedFirstArrhythmia = true;
-        this.arrhythmiaDetected = true;
-        this.consecutiveArrhythmiaFrames = 1;
-        
-        // Guardar la información de esta arritmia
-        this.lastArrhythmiaData = {
-          timestamp: currentTime,
-          rmssd: medianRMSSD,
-          rrVariation: medianRRVariation
-        };
-        
-        console.log('ArrhythmiaProcessor - Nueva arritmia real confirmada:', {
-          contador: this.arrhythmiaCount,
-          rmssd: medianRMSSD.toFixed(2),
-          rrVariation: medianRRVariation.toFixed(2),
-          avgRR: avgRR.toFixed(2),
-          lastRR: lastRR.toFixed(2),
-          timestamp: new Date(currentTime).toISOString()
-        });
-      } else {
-        // Si es muy cercana a la anterior, marcamos como pendiente pero no incrementamos contador
-        this.pendingArrhythmiaDetection = true;
-        this.consecutiveArrhythmiaFrames++;
-        
-        // Límite estricto de detecciones consecutivas
-        if (this.consecutiveArrhythmiaFrames > this.MAX_CONSECUTIVE_DETECTIONS) {
-          this.arrhythmiaDetected = false;
-        }
-      }
-    } else {
-      // Si no hay arritmia en este frame, mantener la detección actual brevemente
-      // y luego desactivarla si no se confirma
-      if (this.arrhythmiaDetected && 
-          currentTime - this.lastArrhythmiaTime > 500) {
-        this.arrhythmiaDetected = false;
-        this.consecutiveArrhythmiaFrames = 0;
-      }
+    if (isArrhythmia && currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
+      this.arrhythmiaCount++;
+      this.lastArrhythmiaTime = currentTime;
+      this.hasDetectedFirstArrhythmia = true;
+      this.arrhythmiaDetected = true;
+      
+      this.lastArrhythmiaData = {
+        timestamp: currentTime,
+        rmssd: medianRMSSD,
+        rrVariation: medianRRVariation
+      };
+    } else if (currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
+      this.arrhythmiaDetected = false;
+      this.lastArrhythmiaData = null;
     }
   }
   

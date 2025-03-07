@@ -345,14 +345,27 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Mostrar el contador de arritmias
+      // Mostrar estado de arritmia y contador
       if (arrhythmiaStatus) {
         const [status, count] = arrhythmiaStatus.split('|');
-        if (status === "ARRITMIA") {
+        
+        if (status === "LATIDO_NORMAL") {
+          ctx.fillStyle = '#0EA5E9';
+          ctx.font = 'bold 16px Inter';
+          ctx.textAlign = 'left';
+          ctx.fillText("LATIDO NORMAL", 45, 35);
+        } else if (status === "ARRITMIA_DETECTADA") {
+          // Mostrar alerta de arritmia
           ctx.fillStyle = '#DC2626';
           ctx.font = 'bold 16px Inter';
           ctx.textAlign = 'left';
-          ctx.fillText(`Arritmias: ${count}`, 45, 35);
+          ctx.fillText("ARRITMIA DETECTADA", 45, 35);
+          
+          // Si hay más de una arritmia, mostrar contador
+          if (parseInt(count) > 1) {
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(`Arritmias detectadas: ${count}`, 45, 60);
+          }
         }
       }
 
@@ -368,12 +381,25 @@ const PPGSignalMeter = ({
           ctx.fill();
 
           if (peak.isArrhythmia) {
+            // Círculo exterior para arritmias
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
+            
+            // Etiqueta para arritmias
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#DC2626';
+            ctx.textAlign = 'center';
+            ctx.fillText('ARRITMIA', x, y - 25);
           }
+          
+          // Valor del pico
+          ctx.font = 'bold 12px Inter';
+          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          ctx.textAlign = 'center';
+          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
       });
     }
