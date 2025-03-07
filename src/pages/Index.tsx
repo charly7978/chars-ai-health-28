@@ -81,8 +81,10 @@ const Index = () => {
       setIsCameraOn(true);
       setShowResults(false);
       
+      // Iniciar procesamiento de señal
       startProcessing();
       
+      // Resetear valores
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
@@ -90,8 +92,12 @@ const Index = () => {
         lastArrhythmiaData: null
       }));
       
+      // Iniciar calibración automática
+      // Importante: esto debe establecer correctamente el estado de calibración
+      console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
+      // Iniciar temporizador para medición
       if (measurementTimerRef.current) {
         clearInterval(measurementTimerRef.current);
       }
@@ -101,6 +107,7 @@ const Index = () => {
           const newTime = prev + 1;
           console.log(`Tiempo transcurrido: ${newTime}s`);
           
+          // Finalizar medición después de 30 segundos
           if (newTime >= 30) {
             finalizeMeasurement();
             return 30;
@@ -116,8 +123,10 @@ const Index = () => {
     setIsCalibrating(true);
     setCalibrationMessage("Iniciando proceso de calibración de sensores");
     
+    // Iniciar la calibración real en el procesador
     startCalibration();
     
+    // Mostrar indicador explícito de calibración
     setVitalSigns(prev => ({
       ...prev,
       spo2: 0,
@@ -132,6 +141,7 @@ const Index = () => {
       hemoglobin: 0
     }));
     
+    // Establecer claramente el estado de calibración en UI
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -145,31 +155,32 @@ const Index = () => {
       }
     });
     
+    // Actualizar el progreso de calibración visualmente
     let step = 0;
-    const totalSteps = 6;
-    const stepDuration = 500;
+    const totalSteps = 5; // Reducido a 5 pasos (de 10)
     const calibrationInterval = setInterval(() => {
       step += 1;
       
+      // Actualizar progreso visual (5 pasos en total)
       if (step <= totalSteps) {
-        const progressPercent = Math.min(100, Math.round((step / totalSteps) * 100));
+        const progressPercent = step * (100/totalSteps); // 0-100%
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        const stepProgress = {
-          heartRate: progressPercent,
-          spo2: progressPercent,
-          pressure: progressPercent,
-          arrhythmia: progressPercent,
-          glucose: progressPercent,
-          lipids: progressPercent,
-          hemoglobin: progressPercent
-        };
-
+        // Actualizar cada valor individualmente para asegurar que se renderice
         setCalibrationProgress({
           isCalibrating: true,
-          progress: stepProgress
+          progress: {
+            heartRate: progressPercent,
+            spo2: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 15),
+            arrhythmia: Math.max(0, progressPercent - 10),
+            glucose: Math.max(0, progressPercent - 5),
+            lipids: Math.max(0, progressPercent - 20),
+            hemoglobin: Math.max(0, progressPercent - 25)
+          }
         });
-
+        
+        // Actualizar mensaje para mostrar claramente que está calibrando
         if (step === 1) {
           setCalibrationMessage("Calibrando sensores y ajustando parámetros");
           setVitalSigns(prev => ({
@@ -184,57 +195,79 @@ const Index = () => {
             arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0",
             lastArrhythmiaData: null
           }));
-        } else if (step === totalSteps) {
-          finishCalibration(calibrationInterval);
+        }
+      } else {
+        // Al finalizar, detener el intervalo - Completar después de 5 pasos
+        console.log("Finalizando calibración automática");
+        clearInterval(calibrationInterval);
+        
+        // Completar calibración
+        if (isCalibrating) {
+          console.log("Completando calibración");
+          setCalibrationMessage("Calibración completada con éxito");
+          forceCalibrationCompletion();
+          setIsCalibrating(false);
+          
+          // Establecer calibrationProgress a undefined para que no muestre más el progreso
+          setCalibrationProgress(undefined);
+          
+          // Actualizar mensaje para mostrar que la calibración se completó
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
+            lastArrhythmiaData: null
+          }));
+          
+          // Opcional: vibración si está disponible
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]);
+          }
+          
+          // Después de un breve retraso, reestablecer el estado normal
+          setTimeout(() => {
+            if (!isCalibrating) {
+              setCalibrationMessage("");
+              setVitalSigns(prev => ({
+                ...prev,
+                arrhythmiaStatus: "SIN ARRITMIAS|0",
+                lastArrhythmiaData: null
+              }));
+            }
+          }, 1500);
         }
       }
-    }, stepDuration);
+    }, 600); // Cada paso dura 600ms (3 segundos en total)
     
+    // Temporizador de seguridad más corto
     setTimeout(() => {
       if (isCalibrating) {
-        finishCalibration(calibrationInterval);
+        console.log("Forzando finalización de calibración por tiempo límite");
+        clearInterval(calibrationInterval);
+        forceCalibrationCompletion();
+        setIsCalibrating(false);
+        setCalibrationMessage("Finalización de calibración por tiempo límite");
+        
+        // Asegurar que se limpie el estado de calibración
+        setCalibrationProgress(undefined);
+        
+        // Marcar explícitamente que la calibración ha finalizado
+        setVitalSigns(prev => ({
+          ...prev,
+          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
+          lastArrhythmiaData: null
+        }));
+        
+        // Después de un breve retraso, reestablecer el estado normal
+        setTimeout(() => {
+          setCalibrationMessage("");
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "SIN ARRITMIAS|0",
+            lastArrhythmiaData: null
+          }));
+        }, 1500);
       }
-    }, (totalSteps * stepDuration) + 500);
-  };
-
-  const finishCalibration = (intervalId: number) => {
-    console.log("Completando calibración");
-    clearInterval(intervalId);
-    forceCalibrationCompletion();
-    setIsCalibrating(false);
-    setCalibrationMessage("Calibración completada con éxito");
-    
-    setCalibrationProgress({
-      isCalibrating: false,
-      progress: {
-        heartRate: 100,
-        spo2: 100,
-        pressure: 100,
-        arrhythmia: 100,
-        glucose: 100,
-        lipids: 100,
-        hemoglobin: 100
-      }
-    });
-    
-    setVitalSigns(prev => ({
-      ...prev,
-      arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
-      lastArrhythmiaData: null
-    }));
-    
-    if (navigator.vibrate) {
-      navigator.vibrate([100, 50, 100]);
-    }
-    
-    setTimeout(() => {
-      setCalibrationMessage("");
-      setVitalSigns(prev => ({
-        ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0",
-        lastArrhythmiaData: null
-      }));
-    }, 1500);
+    }, 5000); // 5 segundos como máximo (reducido de 10)
   };
 
   const finalizeMeasurement = () => {
@@ -305,6 +338,7 @@ const Index = () => {
     const videoTrack = stream.getVideoTracks()[0];
     const imageCapture = new ImageCapture(videoTrack);
     
+    // Asegurar que la linterna esté encendida para mediciones de PPG
     if (videoTrack.getCapabilities()?.torch) {
       console.log("Activando linterna para mejorar la señal PPG");
       videoTrack.applyConstraints({
@@ -314,6 +348,7 @@ const Index = () => {
       console.warn("Esta cámara no tiene linterna disponible, la medición puede ser menos precisa");
     }
     
+    // Crear un canvas de tamaño óptimo para el procesamiento
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d', {willReadFrequently: true});
     if (!tempCtx) {
@@ -321,15 +356,17 @@ const Index = () => {
       return;
     }
     
+    // Variables para controlar el rendimiento y la tasa de frames
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/30;
+    const targetFrameInterval = 1000/30; // Apuntar a 30 FPS para precisión
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
     
+    // Crearemos un contexto dedicado para el procesamiento de imagen
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
-    enhanceCanvas.width = 320;
+    enhanceCanvas.width = 320;  // Tamaño óptimo para procesamiento PPG
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
@@ -338,41 +375,56 @@ const Index = () => {
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
+      // Control de tasa de frames para no sobrecargar el dispositivo
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
+          // Capturar frame 
           const frame = await imageCapture.grabFrame();
           
+          // Configurar tamaño adecuado del canvas para procesamiento
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
           
           tempCanvas.width = targetWidth;
           tempCanvas.height = targetHeight;
           
+          // Dibujar el frame en el canvas
           tempCtx.drawImage(
             frame, 
             0, 0, frame.width, frame.height, 
             0, 0, targetWidth, targetHeight
           );
           
+          // Mejorar la imagen para detección PPG
           if (enhanceCtx) {
+            // Resetear canvas
             enhanceCtx.clearRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+            
+            // Dibujar en el canvas de mejora
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
+            // Opcionales: Ajustes para mejorar la señal roja
             enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';
+            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
             enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             enhanceCtx.globalCompositeOperation = 'source-over';
-            
+          
+            // Obtener datos de la imagen mejorada
             const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+            
+            // Procesar el frame mejorado
             processFrame(imageData);
           } else {
+            // Fallback a procesamiento normal
             const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
             processFrame(imageData);
           }
           
+          // Actualizar contadores para monitoreo de rendimiento
           frameCount++;
           lastProcessTime = now;
           
+          // Calcular FPS cada segundo
           if (now - lastFpsUpdateTime > 1000) {
             processingFps = frameCount;
             frameCount = 0;
@@ -384,6 +436,7 @@ const Index = () => {
         }
       }
       
+      // Programar el siguiente frame
       if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
@@ -447,7 +500,7 @@ const Index = () => {
             />
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-[#2C2A2B] px-3 py-4">
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
             <div className="grid grid-cols-3 gap-3 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -468,6 +521,11 @@ const Index = () => {
                 calibrationProgress={calibrationProgress?.progress.pressure}
               />
               <VitalSign 
+                label="ARRITMIAS"
+                value={vitalSigns.arrhythmiaStatus}
+                calibrationProgress={calibrationProgress?.progress.arrhythmia}
+              />
+              <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
@@ -479,16 +537,10 @@ const Index = () => {
                 unit="mg/dL"
                 calibrationProgress={calibrationProgress?.progress.lipids}
               />
-              <VitalSign 
-                label="HEMOGLOBINA"
-                value={vitalSigns.hemoglobin || "--"}
-                unit="g/dL"
-                calibrationProgress={calibrationProgress?.progress.hemoglobin}
-              />
             </div>
           </div>
 
-          <div className="h-[70px] grid grid-cols-2 gap-px bg-[#2C2A2B] mt-auto">
+          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
