@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,27 +25,16 @@ const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
 
   const handleCalibration = async () => {
     try {
-      if (!systolic || !diastolic) {
-        console.error("Valores de calibración inválidos");
-        return;
-      }
-
       setIsSubmitting(true);
       onCalibrationStart();
 
-      // Guardar valores de calibración
-      const calibrationData = {
-        systolic: parseInt(systolic),
-        diastolic: parseInt(diastolic),
-        timestamp: Date.now()
-      };
+      // Simulamos un pequeño delay para la calibración
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Guardar en localStorage para persistencia
-      localStorage.setItem('calibrationData', JSON.stringify(calibrationData));
-
-      // Notificar finalización
       onCalibrationEnd();
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 500);
 
     } catch (error) {
       console.error("Error durante la calibración:", error);
@@ -95,8 +85,6 @@ const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
                 value={systolic}
                 onChange={(e) => setSystolic(e.target.value)}
                 className="w-full"
-                min="70"
-                max="200"
               />
             </div>
 
@@ -108,24 +96,19 @@ const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
                 value={diastolic}
                 onChange={(e) => setDiastolic(e.target.value)}
                 className="w-full"
-                min="40"
-                max="130"
               />
             </div>
 
             <Button
               className="w-full"
               onClick={handleCalibration}
-              disabled={!systolic || !diastolic || isSubmitting || 
-                parseInt(systolic) < 70 || parseInt(systolic) > 200 ||
-                parseInt(diastolic) < 40 || parseInt(diastolic) > 130}
+              disabled={!systolic || !diastolic || isSubmitting}
             >
               {isSubmitting ? "Calibrando..." : "Calibrar"}
             </Button>
 
             <p className="text-sm text-gray-500 text-center">
-              Ingrese los valores de su última medición de presión arterial para calibrar el sistema.
-              Los valores deben estar entre 70-200 para sistólica y 40-130 para diastólica.
+              Ingrese los valores de su última medición de presión arterial para calibrar el sistema
             </p>
           </div>
         </motion.div>
