@@ -1,3 +1,4 @@
+
 import { calculateAC, calculateDC } from './utils';
 
 /**
@@ -30,6 +31,11 @@ export class SignalProcessor {
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
    */
   public applySMAFilter(value: number): number {
+    if (typeof value !== 'number' || isNaN(value)) {
+      console.warn('SignalProcessor: Invalid input value', value);
+      return 0;
+    }
+
     this.ppgValues.push(value);
     if (this.ppgValues.length > this.WINDOW_SIZE) {
       this.ppgValues.shift();
@@ -62,6 +68,11 @@ export class SignalProcessor {
    * Extracts red channel with improved finger detection
    */
   private extractRedChannel(imageData: ImageData): number {
+    if (!imageData || !imageData.data || imageData.data.length === 0) {
+      console.warn('SignalProcessor: Invalid image data');
+      return 0;
+    }
+
     const data = imageData.data;
     let redSum = 0;
     let greenSum = 0;
@@ -85,19 +96,21 @@ export class SignalProcessor {
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
         const i = (y * imageData.width + x) * 4;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Enhanced red dominance check
-        if (r > g * this.RED_DOMINANCE_RATIO && r > b * this.RED_DOMINANCE_RATIO) {
-          redSum += r;
-          greenSum += g;
-          blueSum += b;
-          pixelCount++;
+        if (i >= 0 && i < data.length - 3) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
           
-          maxRed = Math.max(maxRed, r);
-          minRed = Math.min(minRed, r);
+          // Enhanced red dominance check
+          if (r > g * this.RED_DOMINANCE_RATIO && r > b * this.RED_DOMINANCE_RATIO) {
+            redSum += r;
+            greenSum += g;
+            blueSum += b;
+            pixelCount++;
+            
+            maxRed = Math.max(maxRed, r);
+            minRed = Math.min(minRed, r);
+          }
         }
       }
     }
@@ -140,6 +153,10 @@ export class SignalProcessor {
    * Simplified wavelet denoising based on soft thresholding
    */
   private waveletDenoise(value: number): number {
+    if (typeof value !== 'number' || isNaN(value)) {
+      return this.baselineValue;
+    }
+
     const normalizedValue = value - this.baselineValue;
     
     if (Math.abs(normalizedValue) < this.WAVELET_THRESHOLD) {
@@ -156,11 +173,17 @@ export class SignalProcessor {
    * Implements Savitzky-Golay filtering
    */
   private applySavitzkyGolayFilter(value: number): number {
+    if (typeof value !== 'number' || isNaN(value)) {
+      return 0;
+    }
+
     const recentValues = this.ppgValues.slice(-this.SG_COEFFS.length);
     let filteredValue = 0;
     
     for (let i = 0; i < this.SG_COEFFS.length; i++) {
-      filteredValue += recentValues[i] * this.SG_COEFFS[i];
+      if (i < recentValues.length) {
+        filteredValue += recentValues[i] * this.SG_COEFFS[i];
+      }
     }
     
     return filteredValue / this.SG_NORM;
