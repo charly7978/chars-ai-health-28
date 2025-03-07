@@ -82,39 +82,34 @@ const Index = () => {
       setIsCameraOn(true);
       setShowResults(false);
       
-      // Iniciar procesamiento de señal
+      // Iniciar procesamiento y calibración
       startProcessing();
+      startCalibration();
       
       // Resetear valores
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0"
+        arrhythmiaStatus: "CALIBRANDO|0"
       }));
       
-      // Iniciar calibración automática
-      // Importante: esto debe establecer correctamente el estado de calibración
-      console.log("Iniciando fase de calibración automática");
-      startAutoCalibration();
-      
-      // Iniciar temporizador para medición
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-      }
-      
-      measurementTimerRef.current = window.setInterval(() => {
-        setElapsedTime(prev => {
-          const newTime = prev + 1;
-          console.log(`Tiempo transcurrido: ${newTime}s`);
-          
-          // Finalizar medición después de 30 segundos
-          if (newTime >= 30) {
-            finalizeMeasurement();
-            return 30;
-          }
-          return newTime;
-        });
-      }, 1000);
+      // Solo iniciar el temporizador después de la calibración
+      setTimeout(() => {
+        if (measurementTimerRef.current) {
+          clearInterval(measurementTimerRef.current);
+        }
+        
+        measurementTimerRef.current = window.setInterval(() => {
+          setElapsedTime(prev => {
+            const newTime = prev + 1;
+            if (newTime >= 30) {
+              finalizeMeasurement();
+              return 30;
+            }
+            return newTime;
+          });
+        }, 1000);
+      }, 3000); // Esperar que termine la calibración
     }
   };
 
@@ -406,16 +401,23 @@ const Index = () => {
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        setVitalSigns(vitals);
-        
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
+        // Actualizar UI solo si no estamos calibrando
+        if (!vitals.calibration?.isCalibrating) {
+          setHeartRate(heartBeatResult.bpm);
+          setVitalSigns(vitals);
+          
+          if (vitals.lastArrhythmiaData) {
+            setLastArrhythmiaData(vitals.lastArrhythmiaData);
+            const [status, count] = vitals.arrhythmiaStatus.split('|');
+            setArrhythmiaCount(count || "0");
+          }
+        } else {
+          // Durante calibración, mostrar progreso pero no actualizar mediciones
+          console.log("Calibrando:", vitals.calibration.progress);
+          setCalibrationProgress(vitals.calibration);
         }
       }
       
