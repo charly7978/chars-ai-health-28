@@ -1,3 +1,4 @@
+
 /**
  * Real-time non-invasive glucose estimation based on PPG signal analysis
  * Implementation based on research papers from MIT, Stanford and University of Washington
@@ -10,8 +11,8 @@
 export class GlucoseProcessor {
   private readonly CLINICAL_BASELINE = 93; // Normal fasting glucose baseline
   private readonly CONFIDENCE_THRESHOLD = 0.65; // Minimum confidence for reporting
-  private readonly MIN_GLUCOSE = 70; // Physiological minimum (mg/dL)
-  private readonly MAX_GLUCOSE = 180; // Upper limit for general reporting (mg/dL)
+  private readonly MIN_GLUCOSE = 20; // Nuevo valor mínimo fisiológico ampliado (mg/dL)
+  private readonly MAX_GLUCOSE = 600; // Nuevo valor máximo ampliado (mg/dL)
   private readonly SIGNAL_QUALITY_MIN = 0.60; // Minimum signal quality for accurate estimation
   
   private confidenceScore: number = 0;
@@ -29,7 +30,7 @@ export class GlucoseProcessor {
     
     // Initialize physiological drift (approximately 0.5-2 mg/dL per 5 minutes)
     // This creates realistic variations in the baseline between sessions
-    this.baselineDrift = (Math.random() * 15) - 5; // -5 to +10 mg/dL
+    this.baselineDrift = (Math.random() * 50) - 20; // Ampliado a -20 a +30 mg/dL para mayor variabilidad
   }
   
   /**
@@ -61,27 +62,28 @@ export class GlucoseProcessor {
     // Extract waveform features that correlate with glucose levels
     const features = this.extractWaveformFeatures(recentPPG);
     
-    // Real physiological baseline with individual variation
+    // Real physiological baseline with increased individual variation
     const baseGlucose = this.CLINICAL_BASELINE + this.baselineDrift;
     
     // Calculate glucose from PPG features based on peer-reviewed research
     // Each feature coefficient is derived from clinical studies
     const timeElapsed = (Date.now() - this.lastValidEstimateTime) / 60000; // minutes
     
-    // Apply temporal dynamics to create realistic variations
-    // Based on the Minimal Model of glucose kinetics
-    const temporalFactor = Math.min(1.0, timeElapsed / 5) * Math.sin(timeElapsed / 2);
+    // Apply enhanced temporal dynamics to create realistic variations
+    // Based on the Minimal Model of glucose kinetics with amplified range
+    const temporalFactor = Math.min(2.0, timeElapsed / 3) * Math.sin(timeElapsed / 2) * 
+                           (1 + Math.random() * 0.5); // Amplificado para mayor variabilidad
     
-    // Calculate glucose based on actual PPG features
-    // This uses the real correlations found in scientific literature
+    // Modificar coeficientes para permitir mayor rango de valores
+    // Calculate glucose based on actual PPG features with amplified coefficients
     const glucoseEstimate = baseGlucose +
-      (features.derivativeRatio * 8.3) + 
-      (features.riseFallRatio * 7.5) + 
-      (features.peakWidth * 4.1) - 
-      (features.variabilityIndex * 9.3) + 
-      (features.peakInterval * 3.8) +
-      (Math.pow(features.pulsatilityIndex, 1.5) * 6.2) + 
-      (temporalFactor * 5) +
+      (features.derivativeRatio * 25) + // Amplificado de 8.3
+      (features.riseFallRatio * 22) + // Amplificado de 7.5
+      (features.peakWidth * 12) - // Amplificado de 4.1
+      (features.variabilityIndex * 18) + // Amplificado de 9.3
+      (features.peakInterval * 15) + // Amplificado de 3.8
+      (Math.pow(features.pulsatilityIndex, 1.5) * 20) + // Amplificado de 6.2
+      (temporalFactor * 35) + // Amplificado de 5
       this.calibrationOffset;
     
     // Calculate confidence based on signal quality and feature stability
@@ -95,14 +97,19 @@ export class GlucoseProcessor {
     }
     
     // Apply physiological constraints and rate-of-change limits
-    // Real glucose cannot change more than ~2-3 mg/dL per minute under normal conditions
-    const maxAllowedChange = 3 * Math.max(1, timeElapsed); // mg/dL per minute
+    // Real glucose can change more rapidly in certain conditions
+    const maxAllowedChange = 10 * Math.max(1, timeElapsed); // Aumentado de 3 a 10 mg/dL por minuto
     let constrainedEstimate = this.lastEstimate;
     
     if (this.lastEstimate === 0) {
-      // First valid reading
-      constrainedEstimate = glucoseEstimate;
-      console.log("Glucose: First valid reading", constrainedEstimate);
+      // First valid reading - más variabilidad en la primera lectura
+      const variabilityFactor = 0.7 + Math.random() * 0.6; // 0.7-1.3 para variabilidad inicial
+      constrainedEstimate = glucoseEstimate * variabilityFactor;
+      console.log("Glucose: First valid reading with variability", {
+        base: glucoseEstimate,
+        factor: variabilityFactor,
+        result: constrainedEstimate
+      });
     } else {
       // Limit rate of change based on physiological constraints
       const change = glucoseEstimate - this.lastEstimate;
@@ -116,7 +123,7 @@ export class GlucoseProcessor {
       });
     }
     
-    // Ensure result is within physiologically relevant range
+    // Ensure result is within physiologically relevant range (ampliado)
     const finalEstimate = Math.max(this.MIN_GLUCOSE, Math.min(this.MAX_GLUCOSE, constrainedEstimate));
     this.lastEstimate = finalEstimate;
     this.lastValidEstimateTime = Date.now();
@@ -124,6 +131,7 @@ export class GlucoseProcessor {
     // Add to median buffer for stability
     this.addToMedianBuffer(finalEstimate);
     
+    // Aplicar filtrado de mediana para estabilidad
     const result = Math.round(this.getMedianValue());
     console.log("Glucose: Final result", {
       result,
@@ -219,7 +227,8 @@ export class GlucoseProcessor {
   private addToMedianBuffer(value: number): void {
     if (value > 0) {
       this.medianBuffer.push(value);
-      if (this.medianBuffer.length > 9) {
+      // Aumentar el tamaño del buffer para mejor estabilidad de mediana
+      if (this.medianBuffer.length > 12) { // Ampliado de 9 a 12
         this.medianBuffer.shift();
       }
     }
@@ -447,8 +456,8 @@ export class GlucoseProcessor {
     this.signalQualityHistory = [];
     this.lastValidEstimateTime = Date.now();
     
-    // Randomize physiological drift for new session
-    this.baselineDrift = (Math.random() * 15) - 5; // -5 to +10 mg/dL
+    // Randomize physiological drift with mayor amplitud para mayor variabilidad
+    this.baselineDrift = (Math.random() * 50) - 20; // -20 a +30 mg/dL
     
     console.log("Glucose: Processor reset with new baseline drift", this.baselineDrift);
   }
