@@ -77,7 +77,7 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
-      enterFullScreen();
+      // enterFullScreen(); // Comentado temporalmente para pruebas
       setIsMonitoring(true);
       setIsCameraOn(true);
       setShowResults(false);
