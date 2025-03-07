@@ -7,8 +7,6 @@ import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
-import CalibrationDialog from "@/components/CalibrationDialog";
-import CalibrationIndicator from "@/components/CalibrationIndicator";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -18,7 +16,6 @@ const Index = () => {
     spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
-    lastArrhythmiaData: null,
     glucose: 0,
     lipids: {
       totalCholesterol: 0,
@@ -33,7 +30,11 @@ const Index = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration']>();
   const measurementTimerRef = useRef<number | null>(null);
-  const [calibrationMessage, setCalibrationMessage] = useState<string>("");
+  const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
+    timestamp: number;
+    rmssd: number;
+    rrVariation: number;
+  } | null>(null);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
@@ -88,8 +89,7 @@ const Index = () => {
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0",
-        lastArrhythmiaData: null
+        arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
       // Iniciar calibración automática
@@ -119,29 +119,15 @@ const Index = () => {
   };
 
   const startAutoCalibration = () => {
-    console.log("Iniciando auto-calibración real basada en datos del sensor");
+    console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
-    setCalibrationMessage("Iniciando proceso de calibración de sensores");
     
-    // Iniciar la calibración real en el procesador
+    // Iniciar la calibración en el procesador
     startCalibration();
     
-    // Mostrar indicador explícito de calibración
-    setVitalSigns(prev => ({
-      ...prev,
-      spo2: 0,
-      pressure: "--/--",
-      arrhythmiaStatus: "CALIBRANDO...|0",
-      lastArrhythmiaData: null,
-      glucose: 0,
-      lipids: {
-        totalCholesterol: 0,
-        triglycerides: 0
-      },
-      hemoglobin: 0
-    }));
-    
-    // Establecer claramente el estado de calibración en UI
+    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
+    // Esto garantiza que el estado comience correctamente
+    console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -155,15 +141,19 @@ const Index = () => {
       }
     });
     
-    // Actualizar el progreso de calibración visualmente
+    // Logear para verificar que el estado se estableció
+    setTimeout(() => {
+      console.log("Estado de calibración establecido:", calibrationProgress);
+    }, 100);
+    
+    // Actualizar el progreso visualmente en intervalos regulares
     let step = 0;
-    const totalSteps = 5; // Reducido a 5 pasos (de 10)
     const calibrationInterval = setInterval(() => {
       step += 1;
       
-      // Actualizar progreso visual (5 pasos en total)
-      if (step <= totalSteps) {
-        const progressPercent = step * (100/totalSteps); // 0-100%
+      // Actualizar progreso visual (10 pasos en total)
+      if (step <= 10) {
+        const progressPercent = step * 10; // 0-100%
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
         // Actualizar cada valor individualmente para asegurar que se renderice
@@ -172,102 +162,70 @@ const Index = () => {
           progress: {
             heartRate: progressPercent,
             spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 15),
-            arrhythmia: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 20),
+            arrhythmia: Math.max(0, progressPercent - 15),
             glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 20),
-            hemoglobin: Math.max(0, progressPercent - 25)
+            lipids: Math.max(0, progressPercent - 25),
+            hemoglobin: Math.max(0, progressPercent - 30)
           }
         });
-        
-        // Actualizar mensaje para mostrar claramente que está calibrando
-        if (step === 1) {
-          setCalibrationMessage("Calibrando sensores y ajustando parámetros");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "CALIBRANDO SENSORES|0",
-            lastArrhythmiaData: null
-          }));
-        } else if (step === 3) {
-          setCalibrationMessage("Ajustando algoritmos para mayor precisión");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0",
-            lastArrhythmiaData: null
-          }));
-        }
       } else {
-        // Al finalizar, detener el intervalo - Completar después de 5 pasos
-        console.log("Finalizando calibración automática");
+        // Al finalizar, detener el intervalo
+        console.log("Finalizando animación de calibración");
         clearInterval(calibrationInterval);
         
         // Completar calibración
         if (isCalibrating) {
           console.log("Completando calibración");
-          setCalibrationMessage("Calibración completada con éxito");
           forceCalibrationCompletion();
           setIsCalibrating(false);
           
-          // Establecer calibrationProgress a undefined para que no muestre más el progreso
-          setCalibrationProgress(undefined);
-          
-          // Actualizar mensaje para mostrar que la calibración se completó
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
-            lastArrhythmiaData: null
-          }));
+          // Importante: Establecer calibrationProgress a undefined o con valores 100
+          // para que la UI refleje que ya no está calibrando
+          setCalibrationProgress({
+            isCalibrating: false,
+            progress: {
+              heartRate: 100,
+              spo2: 100,
+              pressure: 100,
+              arrhythmia: 100,
+              glucose: 100,
+              lipids: 100,
+              hemoglobin: 100
+            }
+          });
           
           // Opcional: vibración si está disponible
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100]);
           }
-          
-          // Después de un breve retraso, reestablecer el estado normal
-          setTimeout(() => {
-            if (!isCalibrating) {
-              setCalibrationMessage("");
-              setVitalSigns(prev => ({
-                ...prev,
-                arrhythmiaStatus: "SIN ARRITMIAS|0",
-                lastArrhythmiaData: null
-              }));
-            }
-          }, 1500);
         }
       }
-    }, 600); // Cada paso dura 600ms (3 segundos en total)
+    }, 800); // Cada paso dura 800ms (8 segundos en total)
     
-    // Temporizador de seguridad más corto
+    // Temporizador de seguridad
     setTimeout(() => {
       if (isCalibrating) {
         console.log("Forzando finalización de calibración por tiempo límite");
         clearInterval(calibrationInterval);
         forceCalibrationCompletion();
         setIsCalibrating(false);
-        setCalibrationMessage("Finalización de calibración por tiempo límite");
         
         // Asegurar que se limpie el estado de calibración
-        setCalibrationProgress(undefined);
-        
-        // Marcar explícitamente que la calibración ha finalizado
-        setVitalSigns(prev => ({
-          ...prev,
-          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
-          lastArrhythmiaData: null
-        }));
-        
-        // Después de un breve retraso, reestablecer el estado normal
-        setTimeout(() => {
-          setCalibrationMessage("");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "SIN ARRITMIAS|0",
-            lastArrhythmiaData: null
-          }));
-        }, 1500);
+        setCalibrationProgress({
+          isCalibrating: false,
+          progress: {
+            heartRate: 100,
+            spo2: 100,
+            pressure: 100,
+            arrhythmia: 100,
+            glucose: 100,
+            lipids: 100,
+            hemoglobin: 100
+          }
+        });
       }
-    }, 5000); // 5 segundos como máximo (reducido de 10)
+    }, 10000); // 10 segundos como máximo
   };
 
   const finalizeMeasurement = () => {
@@ -315,20 +273,20 @@ const Index = () => {
     fullResetVitalSigns();
     setElapsedTime(0);
     setHeartRate(0);
-    setVitalSigns({
-      spo2: 0,
+    setVitalSigns({ 
+      spo2: 0, 
       pressure: "--/--",
-      arrhythmiaStatus: "SIN ARRITMIAS|0",
+      arrhythmiaStatus: "--",
       glucose: 0,
       lipids: {
         totalCholesterol: 0,
         triglycerides: 0
       },
-      hemoglobin: 0,
-      lastArrhythmiaData: null
+      hemoglobin: 0
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
+    setLastArrhythmiaData(null);
     setCalibrationProgress(undefined);
   };
 
@@ -453,8 +411,11 @@ const Index = () => {
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
         setVitalSigns(vitals);
-        if (vitals.arrhythmiaStatus) {
-          setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
+        
+        if (vitals.lastArrhythmiaData) {
+          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          const [status, count] = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(count || "0");
         }
       }
       
@@ -487,17 +448,17 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
+              rawArrhythmiaData={lastArrhythmiaData}
               preserveResults={showResults}
             />
           </div>
 
-          {isCalibrating && calibrationProgress && (
-            <CalibrationIndicator 
-              isCalibrating={isCalibrating} 
-              progress={calibrationProgress.progress}
-              message={calibrationMessage}
-            />
+          {isCalibrating && (
+            <div className="absolute bottom-[55%] left-0 right-0 text-center">
+              <span className="text-sm font-medium text-gray-400">
+                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
+              </span>
+            </div>
           )}
 
           <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
@@ -506,36 +467,37 @@ const Index = () => {
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
                 unit="BPM"
-                calibrationProgress={calibrationProgress?.progress.heartRate}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
-                calibrationProgress={calibrationProgress?.progress.spo2}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
-                calibrationProgress={calibrationProgress?.progress.pressure}
+                highlighted={showResults}
               />
               <VitalSign 
-                label="ARRITMIAS"
-                value={vitalSigns.arrhythmiaStatus}
-                calibrationProgress={calibrationProgress?.progress.arrhythmia}
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
-                calibrationProgress={calibrationProgress?.progress.glucose}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids.totalCholesterol || "--"}/${vitalSigns.lipids.triglycerides || "--"}`}
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
-                calibrationProgress={calibrationProgress?.progress.lipids}
+                highlighted={showResults}
               />
             </div>
           </div>
