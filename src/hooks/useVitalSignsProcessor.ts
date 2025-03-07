@@ -50,6 +50,9 @@ export const useVitalSignsProcessor = () => {
     };
   }, []);
   
+  /**
+   * Start calibration for all vital signs
+   */
   const startCalibration = useCallback(() => {
     console.log("useVitalSignsProcessor: Iniciando calibración automática", {
       timestamp: new Date().toISOString(),
@@ -77,7 +80,7 @@ export const useVitalSignsProcessor = () => {
       if (progress >= 100) {
         clearInterval(calibrationInterval);
         setIsCalibrating(false);
-        processor.completeCalibration();
+        processor.forceCalibrationCompletion();
         console.log("Calibración completada automáticamente");
       }
     }, 100);
@@ -87,12 +90,25 @@ export const useVitalSignsProcessor = () => {
       clearInterval(calibrationInterval);
       if (isCalibrating) {
         setIsCalibrating(false);
-        processor.completeCalibration();
+        processor.forceCalibrationCompletion();
         console.log("Calibración forzada a completar por timeout");
       }
     }, CALIBRATION_TIME_MS + 500);
   }, [processor]);
-
+  
+  /**
+   * Force calibration to complete immediately
+   */
+  const forceCalibrationCompletion = useCallback(() => {
+    console.log("useVitalSignsProcessor: Forzando finalización de calibración", {
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId.current
+    });
+    
+    processor.forceCalibrationCompletion();
+  }, [processor]);
+  
+  // Process the signal with improved algorithms
   const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
     
@@ -104,27 +120,19 @@ export const useVitalSignsProcessor = () => {
       timestamp: new Date().toISOString()
     });
     
-    // If we're calibrating, return calibration state
+    // No procesar mediciones durante la calibración
     if (isCalibrating) {
+      console.log("Señal ignorada - en calibración");
       return {
         spo2: 0,
         pressure: "--/--",
         arrhythmiaStatus: "CALIBRANDO|0",
-        lastArrhythmiaData: null,
         glucose: 0,
         lipids: { totalCholesterol: 0, triglycerides: 0 },
         hemoglobin: 0,
         calibration: {
           isCalibrating: true,
-          progress: {
-            heartRate: calibrationProgress,
-            spo2: calibrationProgress,
-            pressure: calibrationProgress,
-            arrhythmia: calibrationProgress,
-            glucose: calibrationProgress,
-            lipids: calibrationProgress,
-            hemoglobin: calibrationProgress
-          }
+          progress: calibrationProgress
         }
       };
     }
@@ -362,9 +370,14 @@ export const useVitalSignsProcessor = () => {
     reset,
     fullReset,
     startCalibration,
-    lastValidResults,
+    forceCalibrationCompletion,
     arrhythmiaCounter,
+    lastValidResults,
     isCalibrating,
-    calibrationProgress
+    calibrationProgress,
+    debugInfo: {
+      processedSignals: processedSignals.current,
+      signalLog: signalLog.current.slice(-10)
+    }
   };
 };

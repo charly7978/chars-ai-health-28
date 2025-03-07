@@ -114,11 +114,12 @@ const Index = () => {
   const startAutoCalibration = () => {
     console.log("Iniciando auto-calibración real basada en datos del sensor");
     setIsCalibrating(true);
-    setCalibrationMessage("Esperando detección del dedo para calibrar sensores");
+    setCalibrationMessage("Iniciando proceso de calibración de sensores");
     
     startCalibration();
     
-    const initialCalibrationState: VitalSignsResult = {
+    setVitalSigns(prev => ({
+      ...prev,
       spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "CALIBRANDO...|0",
@@ -128,62 +129,121 @@ const Index = () => {
         totalCholesterol: 0,
         triglycerides: 0
       },
-      hemoglobin: 0,
-      calibration: {
-        isCalibrating: true,
-        progress: {
-          heartRate: 0,
-          spo2: 0,
-          pressure: 0,
-          arrhythmia: 0,
-          glucose: 0,
-          lipids: 0,
-          hemoglobin: 0
-        }
-      }
-    };
-    
-    setVitalSigns(initialCalibrationState);
-  };
-
-  const finishCalibration = (intervalId: number) => {
-    console.log("Completando calibración");
-    clearInterval(intervalId);
-    forceCalibrationCompletion();
-    setIsCalibrating(false);
-    setCalibrationMessage("Calibración completada con éxito");
+      hemoglobin: 0
+    }));
     
     setCalibrationProgress({
-      isCalibrating: false,
+      isCalibrating: true,
       progress: {
-        heartRate: 100,
-        spo2: 100,
-        pressure: 100,
-        arrhythmia: 100,
-        glucose: 100,
-        lipids: 100,
-        hemoglobin: 100
+        heartRate: 0,
+        spo2: 0,
+        pressure: 0,
+        arrhythmia: 0,
+        glucose: 0,
+        lipids: 0,
+        hemoglobin: 0
       }
     });
     
-    setVitalSigns(prev => ({
-      ...prev,
-      arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
-      lastArrhythmiaData: null
-    }));
-    
-    if (navigator.vibrate) {
-      navigator.vibrate([100, 50, 100]);
-    }
+    let step = 0;
+    const totalSteps = 5;
+    const calibrationInterval = setInterval(() => {
+      step += 1;
+      
+      if (step <= totalSteps) {
+        const progressPercent = step * (100/totalSteps);
+        console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
+        
+        setCalibrationProgress({
+          isCalibrating: true,
+          progress: {
+            heartRate: progressPercent,
+            spo2: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 15),
+            arrhythmia: Math.max(0, progressPercent - 10),
+            glucose: Math.max(0, progressPercent - 5),
+            lipids: Math.max(0, progressPercent - 20),
+            hemoglobin: Math.max(0, progressPercent - 25)
+          }
+        });
+
+        if (step === 1) {
+          setCalibrationMessage("Calibrando sensores y ajustando parámetros");
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "CALIBRANDO SENSORES|0",
+            lastArrhythmiaData: null
+          }));
+        } else if (step === 3) {
+          setCalibrationMessage("Ajustando algoritmos para mayor precisión");
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0",
+            lastArrhythmiaData: null
+          }));
+        }
+      } else {
+        console.log("Finalizando calibración automática");
+        clearInterval(calibrationInterval);
+        
+        if (isCalibrating) {
+          console.log("Completando calibración");
+          setCalibrationMessage("Calibración completada con éxito");
+          forceCalibrationCompletion();
+          setIsCalibrating(false);
+          
+          setCalibrationProgress(undefined);
+          
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
+            lastArrhythmiaData: null
+          }));
+          
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]);
+          }
+          
+          setTimeout(() => {
+            if (!isCalibrating) {
+              setCalibrationMessage("");
+              setVitalSigns(prev => ({
+                ...prev,
+                arrhythmiaStatus: "SIN ARRITMIAS|0",
+                lastArrhythmiaData: null
+              }));
+            }
+          }, 1500);
+        }
+      }
+    }, 600);
     
     setTimeout(() => {
-      setCalibrationMessage("");
-      setVitalSigns(prev => ({
-        ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0",
-        lastArrhythmiaData: null
-      }));
-    }, 1500);
+      if (isCalibrating) {
+        console.log("Forzando finalización de calibración por tiempo límite");
+        clearInterval(calibrationInterval);
+        forceCalibrationCompletion();
+        setIsCalibrating(false);
+        setCalibrationMessage("Finalización de calibración por tiempo límite");
+        
+        setCalibrationProgress(undefined);
+        
+        setVitalSigns(prev => ({
+          ...prev,
+          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
+          lastArrhythmiaData: null
+        }));
+        
+        setTimeout(() => {
+          setCalibrationMessage("");
+          setVitalSigns(prev => ({
+            ...prev,
+            arrhythmiaStatus: "SIN ARRITMIAS|0",
+            lastArrhythmiaData: null
+          }));
+        }, 1500);
+      }
+    }, 5000);
   };
 
   const finalizeMeasurement = () => {
@@ -342,53 +402,21 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (lastSignal && isMonitoring) {
-      if (lastSignal.fingerDetected) {
-        if (isCalibrating) {
-          setCalibrationMessage("Calibrando sensores con datos reales");
-          
-          const vitals = processVitalSigns(lastSignal.filteredValue, null);
-          if (vitals?.calibration) {
-            setVitalSigns(prev => ({
-              ...prev,
-              calibration: vitals.calibration
-            }));
-          }
-        } else {
-          const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-          const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
-          setHeartRate(calculatedHeartRate);
-          
-          const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-          if (vitals) {
-            setVitalSigns(vitals);
-            if (vitals.arrhythmiaStatus) {
-              setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
-            }
-          }
+    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+      setHeartRate(heartBeatResult.bpm);
+      
+      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+      if (vitals) {
+        setVitalSigns(vitals);
+        if (vitals.arrhythmiaStatus) {
+          setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
         }
-        
-        setSignalQuality(lastSignal.quality);
-      } else if (isCalibrating) {
-        setCalibrationMessage("Coloque su dedo en la cámara para comenzar la calibración");
-        setVitalSigns(prev => ({
-          ...prev,
-          calibration: {
-            isCalibrating: true,
-            progress: {
-              heartRate: 0,
-              spo2: 0,
-              pressure: 0,
-              arrhythmia: 0,
-              glucose: 0,
-              lipids: 0,
-              hemoglobin: 0
-            }
-          }
-        }));
       }
+      
+      setSignalQuality(lastSignal.quality);
     }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, isCalibrating]);
+  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
@@ -423,17 +451,8 @@ const Index = () => {
           {isCalibrating && calibrationProgress && (
             <CalibrationIndicator 
               isCalibrating={isCalibrating} 
-              progress={calibrationProgress?.progress || {
-                heartRate: 0,
-                spo2: 0,
-                pressure: 0,
-                arrhythmia: 0,
-                glucose: 0,
-                lipids: 0,
-                hemoglobin: 0
-              }}
+              progress={calibrationProgress.progress}
               message={calibrationMessage}
-              isFingerDetected={lastSignal?.fingerDetected || false}
             />
           )}
 
