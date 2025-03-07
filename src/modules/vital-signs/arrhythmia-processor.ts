@@ -3,17 +3,6 @@
  * Implements algorithms from "Assessment of Arrhythmia Vulnerability by Heart Rate Variability Analysis"
  * and "Machine Learning for Arrhythmia Detection" publications
  */
-import { detrend, filterSignal, findPeaks, calculateRMSSD } from "@/lib/signal-processing";
-
-export interface ArrhythmiaResult {
-  status: string;
-  data: {
-    timestamp: number;
-    rmssd: number;
-    rrVariation: number;
-  } | null;
-}
-
 export class ArrhythmiaProcessor {
   // Configuración optimizada para reducir falsos positivos
   private readonly RR_WINDOW_SIZE = 5; // Reducido para evitar propagación de falsos positivos
@@ -57,200 +46,88 @@ export class ArrhythmiaProcessor {
   private pendingArrhythmiaDetection: boolean = false;
   private lastArrhythmiaData: { timestamp: number; rmssd: number; rrVariation: number; } | null = null;
 
-  private previousRRData: number[] = [];
-  private isInitialized: boolean = false;
-  private isCalibrating: boolean = true; // Inicialmente en calibración
-  private calibrationSamples: number = 0;
-  private calibrationRequiredSamples: number = 50; // Número de muestras necesarias para calibración
-  private thresholdRMSSD: number = 50; // Umbral ajustado para detectar arritmias
-  private medianRRInterval: number = 0; // Valor mediano normal para intervalos RR
-
-  constructor() {
-    // Inicialización del procesador
-    console.log("ArrhythmiaProcessor inicializado con umbral RMSSD de", this.thresholdRMSSD);
-  }
-
   /**
-   * Procesa el valor de PPG actual y calcula el estado de arritmia.
-   * Ahora incluye manejo de estado de calibración.
+   * Processes heart beat data to detect arrhythmias using advanced HRV analysis
+   * Based on techniques from "New frontiers in heart rate variability analysis"
    */
-  public processHeartbeat(
-    ppgValue: number,
-    rrData: number[]
-  ): ArrhythmiaResult {
-    // Si no está inicializado, inicializar y devolver estado inicial
-    if (!this.isInitialized) {
-      this.isInitialized = true;
-      console.log("ArrhythmiaProcessor: primera inicialización");
-      return {
-        status: "INICIALIZANDO|0",
-        data: null
-      };
-    }
+  public processRRData(rrData?: { intervals: number[]; lastPeakTime: number | null }): {
+    arrhythmiaStatus: string;
+    lastArrhythmiaData: { timestamp: number; rmssd: number; rrVariation: number; } | null;
+  } {
+    const currentTime = Date.now();
 
-    // Si está calibrando, incrementar contador de muestras
-    if (this.isCalibrating) {
-      this.calibrationSamples++;
+    // Update RR intervals if available
+    if (rrData?.intervals && rrData.intervals.length > 0) {
+      this.rrIntervals = rrData.intervals;
+      this.lastPeakTime = rrData.lastPeakTime;
       
-      // Guardar datos durante calibración para establecer línea base
-      if (rrData && rrData.length > 0) {
-        this.previousRRData = [...this.previousRRData, ...rrData];
-        
-        // Mantener solo las últimas 20 muestras para la calibración
-        if (this.previousRRData.length > 20) {
-          this.previousRRData = this.previousRRData.slice(-20);
+      // Compute RR differences for variability analysis
+      if (this.rrIntervals.length >= 2) {
+        this.rrDifferences = [];
+        for (let i = 1; i < this.rrIntervals.length; i++) {
+          this.rrDifferences.push(this.rrIntervals[i] - this.rrIntervals[i-1]);
         }
       }
       
-      // Si se han recolectado suficientes muestras, finalizar calibración
-      // y establecer umbrales basados en los datos recolectados
-      if (this.calibrationSamples >= this.calibrationRequiredSamples) {
-        this.isCalibrating = false;
+      // Solo detecta arritmias si ya pasó la fase de aprendizaje y hay suficientes datos
+      if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
+        // Determinar si este frame debe ser evaluado para arritmia
+        const shouldEvaluateFrame = 
+          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
+          !this.arrhythmiaDetected;
         
-        // Calcular la mediana de los intervalos RR durante calibración
-        // para establecer la línea base personal del usuario
-        if (this.previousRRData.length > 5) {
-          const sortedRRData = [...this.previousRRData].sort((a, b) => a - b);
-          this.medianRRInterval = sortedRRData[Math.floor(sortedRRData.length / 2)];
+        if (shouldEvaluateFrame) {
+          // Si hay detección pendiente, desactivarla después de un tiempo
+          if (this.pendingArrhythmiaDetection && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.pendingArrhythmiaDetection = false;
+            this.arrhythmiaDetected = false;
+            this.consecutiveArrhythmiaFrames = 0;
+          }
           
-          // Ajustar umbral RMSSD basado en la variabilidad normal del usuario
-          const calibrationRMSSD = calculateRMSSD(this.previousRRData);
-          // El umbral será 2.5 veces la RMSSD normal del usuario, o el valor predeterminado
-          this.thresholdRMSSD = Math.max(this.thresholdRMSSD, calibrationRMSSD * 2.5);
-          
-          console.log("ArrhythmiaProcessor: Calibración completada", {
-            medianaRR: this.medianRRInterval,
-            umbralRMSSD: this.thresholdRMSSD,
-            baseRMSSD: calibrationRMSSD
-          });
+          // Solo evalúa arritmias si no hay muchas detecciones consecutivas
+          if (this.consecutiveArrhythmiaFrames < this.MAX_CONSECUTIVE_DETECTIONS) {
+            this.detectArrhythmia();
+          } else if (currentTime - this.lastArrhythmiaTime > 1000) {
+            // Resetear contador después de un tiempo
+            this.consecutiveArrhythmiaFrames = 0;
+            this.arrhythmiaDetected = false;
+          }
+        } else {
+          // Si no es momento de evaluar, no mantener la detección demasiado tiempo
+          if (this.arrhythmiaDetected && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.arrhythmiaDetected = false;
+          }
         }
       }
-      
-      // Durante calibración, reportar que se está calibrando
-      return {
-        status: `CALIBRANDO...|${Math.min(100, Math.round((this.calibrationSamples / this.calibrationRequiredSamples) * 100))}`,
-        data: null
-      };
     }
 
-    // Si no hay datos RR válidos, mantener el estado anterior
-    if (!rrData || rrData.length === 0) {
-      return {
-        status: this.arrhythmiaCount > 0 ? `ARRITMIA DETECTADA|${this.arrhythmiaCount}` : `SIN ARRITMIAS|0`,
-        data: null
-      };
+    // Check if learning phase is complete
+    const timeSinceStart = currentTime - this.measurementStartTime;
+    if (timeSinceStart > this.ARRHYTHMIA_LEARNING_PERIOD) {
+      this.isLearningPhase = false;
     }
 
-    // Procesar solo después de completar la calibración
-    // Almacenar los últimos intervalos RR (máximo 30)
-    this.previousRRData = [...this.previousRRData, ...rrData];
-    if (this.previousRRData.length > 30) {
-      this.previousRRData = this.previousRRData.slice(-30);
+    // Determine arrhythmia status message
+    let arrhythmiaStatus;
+    if (this.isLearningPhase) {
+      arrhythmiaStatus = "CALIBRANDO...";
+    } else if (this.arrhythmiaDetected) { 
+      // Solo muestra detección durante la ventana activa
+      arrhythmiaStatus = `ARRITMIA DETECTADA|${this.arrhythmiaCount}`;
+    } else {
+      arrhythmiaStatus = `SIN ARRITMIAS|${this.arrhythmiaCount}`;
     }
 
-    // Necesitamos al menos 8 intervalos RR para un análisis confiable
-    if (this.previousRRData.length < 8) {
-      return {
-        status: "ANALIZANDO|0",
-        data: null
-      };
-    }
+    // Solo enviar datos de arritmia si está actualmente detectada
+    const lastArrhythmiaData = this.arrhythmiaDetected ? 
+      this.lastArrhythmiaData : null;
 
-    // Calcular variabilidad del ritmo cardíaco (RMSSD)
-    const rmssd = calculateRMSSD(this.previousRRData);
-    
-    // Calcular la variación porcentual de los intervalos RR
-    const rrVariation = this.calculateRRVariationPercent(this.previousRRData);
-    
-    // Crear objeto con los datos de análisis
-    const data = {
-      timestamp: Date.now(),
-      rmssd,
-      rrVariation
-    };
-    
-    // Detección de arritmia basada en RMSSD y variación porcentual
-    // Consideramos que hay arritmia si la RMSSD supera el umbral calibrado
-    // o si la variación porcentual es muy alta
-    let isArrhythmia = false;
-    
-    if (rmssd > this.thresholdRMSSD || rrVariation > 25) {
-      isArrhythmia = true;
-      this.arrhythmiaCount++;
-      console.log(`ArrhythmiaProcessor: Arritmia detectada (#${this.arrhythmiaCount})`, {
-        rmssd,
-        umbral: this.thresholdRMSSD,
-        variacion: rrVariation
-      });
-    }
-    
     return {
-      status: isArrhythmia ? `ARRITMIA DETECTADA|${this.arrhythmiaCount}` : `SIN ARRITMIAS|${this.arrhythmiaCount}`,
-      data
+      arrhythmiaStatus,
+      lastArrhythmiaData
     };
-  }
-  
-  /**
-   * Calcula la variación porcentual de los intervalos RR.
-   * Esto es útil para detectar latidos irregulares.
-   */
-  private calculateRRVariationPercent(rrIntervals: number[]): number {
-    if (rrIntervals.length < 2) return 0;
-    
-    // Calcular la variación consecutiva
-    let totalVariation = 0;
-    let validPairs = 0;
-    
-    for (let i = 1; i < rrIntervals.length; i++) {
-      const current = rrIntervals[i];
-      const previous = rrIntervals[i-1];
-      
-      if (current > 0 && previous > 0) {
-        // Variación porcentual entre latidos consecutivos
-        const variation = Math.abs(current - previous) / previous * 100;
-        totalVariation += variation;
-        validPairs++;
-      }
-    }
-    
-    return validPairs > 0 ? totalVariation / validPairs : 0;
-  }
-  
-  /**
-   * Reinicia el procesador para una nueva medición.
-   */
-  public reset(): void {
-    this.rrIntervals = [];
-    this.rrDifferences = [];
-    this.lastPeakTime = null;
-    this.isLearningPhase = true;
-    this.hasDetectedFirstArrhythmia = false;
-    this.arrhythmiaDetected = false;
-    this.arrhythmiaCount = 0;
-    this.measurementStartTime = Date.now();
-    this.lastRMSSD = 0;
-    this.lastRRVariation = 0;
-    this.lastArrhythmiaTime = 0;
-    this.shannonEntropy = 0;
-    this.sampleEntropy = 0;
-    this.pnnX = 0;
-    this.consecutiveArrhythmiaFrames = 0;
-    this.pendingArrhythmiaDetection = false;
-    this.lastArrhythmiaData = null;
-    this.previousRRData = [];
-    this.isCalibrating = true;
-    this.calibrationSamples = 0;
-    console.log("ArrhythmiaProcessor: reset completo y calibración reiniciada");
-  }
-  
-  /**
-   * Establece que la calibración ha terminado (usado cuando se fuerza finalización).
-   */
-  public completeCalibration(): void {
-    if (this.isCalibrating) {
-      this.isCalibrating = false;
-      console.log("ArrhythmiaProcessor: calibración finalizada manualmente");
-    }
   }
 
   /**
@@ -413,6 +290,29 @@ export class ArrhythmiaProcessor {
     
     // Convert to entropy-like measure
     return -Math.log(sumCorr / (normalizedIntervals.length - 1));
+  }
+
+  /**
+   * Reset the arrhythmia processor state
+   */
+  public reset(): void {
+    this.rrIntervals = [];
+    this.rrDifferences = [];
+    this.lastPeakTime = null;
+    this.isLearningPhase = true;
+    this.hasDetectedFirstArrhythmia = false;
+    this.arrhythmiaDetected = false;
+    this.arrhythmiaCount = 0;
+    this.measurementStartTime = Date.now();
+    this.lastRMSSD = 0;
+    this.lastRRVariation = 0;
+    this.lastArrhythmiaTime = 0;
+    this.shannonEntropy = 0;
+    this.sampleEntropy = 0;
+    this.pnnX = 0;
+    this.consecutiveArrhythmiaFrames = 0;
+    this.pendingArrhythmiaDetection = false;
+    this.lastArrhythmiaData = null;
   }
 
   /**
