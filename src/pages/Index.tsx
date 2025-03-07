@@ -410,7 +410,11 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        setVitalSigns(vitals);
+        // Mantener todos los valores del objeto vitals
+        setVitalSigns(prevState => ({
+          ...prevState,
+          ...vitals
+        }));
         
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
