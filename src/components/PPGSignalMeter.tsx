@@ -57,18 +57,6 @@ const PPGSignalMeter = ({
   const MAX_PEAKS_TO_DISPLAY = 25;
 
   useEffect(() => {
-    console.log("[PPG_ENTRADA]", {
-      timestamp: Date.now(),
-      rawValue: value,
-      quality,
-      isFingerDetected,
-      hasBuffer: dataBufferRef.current?.getPoints().length || 0,
-      baseline: baselineRef.current,
-      lastValue: lastValueRef.current,
-      arrhythmiaStatus,
-      preserveResults
-    });
-
     if (!dataBufferRef.current) {
       dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
     }
@@ -81,7 +69,7 @@ const PPGSignalMeter = ({
       baselineRef.current = null;
       lastValueRef.current = null;
     }
-  }, [preserveResults, isFingerDetected, value, quality]);
+  }, [preserveResults, isFingerDetected]);
 
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
@@ -248,25 +236,15 @@ const PPGSignalMeter = ({
   }, []);
 
   const renderSignal = useCallback(() => {
-    const now = Date.now();
-    const currentTime = performance.now();
-    const deltaTime = currentTime - lastRenderTimeRef.current;
-
-    console.log("[PPG_RENDER]", {
-      timestamp: now,
-      frameTime: deltaTime,
-      bufferSize: dataBufferRef.current?.getPoints().length || 0,
-      currentValue: value,
-      isProcessing: !!dataBufferRef.current,
-      quality
-    });
-
     if (!canvasRef.current || !dataBufferRef.current) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
 
-    if (!IMMEDIATE_RENDERING && deltaTime < FRAME_TIME) {
+    const currentTime = performance.now();
+    const timeSinceLastRender = currentTime - lastRenderTimeRef.current;
+
+    if (!IMMEDIATE_RENDERING && timeSinceLastRender < FRAME_TIME) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
@@ -278,76 +256,11 @@ const PPGSignalMeter = ({
       return;
     }
 
-    // Limpiar el canvas completamente
-    ctx.fillStyle = '#F8FAFC';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const now = Date.now();
     
     drawGrid(ctx);
-
-    // Validación estricta de señal PPG
-    const isPPGSignalValid = (val: number): boolean => {
-      // 1. Verificar que el valor esté en el rango típico de PPG (0-255 para señal raw)
-      if (val < 0 || val > 255) return false;
-
-      // 2. Verificar que haya variación periódica en la señal
-      if (dataBufferRef.current && dataBufferRef.current.getPoints().length > 30) {
-        const recentPoints = dataBufferRef.current.getPoints().slice(-30);
-        const maxVal = Math.max(...recentPoints.map(p => p.value));
-        const minVal = Math.min(...recentPoints.map(p => p.value));
-        const variation = maxVal - minVal;
-        
-        // La señal PPG debe tener una variación mínima característica
-        if (variation < 0.5) return false;
-
-        // 3. Verificar periodicidad (característica fundamental de PPG)
-        let crossings = 0;
-        const mean = recentPoints.reduce((a, b) => a + b.value, 0) / recentPoints.length;
-        for (let i = 1; i < recentPoints.length; i++) {
-          if ((recentPoints[i].value - mean) * (recentPoints[i-1].value - mean) < 0) {
-            crossings++;
-          }
-        }
-        // Una señal PPG válida debe tener un número razonable de cruces por cero
-        if (crossings < 4 || crossings > 15) return false;
-      }
-
-      return true;
-    };
-    
-    // No procesar si no hay señal PPG válida
-    if (!isPPGSignalValid(value)) {
-      // Limpiar datos anteriores
-      dataBufferRef.current.clear();
-      baselineRef.current = null;
-      lastValueRef.current = null;
-      peaksRef.current = [];
-      
-      lastRenderTimeRef.current = currentTime;
-      animationFrameRef.current = requestAnimationFrame(renderSignal);
-      return;
-    }
-    
-    // No procesar señal si no hay dedo detectado o la calidad es muy baja
-    if (!isFingerDetected || quality < 40) {
-      // Limpiar datos anteriores
-      dataBufferRef.current.clear();
-      baselineRef.current = null;
-      lastValueRef.current = null;
-      peaksRef.current = [];
-      
-      lastRenderTimeRef.current = currentTime;
-      animationFrameRef.current = requestAnimationFrame(renderSignal);
-      return;
-    }
     
     if (preserveResults && !isFingerDetected) {
-      lastRenderTimeRef.current = currentTime;
-      animationFrameRef.current = requestAnimationFrame(renderSignal);
-      return;
-    }
-    
-    // Validar que el valor esté dentro de rangos razonables
-    if (Math.abs(value) > 255 || value < 0) {
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
@@ -364,14 +277,6 @@ const PPGSignalMeter = ({
 
     const normalizedValue = (baselineRef.current || 0) - smoothedValue;
     const scaledValue = normalizedValue * verticalScale;
-    
-    // Validar que la señal tenga suficiente variación
-    const minVariation = 0.5;
-    if (Math.abs(scaledValue) < minVariation) {
-      lastRenderTimeRef.current = currentTime;
-      animationFrameRef.current = requestAnimationFrame(renderSignal);
-      return;
-    }
     
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
@@ -390,13 +295,9 @@ const PPGSignalMeter = ({
     dataBufferRef.current.push(dataPoint);
     const points = dataBufferRef.current.getPoints();
     
-    // Solo detectar picos si hay suficientes puntos válidos
-    if (points.length >= 10) {
-      detectPeaks(points, now);
-    }
+    detectPeaks(points, now);
 
     if (points.length > 1) {
-      // Dibujar la señal PPG
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
@@ -444,47 +345,33 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Dibujar puntos y valores
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
-          // Dibujar círculo del pico
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
-            // Círculo exterior para arritmias
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia con contorno
-            const label = 'ARRITMIA';
-            ctx.font = 'bold 14px Inter';
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
-            
-            // Dibujar contorno rojo
-            ctx.strokeStyle = '#DC2626';
-            ctx.lineWidth = 3;
-            ctx.strokeText(label, x, y - 25);
-            
-            // Texto en amarillo
-            ctx.fillStyle = '#F59E0B';
-            ctx.fillText(label, x, y - 25);
+            ctx.fillText('ARRITMIA', x, y - 25);
           }
-          
-          // Valor del pico en negro
-          const value = Math.abs(peak.value / verticalScale).toFixed(2);
-          ctx.font = 'bold 14px Inter';
+
+          ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
-          ctx.fillText(value, x, y - 15);
+          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
       });
     }
