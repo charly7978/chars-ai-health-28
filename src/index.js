@@ -186,14 +186,12 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div 
-      className="fixed inset-0 flex flex-col bg-black" 
+    <div className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
-        height: 'calc(100vh + env(safe-area-inset-bottom))',
-        paddingTop: 'env(safe-area-inset-top)',
+        height: '100vh',
+        paddingTop: '0',
         paddingBottom: 'env(safe-area-inset-bottom)'
-      }}
-    >
+      }}>
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
@@ -205,7 +203,7 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          <div className="flex-1">
+          <div className="flex-1 bg-black">
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
@@ -213,6 +211,7 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={stopMonitoring}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
+              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
             />
           </div>
 
