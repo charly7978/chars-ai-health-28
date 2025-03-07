@@ -350,31 +350,6 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Mostrar estado de arritmia y contador
-      if (arrhythmiaStatus) {
-        const [status, count] = arrhythmiaStatus.split('|');
-        
-        if (status === "LATIDO_NORMAL") {
-          // Mensaje de latido normal
-          ctx.fillStyle = '#0EA5E9';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
-        } else if (status === "ARRITMIA_DETECTADA") {
-          // Alerta de arritmia
-          ctx.fillStyle = '#DC2626';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
-          
-          // Contador de arritmias
-          if (parseInt(count) > 0) {
-            ctx.font = 'bold 16px Inter';
-            ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
-          }
-        }
-      }
-
       // Dibujar puntos y valores
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
@@ -395,17 +370,25 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia
+            // Etiqueta de arritmia con contorno
+            const label = 'ARRITMIA';
             ctx.font = 'bold 14px Inter';
-            ctx.fillStyle = '#F59E0B';
             ctx.textAlign = 'center';
-            ctx.fillText('ARRITMIA', x, y - 25);
+            
+            // Dibujar contorno rojo
+            ctx.strokeStyle = '#DC2626';
+            ctx.lineWidth = 3;
+            ctx.strokeText(label, x, y - 25);
+            
+            // Texto en amarillo
+            ctx.fillStyle = '#F59E0B';
+            ctx.fillText(label, x, y - 25);
           }
           
-          // Valor del pico
+          // Valor del pico en negro
           const value = Math.abs(peak.value / verticalScale).toFixed(2);
           ctx.font = 'bold 14px Inter';
-          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
           ctx.fillText(value, x, y - 15);
         }
