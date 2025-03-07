@@ -67,13 +67,22 @@ export class VitalSignsProcessor {
   private signalQualityBuffer: number[] = [];
   private readonly QUALITY_BUFFER_SIZE = 10;
 
-  constructor() {
+  constructor(calibrationProgress = {
+    heartRate: 0,
+    spo2: 0,
+    pressure: 0,
+    arrhythmia: 0,
+    glucose: 0,
+    lipids: 0,
+    hemoglobin: 0
+  }) {
     this.spo2Processor = new SpO2Processor();
     this.bpProcessor = new BloodPressureProcessor();
     this.arrhythmiaProcessor = new ArrhythmiaProcessor();
     this.signalProcessor = new SignalProcessor();
     this.glucoseProcessor = new GlucoseProcessor();
     this.lipidProcessor = new LipidProcessor();
+    this.calibrationProgress = calibrationProgress;
 
     // Cargar calibración previa si existe
     const savedCalibration = localStorage.getItem('calibrationData');
@@ -219,11 +228,20 @@ export class VitalSignsProcessor {
       arrhythmiaStatus: arrhythmiaResult.status,
       lastArrhythmiaData: arrhythmiaResult.data,
       glucose: this.getMedianGlucose(),
-      lipids: {
-        totalCholesterol: this.getMedianCholesterol(),
-        triglycerides: this.getMedianTriglycerides()
-      },
-      hemoglobin: this.getMedianHemoglobin()
+      lipids: this.getMedianLipids(),
+      hemoglobin: this.getMedianHemoglobin(),
+      calibration: {
+        isCalibrating: false,
+        progress: {
+          heartRate: 100,
+          spo2: 100,
+          pressure: 100,
+          arrhythmia: 100,
+          glucose: 100,
+          lipids: 100,
+          hemoglobin: 100
+        }
+      }
     };
 
     this.lastValidResults = result;
@@ -327,53 +345,67 @@ export class VitalSignsProcessor {
     }
   }
 
+  private getMedianValue(values: number[]): number {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  }
+
   private getMedianSpo2(): number {
-    if (this.spo2Samples.length === 0) return 0;
-    return this.calculateMedian(this.spo2Samples);
+    // Mantener solo las últimas 10 muestras
+    if (this.spo2Samples.length > 10) {
+      this.spo2Samples = this.spo2Samples.slice(-10);
+    }
+    return Math.round(this.getMedianValue(this.spo2Samples));
   }
 
   private getMedianPressure(): string {
     if (this.pressureSamples.length < 2) return "--/--";
-    const sorted = [...this.pressureSamples].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return `${Math.round(sorted[mid - 1])}/${Math.round(sorted[mid])}`;
+    
+    // Mantener solo las últimas 20 muestras (10 pares de sistólica/diastólica)
+    if (this.pressureSamples.length > 20) {
+      this.pressureSamples = this.pressureSamples.slice(-20);
+    }
+    
+    const systolicValues = this.pressureSamples.filter((_, i) => i % 2 === 0);
+    const diastolicValues = this.pressureSamples.filter((_, i) => i % 2 === 1);
+    
+    const systolic = Math.round(this.getMedianValue(systolicValues));
+    const diastolic = Math.round(this.getMedianValue(diastolicValues));
+    
+    return systolic && diastolic ? `${systolic}/${diastolic}` : "--/--";
   }
 
   private getMedianGlucose(): number {
-    if (this.glucoseSamples.length === 0) return 0;
-    return this.calculateMedian(this.glucoseSamples);
+    // Mantener solo las últimas 10 muestras
+    if (this.glucoseSamples.length > 10) {
+      this.glucoseSamples = this.glucoseSamples.slice(-10);
+    }
+    return Math.round(this.getMedianValue(this.glucoseSamples));
   }
 
-  private getMedianCholesterol(): number {
-    if (this.lipidSamples.length === 0) return 0;
-    return this.calculateMedian(this.lipidSamples);
-  }
-
-  private getMedianTriglycerides(): number {
-    if (this.lipidSamples.length === 0) return 0;
-    return this.calculateMedian(this.lipidSamples);
+  private getMedianLipids(): { totalCholesterol: number; triglycerides: number } {
+    // Mantener solo las últimas 20 muestras (10 pares de colesterol/triglicéridos)
+    if (this.lipidSamples.length > 20) {
+      this.lipidSamples = this.lipidSamples.slice(-20);
+    }
+    
+    const cholesterolValues = this.lipidSamples.filter((_, i) => i % 2 === 0);
+    const triglyceridesValues = this.lipidSamples.filter((_, i) => i % 2 === 1);
+    
+    return {
+      totalCholesterol: Math.round(this.getMedianValue(cholesterolValues)),
+      triglycerides: Math.round(this.getMedianValue(triglyceridesValues))
+    };
   }
 
   private getMedianHemoglobin(): number {
-    if (this.heartRateSamples.length === 0) return 0;
-    return this.calculateMedian(this.heartRateSamples);
-  }
-
-  private calculateMedian(values: number[]): number {
-    if (values.length === 0) return 0;
-    
-    // Crear una copia y ordenarla para no modificar el original
-    const sortedValues = [...values].sort((a, b) => a - b);
-    
-    const mid = Math.floor(sortedValues.length / 2);
-    
-    // Si hay un número impar de elementos, la mediana es el valor central
-    if (sortedValues.length % 2 === 1) {
-      return sortedValues[mid];
+    // Mantener solo las últimas 10 muestras
+    if (this.heartRateSamples.length > 10) {
+      this.heartRateSamples = this.heartRateSamples.slice(-10);
     }
-    
-    // Si hay un número par de elementos, la mediana es el promedio de los dos centrales
-    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+    return Math.round(this.getMedianValue(this.heartRateSamples) * 10) / 10; // Un decimal
   }
 
   /**
