@@ -441,7 +441,7 @@ const PPGSignalMeter = ({
 
   return (
     <div className="fixed inset-0 bg-transparent">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent backdrop-blur-sm border-b border-slate-100/20 shadow-sm pt-3">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="w-[180px]">
