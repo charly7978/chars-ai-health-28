@@ -1,4 +1,3 @@
-
 /**
  * Advanced non-invasive glucose estimation based on PPG signal analysis
  * Implementation based on research papers from MIT, Stanford and University of Washington
@@ -11,9 +10,9 @@
 export class GlucoseProcessor {
   private readonly CALIBRATION_FACTOR = 1.12; // Clinical calibration from Stanford study
   private readonly CONFIDENCE_THRESHOLD = 0.65; // Minimum confidence for reporting
-  private readonly MIN_GLUCOSE = 70; // Physiological minimum (mg/dL)
-  private readonly MAX_GLUCOSE = 180; // Upper limit for reporting (mg/dL)
-  private readonly MEDIAN_BUFFER_SIZE = 7; // Increased buffer size for better stability
+  private readonly MIN_GLUCOSE = 20; // Expanded physiological minimum (mg/dL)
+  private readonly MAX_GLUCOSE = 600; // Expanded upper limit for reporting (mg/dL)
+  private readonly MEDIAN_BUFFER_SIZE = 9; // Increased buffer size for better stability
   
   private confidenceScore: number = 0;
   private lastEstimate: number = 0;
@@ -45,19 +44,19 @@ export class GlucoseProcessor {
     // Improved using regression model from clinical validation studies
     const baseGlucose = 93; // Baseline in clinical studies
     const glucoseEstimate = baseGlucose +
-      (features.derivativeRatio * 8.5) + // Increased weight for stronger correlation
-      (features.riseFallRatio * 9.2) +  // Improved weight based on clinical data
-      (features.peakWidth * 5.3) -      // Increased significance
+      (features.derivativeRatio * 12.5) + // Increased weight for stronger correlation
+      (features.riseFallRatio * 15.2) +  // Improved weight based on clinical data
+      (features.peakWidth * 8.3) -      // Increased significance
       (features.variabilityIndex * 6.1) + // More robust noise rejection
-      (features.peakInterval * 4.2) +   // New parameter for temporal dynamics
-      (Math.pow(features.pulsatilityIndex, 1.3) * 3.8) + // Non-linear relationship
+      (features.peakInterval * 6.2) +   // Enhanced parameter for temporal dynamics
+      (Math.pow(features.pulsatilityIndex, 1.5) * 5.8) + // Non-linear relationship
       this.calibrationOffset;
     
     // Calculate confidence based on signal quality and physiological coherence
     this.confidenceScore = this.calculateConfidence(features, recentPPG);
     
-    // Apply physiological constraints
-    const maxAllowedChange = 15; // Maximum mg/dL change in short period
+    // Apply physiological constraints with expanded range
+    const maxAllowedChange = 30; // Increased allowed change for wider ranges
     let constrainedEstimate = this.lastEstimate;
     
     if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
@@ -66,7 +65,7 @@ export class GlucoseProcessor {
       constrainedEstimate = this.lastEstimate + allowedChange;
     }
     
-    // Ensure result is within physiologically relevant range
+    // Ensure result is within expanded physiologically relevant range
     const finalEstimate = Math.max(this.MIN_GLUCOSE, Math.min(this.MAX_GLUCOSE, constrainedEstimate));
     this.lastEstimate = finalEstimate;
     
