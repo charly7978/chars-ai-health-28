@@ -22,9 +22,9 @@ export const useVitalSignsProcessor = () => {
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   
   // Advanced configuration based on clinical guidelines
-  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
+  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 800; // Reducido a 800ms para aumentar sensibilidad
   const MAX_ARRHYTHMIAS_PER_SESSION = 20; // Reasonable maximum for 30 seconds
-  const SIGNAL_QUALITY_THRESHOLD = 0.55; // Signal quality required for reliable detection
+  const SIGNAL_QUALITY_THRESHOLD = 0.50; // Reducido para permitir detección con menor calidad
   
   useEffect(() => {
     console.log("useVitalSignsProcessor: Hook inicializado", {
@@ -159,20 +159,20 @@ export const useVitalSignsProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Multi-parametric arrhythmia detection algorithm
-      if ((rmssd > 50 && rrVariation > 0.20) || // Primary condition
-          (rrSD > 35 && rrVariation > 0.18) ||  // Secondary condition
-          (lastRR > 1.4 * avgRR) ||             // Extreme outlier condition
-          (lastRR < 0.6 * avgRR)) {             // Extreme outlier condition
+      // Multi-parametric arrhythmia detection algorithm - Parámetros más sensibles
+      if ((rmssd > 40 && rrVariation > 0.18) || // Menos restrictivo 
+          (rrSD > 30 && rrVariation > 0.15) ||  // Menos restrictivo
+          (lastRR > 1.3 * avgRR) ||             // Menos restrictivo
+          (lastRR < 0.7 * avgRR)) {             // Menos restrictivo
           
         console.log("useVitalSignsProcessor: Posible arritmia detectada", {
           rmssd,
           rrVariation,
           rrSD,
-          condición1: rmssd > 50 && rrVariation > 0.20,
-          condición2: rrSD > 35 && rrVariation > 0.18,
-          condición3: lastRR > 1.4 * avgRR,
-          condición4: lastRR < 0.6 * avgRR,
+          condición1: rmssd > 40 && rrVariation > 0.18,
+          condición2: rrSD > 30 && rrVariation > 0.15,
+          condición3: lastRR > 1.3 * avgRR,
+          condición4: lastRR < 0.7 * avgRR,
           timestamp: new Date().toISOString()
         });
         
@@ -231,7 +231,7 @@ export const useVitalSignsProcessor = () => {
       ...result,
       arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
     };
-  }, [processor, arrhythmiaCounter]);
+  }, [processor, arrhythmiaCounter, MIN_TIME_BETWEEN_ARRHYTHMIAS, MAX_ARRHYTHMIAS_PER_SESSION]);
 
   // Soft reset: mantener los resultados pero reiniciar los procesadores
   const reset = useCallback(() => {

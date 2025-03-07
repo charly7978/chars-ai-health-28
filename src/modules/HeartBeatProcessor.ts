@@ -60,11 +60,11 @@ export class HeartBeatProcessor {
 
   // Parámetros de arritmia
   private readonly RR_HISTORY_SIZE = 8; // Tamaño del historial de intervalos RR
-  private readonly PREMATURE_BEAT_THRESHOLD = 0.85; // % del intervalo RR promedio para considerar prematuro
-  private readonly LATE_BEAT_THRESHOLD = 1.15; // % del intervalo RR promedio para considerar tardío
-  private readonly MORPHOLOGY_DIFFERENCE_THRESHOLD = 0.3; // Diferencia en morfología para considerar anormal
+  private readonly PREMATURE_BEAT_THRESHOLD = 0.80; // % del intervalo RR promedio para considerar prematuro (más sensible)
+  private readonly LATE_BEAT_THRESHOLD = 1.20; // % del intervalo RR promedio para considerar tardío (más sensible)
+  private readonly MORPHOLOGY_DIFFERENCE_THRESHOLD = 0.25; // Reducido para mayor sensibilidad
   private readonly MIN_RR_HISTORY = 3; // Mínimo de intervalos RR para comenzar detección
-  private readonly ARRHYTHMIA_CONFIDENCE_THRESHOLD = 0.75; // Confianza mínima para marcar arritmia
+  private readonly ARRHYTHMIA_CONFIDENCE_THRESHOLD = 0.65; // Confianza mínima para marcar arritmia (reducido)
 
   // Variables para arritmias
   private rrIntervalHistory: number[] = [];
@@ -629,7 +629,7 @@ export class HeartBeatProcessor {
     const previousIntervals = this.rrIntervalHistory.slice(0, -1);
     const avgRR = previousIntervals.reduce((a, b) => a + b, 0) / previousIntervals.length;
 
-    // Detectar latidos prematuros o tardíos
+    // Detectar latidos prematuros o tardíos (umbrales más sensibles)
     const isPrematurely = currentRRInterval < avgRR * this.PREMATURE_BEAT_THRESHOLD;
     const isLate = currentRRInterval > avgRR * this.LATE_BEAT_THRESHOLD;
 

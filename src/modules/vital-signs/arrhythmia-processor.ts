@@ -6,8 +6,8 @@
 export class ArrhythmiaProcessor {
   // Configuración optimizada para reducir falsos positivos
   private readonly RR_WINDOW_SIZE = 5; // Reducido para evitar propagación de falsos positivos
-  private RMSSD_THRESHOLD = 45; // Cambiado a variable normal para permitir ajustes
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 5000; // Periodo de aprendizaje
+  private RMSSD_THRESHOLD = 35; // Bajado para aumentar sensibilidad de detección
+  private readonly ARRHYTHMIA_LEARNING_PERIOD = 3000; // Reducido periodo de aprendizaje para detección más rápida
   private readonly SD1_THRESHOLD = 25; // Poincaré plot SD1 threshold
   private readonly PERFUSION_INDEX_MIN = 0.2; // Minimum PI for reliable detection
   
@@ -17,11 +17,11 @@ export class ArrhythmiaProcessor {
   private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
   
   // Límites de tiempo para evitar múltiples detecciones del mismo evento
-  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1500; // Al menos 1.5 segundos entre arritmias
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1000; // Reducido a 1 segundo entre arritmias
   
   // Parámetros para evitar falsos positivos en la detección
   private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
-  private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Máximo 1 latido arrítmico consecutivo
+  private readonly MAX_CONSECUTIVE_DETECTIONS = 2; // Aumentado a 2 para mejorar la detección
   
   // Parámetros para filtrado de mediana
   private readonly MEDIAN_BUFFER_SIZE = 5; // Tamaño del buffer para filtro de mediana
@@ -76,8 +76,10 @@ export class ArrhythmiaProcessor {
         }
       }
       
-      // Solo detecta arritmias si ya pasó la fase de aprendizaje y hay suficientes datos
-      if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
+      // Solo detecta arritmias si ya pasó la fase de aprendizaje o hay suficientes datos
+      // Reducida la barrera para detección
+      if ((this.rrIntervals.length >= 3) && 
+          (currentTime - this.measurementStartTime > this.ARRHYTHMIA_LEARNING_PERIOD || this.rrIntervals.length >= this.RR_WINDOW_SIZE)) {
         // Determinar si este frame debe ser evaluado para arritmia
         const shouldEvaluateFrame = 
           currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
@@ -142,7 +144,7 @@ export class ArrhythmiaProcessor {
    * Based on ESC Guidelines for arrhythmia detection
    */
   private detectArrhythmia(): void {
-    if (this.rrIntervals.length < this.RR_WINDOW_SIZE) return;
+    if (this.rrIntervals.length < 3) return; // Reducido mínimo a 3 intervalos
 
     const currentTime = Date.now();
     const recentRR = this.rrIntervals.slice(-this.RR_WINDOW_SIZE);
@@ -182,12 +184,12 @@ export class ArrhythmiaProcessor {
     this.lastRRVariation = medianRRVariation;
     
     // Algoritmo de decisión mejorado con uso de mediana
-    // Criterios más estrictos para reducir falsos positivos
+    // Parámetros modificados para mayor sensibilidad
     const isArrhythmia = 
-      // Requiere alta variación del último intervalo RR respecto al promedio
-      (medianRMSSD > this.RMSSD_THRESHOLD && medianRRVariation > 0.25) ||
+      // Requiere menor variación para detectar arritmias
+      (medianRMSSD > this.RMSSD_THRESHOLD && medianRRVariation > 0.22) ||
       // O una variación extrema del intervalo R-R
-      (medianRRVariation > 0.40);
+      (medianRRVariation > 0.35);
     
     // Si detectamos una arritmia potencial
     if (isArrhythmia) {
@@ -218,11 +220,6 @@ export class ArrhythmiaProcessor {
         // Si es muy cercana a la anterior, marcamos como pendiente pero no incrementamos contador
         this.pendingArrhythmiaDetection = true;
         this.consecutiveArrhythmiaFrames++;
-        
-        // Límite estricto de detecciones consecutivas
-        if (this.consecutiveArrhythmiaFrames > this.MAX_CONSECUTIVE_DETECTIONS) {
-          this.arrhythmiaDetected = false;
-        }
       }
     } else {
       // Si no hay arritmia en este frame, mantener la detección actual brevemente
