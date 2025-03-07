@@ -28,6 +28,7 @@ const Index = () => {
   const [heartRate, setHeartRate] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration']>();
   const measurementTimerRef = useRef<number | null>(null);
@@ -73,6 +74,7 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
+      console.log("Iniciando monitoreo y calibración");
       enterFullScreen();
       setIsMonitoring(true);
       setIsCameraOn(true);
@@ -95,7 +97,6 @@ const Index = () => {
       });
       
       setHeartRate(0);
-      console.log("Iniciando fase de calibración");
       startAutoCalibration();
     }
   };
@@ -105,7 +106,7 @@ const Index = () => {
     setIsCalibrating(true);
     startCalibration();
     
-    // Inicializar progreso de calibración
+    // Initialize calibration progress
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -118,17 +119,35 @@ const Index = () => {
         hemoglobin: 0
       }
     });
-
-    // Timer de seguridad para asegurar que la calibración termine
-    setTimeout(() => {
-      if (isCalibrating) {
-        console.log("Forzando finalización de calibración por timeout");
-        forceCalibrationCompletion();
-        setIsCalibrating(false);
-        startMeasurementTimer();
-      }
-    }, 5000); // 5 segundos máximo para calibración
   };
+
+  useEffect(() => {
+    if (lastSignal?.fingerDetected && isMonitoring) {
+      // Only process and show results if calibration is complete
+      if (!isCalibrating) {
+        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+        setHeartRate(heartBeatResult.bpm);
+        
+        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+        if (vitals) {
+          if (vitals.calibration) {
+            setCalibrationProgress(vitals.calibration);
+            
+            // Check if calibration is complete
+            const isComplete = Object.values(vitals.calibration.progress).every(value => value >= 100);
+            if (isComplete) {
+              console.log("Calibración completada, iniciando mediciones");
+              setIsCalibrating(false);
+              startMeasurementTimer();
+            }
+          } else {
+            setVitalSigns(vitals);
+            setSignalQuality(lastSignal.quality);
+          }
+        }
+      }
+    }
+  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, isCalibrating]);
 
   const startMeasurementTimer = () => {
     if (measurementTimerRef.current) {
@@ -320,25 +339,7 @@ const Index = () => {
     processImage();
   };
 
-  useEffect(() => {
-    if (lastSignal?.fingerDetected && isMonitoring) {
-      // Solo procesar y mostrar resultados si la calibración está completa
-      const isCalibrationComplete = calibrationProgress?.progress && 
-        Object.values(calibrationProgress.progress).every(value => value >= 100);
-      
-      if (!isCalibrating && isCalibrationComplete) {
-        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-        setHeartRate(heartBeatResult.bpm);
-        
-        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-        if (vitals) {
-          setVitalSigns(vitals);
-        }
-        
-        setSignalQuality(lastSignal.quality);
-      }
-    }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, isCalibrating, calibrationProgress]);
+  
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
