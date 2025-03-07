@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -395,17 +396,24 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia
+            // Etiqueta de arritmia con borde rojo
             ctx.font = 'bold 14px Inter';
-            ctx.fillStyle = '#F59E0B';
             ctx.textAlign = 'center';
+            
+            // Dibujar el contorno rojo de la etiqueta
+            ctx.strokeStyle = '#DC2626';
+            ctx.lineWidth = 1;
+            ctx.strokeText('ARRITMIA', x, y - 25);
+            
+            // Rellenar con amarillo
+            ctx.fillStyle = '#F59E0B';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
           
-          // Valor del pico
+          // Valor del pico con texto negro
           const value = Math.abs(peak.value / verticalScale).toFixed(2);
           ctx.font = 'bold 14px Inter';
-          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
           ctx.fillText(value, x, y - 15);
         }
