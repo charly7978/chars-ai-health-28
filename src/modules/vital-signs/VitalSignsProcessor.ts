@@ -67,6 +67,13 @@ export class VitalSignsProcessor {
   private signalQualityBuffer: number[] = [];
   private readonly QUALITY_BUFFER_SIZE = 10;
 
+  private readonly RED_WAVELENGTH = 660; // nm
+  private readonly IR_WAVELENGTH = 940;  // nm
+  private readonly HB_EXTINCTION_COEFF = 0.0091; // mm⁻¹
+  private readonly HBO2_EXTINCTION_COEFF = 0.0213; // mm⁻¹
+  private readonly TISSUE_SCATTER_COEFF = 0.35; // mm⁻¹
+  private readonly OPTICAL_PATH_LENGTH = 10; // mm
+
   constructor(calibrationProgress = {
     heartRate: 0,
     spo2: 0,
@@ -254,21 +261,52 @@ export class VitalSignsProcessor {
   }
 
   private calculateHemoglobin(ppgValues: number[]): number {
-    if (ppgValues.length < 50) return 0;
+    if (ppgValues.length < 100) return 0; // Necesitamos más muestras para un análisis confiable
     
-    // Calculate using real PPG data based on absorption characteristics
-    const peak = Math.max(...ppgValues);
-    const valley = Math.min(...ppgValues);
-    const ac = peak - valley;
-    const dc = ppgValues.reduce((a, b) => a + b, 0) / ppgValues.length;
-    
-    // Beer-Lambert law application for hemoglobin estimation
-    const ratio = ac / dc;
-    const baseHemoglobin = 12.5;
-    const hemoglobin = baseHemoglobin + (ratio - 1) * 2.5;
-    
-    // Clamp to physiologically relevant range
-    return Math.max(8, Math.min(18, Number(hemoglobin.toFixed(1))));
+    try {
+        // 1. Separar componentes de señal roja e IR
+        const redSignal = ppgValues.filter((_, i) => i % 2 === 0);
+        const irSignal = ppgValues.filter((_, i) => i % 2 === 1);
+        
+        if (redSignal.length < 50 || irSignal.length < 50) return 0;
+
+        // 2. Calcular componentes AC y DC para cada longitud de onda
+        const redAC = Math.max(...redSignal) - Math.min(...redSignal);
+        const redDC = redSignal.reduce((a, b) => a + b, 0) / redSignal.length;
+        const irAC = Math.max(...irSignal) - Math.min(...irSignal);
+        const irDC = irSignal.reduce((a, b) => a + b, 0) / irSignal.length;
+
+        // 3. Calcular ratio-of-ratios (R)
+        const R = Math.log(redAC/redDC) / Math.log(irAC/irDC);
+        
+        // 4. Calcular saturación de oxígeno (necesaria para el cálculo de hemoglobina)
+        const spo2 = 110 - 25 * R; // Aproximación empírica
+        if (spo2 < 80 || spo2 > 100) return 0; // Datos no confiables
+        
+        // 5. Calcular concentración de hemoglobina usando ley de Beer-Lambert modificada
+        const oxygenatedHbFraction = spo2 / 100;
+        const deoxygenatedHbFraction = 1 - oxygenatedHbFraction;
+        
+        // Atenuación total considerando dispersión
+        const totalAttenuation = Math.log(redDC) / this.OPTICAL_PATH_LENGTH;
+        
+        // Resolver ecuación de Beer-Lambert modificada
+        const totalHemoglobin = (totalAttenuation - this.TISSUE_SCATTER_COEFF) / 
+            (this.HB_EXTINCTION_COEFF * deoxygenatedHbFraction + 
+             this.HBO2_EXTINCTION_COEFF * oxygenatedHbFraction);
+        
+        // Convertir a g/dL y aplicar factor de corrección empírico
+        const hemoglobinGdL = totalHemoglobin * 1.6;
+        
+        // 6. Validar resultado y aplicar límites fisiológicos
+        if (isNaN(hemoglobinGdL) || !isFinite(hemoglobinGdL)) return 0;
+        
+        return Math.max(8, Math.min(18, Number(hemoglobinGdL.toFixed(1))));
+        
+    } catch (error) {
+        console.error('Error en cálculo de hemoglobina:', error);
+        return 0;
+    }
   }
 
   public isCurrentlyCalibrating(): boolean {
