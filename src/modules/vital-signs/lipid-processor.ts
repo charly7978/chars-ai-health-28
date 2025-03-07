@@ -34,12 +34,7 @@ export class LipidProcessor {
   private readonly MIN_CALIBRATION_SAMPLES = 150;
   private readonly CALIBRATION_WINDOW = 50;
   private readonly STABILITY_THRESHOLD = 0.12;
-  private readonly QUALITY_THRESHOLD = 0.80;
-  
-  // Parámetros de calidad de señal mejorados
-  private readonly MIN_AMPLITUDE = 0.15; // Mínima amplitud aceptable
-  private readonly MAX_VARIANCE = 0.3; // Máxima varianza permitida
-  private readonly MIN_PEAKS = 3; // Mínimo número de picos para señal válida
+  private readonly QUALITY_THRESHOLD = 0.85;
   
   // Coeficientes de absorción (basados en estudios espectrales)
   private readonly RED_ABSORPTION = 0.482;
@@ -55,9 +50,8 @@ export class LipidProcessor {
   private baselineTriglycerides: number = 100;
   
   // Buffers para estabilidad - aumentado para mejor mediana
-  private readonly STABILITY_BUFFER_SIZE = 30; // Aumentado para mejor mediana
-  private readonly MIN_SAMPLES_FOR_MEDIAN = 20; // Mínimo de muestras para mediana confiable
-  private readonly MEDIAN_WINDOW_MS = 15000; // Ventana de 15 segundos para mediana
+  private readonly STABILITY_BUFFER_SIZE = 25; // Aumentado para mejor estadística
+  private readonly MIN_SAMPLES_FOR_MEDIAN = 15; // Mínimo de muestras para mediana
   private stabilityBuffer: Array<{
     cholesterol: number;
     triglycerides: number;
@@ -84,27 +78,21 @@ export class LipidProcessor {
       return { totalCholesterol: 0, triglycerides: 0 };
     }
 
-    // Limpiar muestras antiguas
+    // Limpiar muestras antiguas del buffer (más de 30 segundos)
     this.cleanOldSamples();
 
     if (this.calibrationInProgress) {
       return this.handleCalibration(ppgValues);
     }
 
-    // Extraer características avanzadas de la señal PPG
     const features = this.extractAdvancedFeatures(ppgValues);
-    
-    // Verificación más estricta de calidad de señal
-    if (!this.isSignalValid(features)) {
+    if (features.quality < this.QUALITY_THRESHOLD) {
       console.log("Calidad de señal insuficiente para análisis de lípidos", {
-        quality: features.quality,
-        amplitude: features.amplitude,
-        peakCount: features.peakCount
+        quality: features.quality
       });
       return this.getLastStableMedian();
     }
 
-    // Calcular valores actuales
     const cholesterolEstimate = this.calculateCholesterol(features);
     const triglyceridesEstimate = this.calculateTriglycerides(features);
 
@@ -116,12 +104,12 @@ export class LipidProcessor {
       timestamp: Date.now()
     });
 
-    // Calcular mediana con ventana deslizante
-    const medianValues = this.calculateSlidingWindowMedian();
+    // Obtener mediana estable
+    const stableValues = this.calculateWeightedMedian();
     
     return {
-      totalCholesterol: Math.round(medianValues.cholesterol),
-      triglycerides: Math.round(medianValues.triglycerides)
+      totalCholesterol: Math.round(stableValues.cholesterol),
+      triglycerides: Math.round(stableValues.triglycerides)
     };
   }
 
@@ -132,37 +120,27 @@ export class LipidProcessor {
     );
   }
 
-  private calculateSlidingWindowMedian(): {
+  private calculateWeightedMedian(): {
     cholesterol: number;
     triglycerides: number;
   } {
     if (this.stabilityBuffer.length < this.MIN_SAMPLES_FOR_MEDIAN) {
       return {
-        cholesterol: this.baselineCholesterol,
-        triglycerides: this.baselineTriglycerides
+        cholesterol: this.TARGET_CHOLESTEROL,
+        triglycerides: this.TARGET_TRIGLYCERIDES
       };
     }
 
-    // Obtener muestras dentro de la ventana de tiempo
-    const windowStart = Date.now() - this.MEDIAN_WINDOW_MS;
-    const recentSamples = this.stabilityBuffer.filter(
-      sample => sample.timestamp >= windowStart
-    );
-
-    if (recentSamples.length < this.MIN_SAMPLES_FOR_MEDIAN) {
-      return this.getLastStableValues();
-    }
-
     // Ordenar valores por separado
-    const sortedCholesterol = [...recentSamples]
+    const sortedCholesterol = [...this.stabilityBuffer]
       .sort((a, b) => a.cholesterol - b.cholesterol);
-    const sortedTriglycerides = [...recentSamples]
+    const sortedTriglycerides = [...this.stabilityBuffer]
       .sort((a, b) => a.triglycerides - b.triglycerides);
 
     // Calcular pesos basados en calidad y tiempo
-    const weights = recentSamples.map(sample => {
+    const weights = this.stabilityBuffer.map(sample => {
       const age = (Date.now() - sample.timestamp) / 1000;
-      const timeWeight = Math.exp(-age / 5); // Decay más rápido
+      const timeWeight = Math.exp(-age / 10);
       return sample.quality * timeWeight;
     });
 
@@ -170,11 +148,11 @@ export class LipidProcessor {
     const medianWeight = totalWeight / 2;
 
     let accumWeight = 0;
-    let cholesterolValue = this.baselineCholesterol;
-    let triglyceridesValue = this.baselineTriglycerides;
+    let cholesterolValue = this.TARGET_CHOLESTEROL;
+    let triglyceridesValue = this.TARGET_TRIGLYCERIDES;
 
     // Encontrar mediana ponderada
-    for (let i = 0; i < recentSamples.length; i++) {
+    for (let i = 0; i < this.stabilityBuffer.length; i++) {
       accumWeight += weights[i];
       if (accumWeight >= medianWeight) {
         cholesterolValue = sortedCholesterol[i].cholesterol;
@@ -183,20 +161,76 @@ export class LipidProcessor {
       }
     }
 
-    // Aplicar suavizado adaptativo
+    // Aplicar suavizado adaptativo basado en el rango
     const smoothingFactor = this.calculateAdaptiveSmoothingFactor(cholesterolValue);
-    
+    cholesterolValue = cholesterolValue * (1 - smoothingFactor) + 
+                      this.TARGET_CHOLESTEROL * smoothingFactor;
+    triglyceridesValue = triglyceridesValue * (1 - smoothingFactor) + 
+                        this.TARGET_TRIGLYCERIDES * smoothingFactor;
+
+    // No limitar valores altos si son consistentes
+    if (this.isValueConsistent(cholesterolValue, 'cholesterol')) {
+      return {
+        cholesterol: cholesterolValue,
+        triglycerides: Math.max(this.MIN_TRIGLYCERIDES,
+                      Math.min(this.MAX_TRIGLYCERIDES, triglyceridesValue))
+      };
+    }
+
+    // Si el valor no es consistente, aplicar límites de seguridad
     return {
-      cholesterol: this.smoothValue(cholesterolValue, smoothingFactor),
-      triglycerides: this.smoothValue(triglyceridesValue, smoothingFactor)
+      cholesterol: Math.max(this.MIN_CHOLESTEROL,
+                Math.min(this.MAX_CHOLESTEROL, cholesterolValue)),
+      triglycerides: Math.max(this.MIN_TRIGLYCERIDES,
+                    Math.min(this.MAX_TRIGLYCERIDES, triglyceridesValue))
     };
   }
 
-  private smoothValue(value: number, factor: number): number {
-    if (!this.lastStableValues) {
-      return value;
+  private calculateAdaptiveSmoothingFactor(value: number): number {
+    // Menor suavizado para valores fuera de rango
+    if (value > this.REFERENCE_RANGES.cholesterol.borderline.max) {
+      return 0.08; // Reducir suavizado para valores altos
+    } else if (value < this.REFERENCE_RANGES.cholesterol.optimal.min) {
+      return 0.08; // Reducir suavizado para valores bajos
     }
-    return value * (1 - factor) + this.lastStableValues.cholesterol * factor;
+    return 0.15; // Suavizado normal para valores en rango
+  }
+
+  private isValueConsistent(value: number, type: 'cholesterol' | 'triglycerides'): boolean {
+    if (this.stabilityBuffer.length < this.MIN_SAMPLES_FOR_MEDIAN) {
+      return false;
+    }
+
+    // Calcular desviación estándar de las últimas muestras
+    const values = this.stabilityBuffer.map(s => type === 'cholesterol' ? s.cholesterol : s.triglycerides);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Calcular coeficiente de variación
+    const cv = (stdDev / mean) * 100;
+
+    // Más permisivo con valores fuera de rango si son consistentes
+    const maxAllowedCV = value > this.REFERENCE_RANGES[type].borderline.max ? 15 : 10;
+
+    return cv <= maxAllowedCV;
+  }
+
+  private handleCalibration(ppgValues: number[]): {
+    totalCholesterol: number;
+    triglycerides: number;
+  } {
+    const features = this.extractAdvancedFeatures(ppgValues);
+    
+    if (features.quality >= this.QUALITY_THRESHOLD) {
+      this.calibrationSamples.push(...ppgValues);
+      
+      if (this.calibrationSamples.length >= this.MIN_CALIBRATION_SAMPLES) {
+        this.completeCalibration();
+      }
+    }
+    
+    return { totalCholesterol: 0, triglycerides: 0 };
   }
 
   private extractAdvancedFeatures(values: number[]): {
@@ -204,8 +238,6 @@ export class LipidProcessor {
     peakWidth: number;
     valleyWidth: number;
     quality: number;
-    variance: number;
-    peakCount: number;
     spectralFeatures: {
       lowFreqPower: number;
       highFreqPower: number;
@@ -223,60 +255,38 @@ export class LipidProcessor {
     let peakCount = 0;
     let valleyCount = 0;
     let lastDirection = 0;
-    let lastPeakValue = -Infinity;
-    let consecutiveSamples = 0;
     
     for (let i = 1; i < recentValues.length; i++) {
       const diff = recentValues[i] - recentValues[i - 1];
       
       if (diff > 0 && lastDirection <= 0) {
-        // Valle detectado
         valleyCount++;
-        valleyWidth += consecutiveSamples;
-        consecutiveSamples = 0;
+        valleyWidth += peakWidth;
+        peakWidth = 0;
       } else if (diff < 0 && lastDirection >= 0) {
-        // Pico detectado
-        if (recentValues[i-1] > lastPeakValue * 0.8) { // Pico significativo
-          peakCount++;
-          lastPeakValue = recentValues[i-1];
-        }
-        peakWidth += consecutiveSamples;
-        consecutiveSamples = 0;
+        peakCount++;
+        peakWidth += valleyWidth;
+        valleyWidth = 0;
       }
       
-      consecutiveSamples++;
       lastDirection = diff;
     }
     
-    // Calcular varianza normalizada
-    const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    const variance = recentValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / 
-                    (recentValues.length * mean * mean);
-    
-    // Análisis espectral
+    // Análisis espectral simplificado
     const spectralFeatures = this.calculateSpectralFeatures(recentValues);
     
     // Calidad basada en múltiples factores
-    const rhythmQuality = Math.min(1, (peakCount + valleyCount) / 12);
-    const amplitudeQuality = amplitude > this.MIN_AMPLITUDE ? 
-                            Math.min(1, amplitude / 0.4) : 0;
-    const varianceQuality = Math.exp(-variance * 2);
+    const rhythmQuality = Math.min(1, (peakCount + valleyCount) / 10);
+    const amplitudeQuality = amplitude > 0.1 ? Math.min(1, amplitude / 0.3) : 0;
     const spectralQuality = spectralFeatures.peakFrequency > 0.5 ? 1 : 0.5;
     
-    const quality = (
-      rhythmQuality * 0.3 + 
-      amplitudeQuality * 0.3 + 
-      varianceQuality * 0.2 + 
-      spectralQuality * 0.2
-    );
+    const quality = (rhythmQuality * 0.4 + amplitudeQuality * 0.4 + spectralQuality * 0.2);
     
     return {
       amplitude,
       peakWidth: peakWidth / recentValues.length,
       valleyWidth: valleyWidth / recentValues.length,
       quality,
-      variance,
-      peakCount,
       spectralFeatures
     };
   }
@@ -398,7 +408,7 @@ export class LipidProcessor {
     totalCholesterol: number;
     triglycerides: number;
   } {
-    const medianValues = this.calculateSlidingWindowMedian();
+    const medianValues = this.calculateWeightedMedian();
     return {
       totalCholesterol: Math.round(medianValues.cholesterol),
       triglycerides: Math.round(medianValues.triglycerides)
@@ -445,14 +455,5 @@ export class LipidProcessor {
     this.baselineCholesterol = this.TARGET_CHOLESTEROL;
     this.baselineTriglycerides = this.TARGET_TRIGLYCERIDES;
     this.stabilityBuffer = [];
-  }
-
-  private isSignalValid(features: ReturnType<typeof this.extractAdvancedFeatures>): boolean {
-    return (
-      features.quality >= this.QUALITY_THRESHOLD &&
-      features.amplitude >= this.MIN_AMPLITUDE &&
-      features.peakCount >= this.MIN_PEAKS &&
-      features.variance <= this.MAX_VARIANCE
-    );
   }
 }
