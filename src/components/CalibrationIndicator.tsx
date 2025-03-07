@@ -14,12 +14,14 @@ interface CalibrationIndicatorProps {
     hemoglobin: number;
   };
   message: string;
+  isFingerDetected: boolean;
 }
 
 const CalibrationIndicator: React.FC<CalibrationIndicatorProps> = ({
   isCalibrating,
   progress,
-  message
+  message,
+  isFingerDetected
 }) => {
   if (!isCalibrating) return null;
 
@@ -32,10 +34,15 @@ const CalibrationIndicator: React.FC<CalibrationIndicatorProps> = ({
       <div className="px-4 py-2">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[#C8C8C9] text-xs font-medium">{message}</span>
-            <span className="text-[#C8C8C9] text-xs font-medium">{avgProgress}%</span>
+            <span className="text-[#C8C8C9] text-xs font-medium">
+              {!isFingerDetected ? "Coloque su dedo en la cámara para comenzar la calibración" : message}
+            </span>
+            <span className="text-[#C8C8C9] text-xs font-medium">{isFingerDetected ? `${avgProgress}%` : '0%'}</span>
           </div>
-          <Progress value={avgProgress} className="h-1.5 bg-[#2C2A2B]/20" />
+          <Progress 
+            value={isFingerDetected ? avgProgress : 0} 
+            className="h-1.5 bg-[#2C2A2B]/20" 
+          />
         </div>
       </div>
     </div>
