@@ -144,15 +144,15 @@ export class VitalSignsProcessor {
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
-  ): VitalSignsResult | null {
+  ): VitalSignsResult {
     const timestamp = Date.now();
     const signalQuality = this.updateSignalQuality(ppgValue);
 
     if (this.isCalibrating) {
-      this.calibrationSamples++;
-      
-      // Solo procesar muestras con calidad suficiente
+      // Solo procesar si hay señal válida
       if (signalQuality >= this.MIN_CALIBRATION_QUALITY) {
+        this.calibrationSamples++;
+        
         this.spo2Samples.push(ppgValue);
         this.pressureSamples.push(ppgValue);
         this.heartRateSamples.push(ppgValue);
@@ -168,21 +168,12 @@ export class VitalSignsProcessor {
         }
       }
 
-      // Timeout de seguridad
-      if (timestamp - this.calibrationStartTime > this.CALIBRATION_DURATION_MS) {
-        if (this.getAverageSignalQuality() >= this.MIN_CALIBRATION_QUALITY) {
-          this.completeCalibration();
-        } else {
-          console.warn("Calibración fallida por baja calidad de señal");
-          this.reset();
-        }
-      }
-
+      // Si no hay señal válida, mantener progreso en 0
       return {
         timestamp,
         spo2: 0,
         pressure: "--/--",
-        arrhythmiaStatus: `CALIBRANDO...|${Math.round(this.getCalibrationProgress().progress.heartRate)}`,
+        arrhythmiaStatus: "CALIBRANDO...|0",
         lastArrhythmiaData: null,
         glucose: 0,
         lipids: {
@@ -190,7 +181,20 @@ export class VitalSignsProcessor {
           triglycerides: 0
         },
         hemoglobin: 0,
-        calibration: this.getCalibrationProgress()
+        calibration: {
+          isCalibrating: true,
+          progress: signalQuality >= this.MIN_CALIBRATION_QUALITY ? 
+            { ...this.calibrationProgress } : 
+            {
+              heartRate: 0,
+              spo2: 0,
+              pressure: 0,
+              arrhythmia: 0,
+              glucose: 0,
+              lipids: 0,
+              hemoglobin: 0
+            }
+        }
       };
     }
 

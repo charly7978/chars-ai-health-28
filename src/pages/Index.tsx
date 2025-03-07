@@ -341,26 +341,52 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+    if (lastSignal && isMonitoring) {
       if (isCalibrating) {
-        setCalibrationMessage("Calibrando sensores con datos reales");
-      }
-      
-      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
-      setHeartRate(calculatedHeartRate);
-      
-      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-      if (vitals) {
-        setVitalSigns(vitals);
-        if (vitals.arrhythmiaStatus) {
-          setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
+        if (lastSignal.fingerDetected) {
+          setCalibrationMessage("Calibrando sensores con datos reales");
+          
+          const vitals = processVitalSigns(lastSignal.filteredValue, null);
+          if (vitals?.calibration) {
+            setVitalSigns(prev => ({
+              ...prev,
+              ...vitals,
+              calibration: vitals.calibration
+            }));
+          }
+        } else {
+          setCalibrationMessage("Coloque su dedo en la cámara para comenzar la calibración");
+          setVitalSigns(prev => ({
+            ...prev,
+            calibration: {
+              isCalibrating: true,
+              progress: {
+                heartRate: 0,
+                spo2: 0,
+                pressure: 0,
+                arrhythmia: 0,
+                glucose: 0,
+                lipids: 0,
+                hemoglobin: 0
+              }
+            }
+          }));
+        }
+      } else if (lastSignal.fingerDetected) {
+        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+        const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
+        setHeartRate(calculatedHeartRate);
+        
+        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+        if (vitals) {
+          setVitalSigns(vitals);
+          if (vitals.arrhythmiaStatus) {
+            setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
+          }
         }
       }
       
       setSignalQuality(lastSignal.quality);
-    } else if (isCalibrating) {
-      setCalibrationMessage("Coloque su dedo en la cámara para comenzar la calibración");
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, isCalibrating]);
 
