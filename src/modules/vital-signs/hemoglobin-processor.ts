@@ -1,65 +1,66 @@
 /**
- * Advanced non-invasive glucose estimation based on PPG signal analysis
- * Focused on measurement accuracy across all ranges
+ * Advanced non-invasive hemoglobin estimation using PPG signal analysis
+ * Based on spectral analysis and Beer-Lambert law
  */
-export class GlucoseProcessor {
+export class HemoglobinProcessor {
   // Rangos ampliados para detectar valores patológicos
-  private readonly MIN_GLUCOSE = 20;   // Hipoglucemia severa
-  private readonly MAX_GLUCOSE = 600;  // Hiperglucemia crítica
-  private readonly TARGET_GLUCOSE = 100; // Solo para calibración inicial
+  private readonly MIN_HEMOGLOBIN = 3.0;  // Anemia severa
+  private readonly MAX_HEMOGLOBIN = 25.0; // Policitemia extrema
+  private readonly TARGET_HEMOGLOBIN = 14.0; // Solo para calibración inicial
   
   // Rangos de referencia (solo informativos, no limitan medición)
   private readonly REFERENCE_RANGES = {
-    hypoglycemia: {
-      severe: { min: 20, max: 50 },
-      moderate: { min: 50, max: 70 }
+    anemia: {
+      severe: { min: 3.0, max: 6.9 },
+      moderate: { min: 7.0, max: 9.9 },
+      mild: { min: 10.0, max: 11.9 }
     },
-    normal: { min: 70, max: 140 },
-    hyperglycemia: {
-      moderate: { min: 140, max: 200 },
-      high: { min: 200, max: 300 },
-      severe: { min: 300, max: 600 }
+    normal: {
+      female: { min: 12.0, max: 15.5 },
+      male: { min: 13.5, max: 17.5 }
+    },
+    polycythemia: {
+      mild: { min: 17.6, max: 20.0 },
+      severe: { min: 20.1, max: 25.0 }
     }
   };
 
-  // Parámetros de calibración mejorados
+  // Parámetros de calibración
   private readonly MIN_CALIBRATION_SAMPLES = 150;
-  private readonly ANALYSIS_WINDOW = 150;
+  private readonly ANALYSIS_WINDOW = 100;
   private readonly QUALITY_THRESHOLD = 0.85;
   
-  // Ventanas de tiempo para análisis de tendencias
-  private readonly TREND_WINDOW_SIZE = 20;
-  private readonly STABILITY_THRESHOLD = 0.12;
+  // Coeficientes de absorción (basados en literatura científica)
+  private readonly HB_EXTINCTION_COEFF = 0.0091; // mm⁻¹
+  private readonly HBO2_EXTINCTION_COEFF = 0.0213; // mm⁻¹
+  private readonly TISSUE_SCATTER_COEFF = 0.35; // mm⁻¹
+  private readonly OPTICAL_PATH_LENGTH = 10;
   
-  // Variables de estado y memoria
+  // Estado y memoria
   private calibrationInProgress: boolean = false;
   private baselineEstablished: boolean = false;
   private baselineValue: number = 0;
   private lastStableValue: number = 0;
-  private measurementHistory: Array<{
-    timestamp: number;
-    value: number;
-    confidence: number;
-  }> = [];
   
-  // Buffers para estabilidad
+  // Buffer para estabilidad
   private readonly STABILITY_BUFFER_SIZE = 25;
   private readonly MIN_SAMPLES_FOR_MEDIAN = 15;
   private stabilityBuffer: Array<{
     value: number;
     quality: number;
     timestamp: number;
+    redAbsorption: number;
+    irAbsorption: number;
   }> = [];
 
   public startCalibration(): void {
-    console.log("Iniciando calibración de glucosa");
+    console.log("Iniciando calibración de hemoglobina");
     this.calibrationInProgress = true;
     this.baselineEstablished = false;
-    this.measurementHistory = [];
     this.stabilityBuffer = [];
   }
 
-  public calculateGlucose(ppgValues: number[]): number {
+  public calculateHemoglobin(ppgValues: number[], spo2: number = 97): number {
     if (ppgValues.length < this.ANALYSIS_WINDOW) {
       return this.lastStableValue;
     }
@@ -72,45 +73,36 @@ export class GlucoseProcessor {
         return this.handleCalibration(ppgValues);
       }
 
-      // Análisis de señal y calidad
-      const { amplitude, quality } = this.analyzeSignalQuality(ppgValues);
+      // Extraer características espectrales
+      const { redAbsorption, irAbsorption, quality } = this.extractSpectralFeatures(ppgValues);
       
       if (quality < this.QUALITY_THRESHOLD) {
         return this.getLastStableMedian();
       }
 
-      // Calcular valor relativo
-      const currentValue = this.calculateRelativeValue(amplitude);
+      // Calcular hemoglobina usando ley de Beer-Lambert modificada
+      const hemoglobinEstimate = this.calculateFromAbsorption(redAbsorption, irAbsorption, spo2);
       
       // Actualizar buffer de estabilidad
       this.updateStabilityBuffer({
-        value: currentValue,
+        value: hemoglobinEstimate,
         quality,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        redAbsorption,
+        irAbsorption
       });
-      
+
       // Obtener valor estable
       const stableValue = this.calculateWeightedMedian();
       
-      // Actualizar historial si el valor es estable
-      if (this.isValueStable(stableValue)) {
-        this.measurementHistory.push({
-          timestamp: Date.now(),
-          value: stableValue,
-          confidence: quality
-        });
-        
-        if (this.measurementHistory.length > this.TREND_WINDOW_SIZE) {
-          this.measurementHistory.shift();
-        }
-        
+      if (this.isValueConsistent(stableValue)) {
         this.lastStableValue = stableValue;
       }
 
-      return Math.round(stableValue);
+      return Math.round(stableValue * 10) / 10; // Un decimal
 
     } catch (error) {
-      console.error("Error en procesamiento de glucosa:", error);
+      console.error("Error en procesamiento de hemoglobina:", error);
       return this.lastStableValue;
     }
   }
@@ -124,7 +116,7 @@ export class GlucoseProcessor {
 
   private calculateWeightedMedian(): number {
     if (this.stabilityBuffer.length < this.MIN_SAMPLES_FOR_MEDIAN) {
-      return this.lastStableValue || this.TARGET_GLUCOSE;
+      return this.lastStableValue || this.TARGET_HEMOGLOBIN;
     }
 
     // Ordenar valores
@@ -168,8 +160,8 @@ export class GlucoseProcessor {
 
   private calculateAdaptiveSmoothingFactor(value: number): number {
     // Menor suavizado para valores extremos
-    if (value > this.REFERENCE_RANGES.hyperglycemia.high.min || 
-        value < this.REFERENCE_RANGES.hypoglycemia.moderate.max) {
+    if (value < this.REFERENCE_RANGES.anemia.moderate.max || 
+        value > this.REFERENCE_RANGES.polycythemia.mild.min) {
       return 0.08; // Suavizado mínimo para valores extremos
     }
     return 0.15; // Suavizado normal para valores en rango
@@ -188,8 +180,8 @@ export class GlucoseProcessor {
 
     // Más permisivo con valores extremos
     let maxAllowedCV;
-    if (value > this.REFERENCE_RANGES.hyperglycemia.high.min || 
-        value < this.REFERENCE_RANGES.hypoglycemia.moderate.max) {
+    if (value < this.REFERENCE_RANGES.anemia.moderate.max || 
+        value > this.REFERENCE_RANGES.polycythemia.mild.min) {
       maxAllowedCV = 20; // 20% para valores extremos
     } else {
       maxAllowedCV = 15; // 15% para valores normales
@@ -198,84 +190,111 @@ export class GlucoseProcessor {
     return cv <= maxAllowedCV;
   }
 
-  private analyzeSignalQuality(ppgValues: number[]): {
-    amplitude: number;
+  private extractSpectralFeatures(values: number[]): {
+    redAbsorption: number;
+    irAbsorption: number;
     quality: number;
   } {
-    const recentValues = ppgValues.slice(-this.ANALYSIS_WINDOW);
-    const max = Math.max(...recentValues);
-    const min = Math.min(...recentValues);
-    const amplitude = (max - min) / (max || 1);
+    const recentValues = values.slice(-this.ANALYSIS_WINDOW);
     
-    // Análisis de estabilidad
-    const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    const variance = recentValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / recentValues.length;
-    const stability = Math.exp(-variance / (mean * mean));
-    
-    // Calidad combinada
-    const amplitudeQuality = amplitude > 0.1 ? Math.min(1, amplitude / 0.3) : 0;
-    const quality = Math.min(1, stability * amplitudeQuality * 0.9);
-    
-    return { amplitude, quality };
+    // Separar componentes rojo e IR
+    const redValues = recentValues.filter((_, i) => i % 2 === 0);
+    const irValues = recentValues.filter((_, i) => i % 2 === 1);
+
+    // Calcular absorción para cada longitud de onda
+    const redAbsorption = this.calculateAbsorption(redValues);
+    const irAbsorption = this.calculateAbsorption(irValues);
+
+    // Calcular calidad de señal
+    const redQuality = this.calculateSignalQuality(redValues);
+    const irQuality = this.calculateSignalQuality(irValues);
+    const quality = Math.min(redQuality, irQuality);
+
+    return {
+      redAbsorption,
+      irAbsorption,
+      quality
+    };
   }
 
-  private calculateRelativeValue(currentAmplitude: number): number {
-    if (!this.baselineEstablished) return this.TARGET_GLUCOSE;
-    
-    // Calcular cambio relativo respecto a la línea base
-    const relativeChange = (currentAmplitude - this.baselineValue) / this.baselineValue;
-    
-    // Factor de escala adaptativo
-    let scaleFactor = 100; // Factor base
-    if (this.lastStableValue > 200) {
-      scaleFactor = 150; // Aumentar sensibilidad para valores altos
-    } else if (this.lastStableValue < 70) {
-      scaleFactor = 80; // Reducir sensibilidad para valores bajos
-    }
-    
-    // Calcular nuevo valor
-    const glucoseChange = relativeChange * scaleFactor;
-    return this.lastStableValue + glucoseChange;
+  private calculateAbsorption(values: number[]): number {
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const dc = values.reduce((a, b) => a + b, 0) / values.length;
+    const ac = max - min;
+
+    return Math.log((ac + dc) / dc);
+  }
+
+  private calculateSignalQuality(values: number[]): number {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+    const cv = Math.sqrt(variance) / mean;
+
+    return Math.exp(-cv * 2); // Convertir a calidad entre 0 y 1
+  }
+
+  private calculateFromAbsorption(
+    redAbsorption: number,
+    irAbsorption: number,
+    spo2: number
+  ): number {
+    // Calcular fracciones de Hb y HbO2 usando SpO2
+    const oxygenatedFraction = spo2 / 100;
+    const deoxygenatedFraction = 1 - oxygenatedFraction;
+
+    // Calcular atenuación total considerando dispersión
+    const totalAttenuation = (redAbsorption + irAbsorption) / 2;
+
+    // Resolver ecuación de Beer-Lambert modificada
+    const totalHemoglobin = (totalAttenuation - this.TISSUE_SCATTER_COEFF) / 
+      (this.HB_EXTINCTION_COEFF * deoxygenatedFraction + 
+       this.HBO2_EXTINCTION_COEFF * oxygenatedFraction);
+
+    // Convertir a g/dL
+    return totalHemoglobin * 1.6;
   }
 
   private handleCalibration(ppgValues: number[]): number {
-    const { amplitude, quality } = this.analyzeSignalQuality(ppgValues);
+    const { quality } = this.extractSpectralFeatures(ppgValues);
     
     if (quality >= this.QUALITY_THRESHOLD) {
       this.stabilityBuffer.push({
-        value: this.TARGET_GLUCOSE,
+        value: this.TARGET_HEMOGLOBIN,
         quality,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        redAbsorption: 0,
+        irAbsorption: 0
       });
       
       if (this.stabilityBuffer.length >= this.MIN_CALIBRATION_SAMPLES) {
-        this.establishBaseline(amplitude);
+        this.establishBaseline();
       }
     }
     
     return 0;
   }
 
-  private establishBaseline(amplitude: number): void {
-    this.baselineValue = amplitude;
+  private establishBaseline(): void {
     this.baselineEstablished = true;
     this.calibrationInProgress = false;
-    this.lastStableValue = this.TARGET_GLUCOSE;
+    this.lastStableValue = this.TARGET_HEMOGLOBIN;
     
-    console.log("Línea base de glucosa establecida", {
-      baselineValue: this.baselineValue,
+    console.log("Línea base de hemoglobina establecida", {
       timestamp: new Date().toISOString()
     });
   }
 
   private getLastStableMedian(): number {
-    return Math.round(this.calculateWeightedMedian());
+    return this.calculateWeightedMedian();
   }
 
   private updateStabilityBuffer(values: {
     value: number;
     quality: number;
     timestamp: number;
+    redAbsorption: number;
+    irAbsorption: number;
   }): void {
     // Verificar desviación
     if (this.stabilityBuffer.length > 0) {
@@ -296,23 +315,11 @@ export class GlucoseProcessor {
     }
   }
 
-  private isValueStable(value: number): boolean {
-    if (this.measurementHistory.length < 2) return true;
-    
-    // Calcular variación respecto a mediciones recientes
-    const recentMeasurements = this.measurementHistory.slice(-3);
-    const avgValue = recentMeasurements.reduce((sum, m) => sum + m.value, 0) / recentMeasurements.length;
-    
-    const variation = Math.abs(value - avgValue) / avgValue;
-    return variation <= this.STABILITY_THRESHOLD;
-  }
-
   public reset(): void {
     this.calibrationInProgress = false;
     this.baselineEstablished = false;
     this.baselineValue = 0;
     this.lastStableValue = 0;
-    this.measurementHistory = [];
     this.stabilityBuffer = [];
   }
-}
+} 

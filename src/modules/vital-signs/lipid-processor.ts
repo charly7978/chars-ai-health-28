@@ -8,19 +8,33 @@
  * - "Correlation between hemodynamic parameters and serum lipid profiles" (2018)
  */
 export class LipidProcessor {
-  // Rangos ajustados basados en guías clínicas actualizadas
-  private readonly MIN_CHOLESTEROL = 120;
-  private readonly MAX_CHOLESTEROL = 220; // Reducido para evitar sobreestimaciones
+  // Rangos ampliados para detectar valores patológicos
+  private readonly MIN_CHOLESTEROL = 100;  // Mínimo detectable
+  private readonly MAX_CHOLESTEROL = 400;  // Máximo detectable
   private readonly MIN_TRIGLYCERIDES = 40;
-  private readonly MAX_TRIGLYCERIDES = 200; // Ajustado a rango más realista
-  private readonly TARGET_CHOLESTEROL = 170; // Valor objetivo saludable
-  private readonly TARGET_TRIGLYCERIDES = 100; // Valor objetivo saludable
+  private readonly MAX_TRIGLYCERIDES = 500; // Máximo detectable
+  private readonly TARGET_CHOLESTEROL = 160; // Valor de referencia para calibración
+  private readonly TARGET_TRIGLYCERIDES = 100;
+  
+  // Rangos de referencia (solo para calibración)
+  private readonly REFERENCE_RANGES = {
+    cholesterol: {
+      optimal: { min: 130, max: 200 },
+      borderline: { min: 200, max: 240 },
+      high: { min: 240, max: 400 }
+    },
+    triglycerides: {
+      optimal: { min: 40, max: 150 },
+      borderline: { min: 150, max: 200 },
+      high: { min: 200, max: 500 }
+    }
+  };
   
   // Parámetros de calibración mejorados
-  private readonly MIN_CALIBRATION_SAMPLES = 150; // Aumentado para mejor estabilidad
+  private readonly MIN_CALIBRATION_SAMPLES = 150;
   private readonly CALIBRATION_WINDOW = 50;
-  private readonly STABILITY_THRESHOLD = 0.15;
-  private readonly QUALITY_THRESHOLD = 0.8;
+  private readonly STABILITY_THRESHOLD = 0.12;
+  private readonly QUALITY_THRESHOLD = 0.85;
   
   // Coeficientes de absorción (basados en estudios espectrales)
   private readonly RED_ABSORPTION = 0.482;
@@ -32,15 +46,17 @@ export class LipidProcessor {
   private calibrationSamples: number[] = [];
   private cholesterolFactor: number = 1.0;
   private triglyceridesFactor: number = 1.0;
-  private baselineCholesterol: number = 170;
+  private baselineCholesterol: number = 160;
   private baselineTriglycerides: number = 100;
   
-  // Buffers para estabilidad
-  private readonly STABILITY_BUFFER_SIZE = 15;
+  // Buffers para estabilidad - aumentado para mejor mediana
+  private readonly STABILITY_BUFFER_SIZE = 25; // Aumentado para mejor estadística
+  private readonly MIN_SAMPLES_FOR_MEDIAN = 15; // Mínimo de muestras para mediana
   private stabilityBuffer: Array<{
     cholesterol: number;
     triglycerides: number;
     quality: number;
+    timestamp: number;
   }> = [];
 
   public startCalibration(): void {
@@ -62,38 +78,142 @@ export class LipidProcessor {
       return { totalCholesterol: 0, triglycerides: 0 };
     }
 
-    // Si estamos calibrando, recolectar muestras
+    // Limpiar muestras antiguas del buffer (más de 30 segundos)
+    this.cleanOldSamples();
+
     if (this.calibrationInProgress) {
       return this.handleCalibration(ppgValues);
     }
 
-    // Extraer características avanzadas de la señal PPG
     const features = this.extractAdvancedFeatures(ppgValues);
     if (features.quality < this.QUALITY_THRESHOLD) {
       console.log("Calidad de señal insuficiente para análisis de lípidos", {
         quality: features.quality
       });
-      return this.getLastStableValues();
+      return this.getLastStableMedian();
     }
 
-    // Calcular colesterol usando modelo mejorado
     const cholesterolEstimate = this.calculateCholesterol(features);
     const triglyceridesEstimate = this.calculateTriglycerides(features);
 
-    // Actualizar buffer de estabilidad
+    // Actualizar buffer con timestamp
     this.updateStabilityBuffer({
       cholesterol: cholesterolEstimate,
       triglycerides: triglyceridesEstimate,
-      quality: features.quality
+      quality: features.quality,
+      timestamp: Date.now()
     });
 
-    // Obtener valores estables
-    const stableValues = this.getStableValues();
+    // Obtener mediana estable
+    const stableValues = this.calculateWeightedMedian();
     
     return {
       totalCholesterol: Math.round(stableValues.cholesterol),
       triglycerides: Math.round(stableValues.triglycerides)
     };
+  }
+
+  private cleanOldSamples(): void {
+    const thirtySecondsAgo = Date.now() - 30000;
+    this.stabilityBuffer = this.stabilityBuffer.filter(
+      sample => sample.timestamp > thirtySecondsAgo
+    );
+  }
+
+  private calculateWeightedMedian(): {
+    cholesterol: number;
+    triglycerides: number;
+  } {
+    if (this.stabilityBuffer.length < this.MIN_SAMPLES_FOR_MEDIAN) {
+      return {
+        cholesterol: this.TARGET_CHOLESTEROL,
+        triglycerides: this.TARGET_TRIGLYCERIDES
+      };
+    }
+
+    // Ordenar valores por separado
+    const sortedCholesterol = [...this.stabilityBuffer]
+      .sort((a, b) => a.cholesterol - b.cholesterol);
+    const sortedTriglycerides = [...this.stabilityBuffer]
+      .sort((a, b) => a.triglycerides - b.triglycerides);
+
+    // Calcular pesos basados en calidad y tiempo
+    const weights = this.stabilityBuffer.map(sample => {
+      const age = (Date.now() - sample.timestamp) / 1000;
+      const timeWeight = Math.exp(-age / 10);
+      return sample.quality * timeWeight;
+    });
+
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+    const medianWeight = totalWeight / 2;
+
+    let accumWeight = 0;
+    let cholesterolValue = this.TARGET_CHOLESTEROL;
+    let triglyceridesValue = this.TARGET_TRIGLYCERIDES;
+
+    // Encontrar mediana ponderada
+    for (let i = 0; i < this.stabilityBuffer.length; i++) {
+      accumWeight += weights[i];
+      if (accumWeight >= medianWeight) {
+        cholesterolValue = sortedCholesterol[i].cholesterol;
+        triglyceridesValue = sortedTriglycerides[i].triglycerides;
+        break;
+      }
+    }
+
+    // Aplicar suavizado adaptativo basado en el rango
+    const smoothingFactor = this.calculateAdaptiveSmoothingFactor(cholesterolValue);
+    cholesterolValue = cholesterolValue * (1 - smoothingFactor) + 
+                      this.TARGET_CHOLESTEROL * smoothingFactor;
+    triglyceridesValue = triglyceridesValue * (1 - smoothingFactor) + 
+                        this.TARGET_TRIGLYCERIDES * smoothingFactor;
+
+    // No limitar valores altos si son consistentes
+    if (this.isValueConsistent(cholesterolValue, 'cholesterol')) {
+      return {
+        cholesterol: cholesterolValue,
+        triglycerides: Math.max(this.MIN_TRIGLYCERIDES,
+                      Math.min(this.MAX_TRIGLYCERIDES, triglyceridesValue))
+      };
+    }
+
+    // Si el valor no es consistente, aplicar límites de seguridad
+    return {
+      cholesterol: Math.max(this.MIN_CHOLESTEROL,
+                Math.min(this.MAX_CHOLESTEROL, cholesterolValue)),
+      triglycerides: Math.max(this.MIN_TRIGLYCERIDES,
+                    Math.min(this.MAX_TRIGLYCERIDES, triglyceridesValue))
+    };
+  }
+
+  private calculateAdaptiveSmoothingFactor(value: number): number {
+    // Menor suavizado para valores fuera de rango
+    if (value > this.REFERENCE_RANGES.cholesterol.borderline.max) {
+      return 0.08; // Reducir suavizado para valores altos
+    } else if (value < this.REFERENCE_RANGES.cholesterol.optimal.min) {
+      return 0.08; // Reducir suavizado para valores bajos
+    }
+    return 0.15; // Suavizado normal para valores en rango
+  }
+
+  private isValueConsistent(value: number, type: 'cholesterol' | 'triglycerides'): boolean {
+    if (this.stabilityBuffer.length < this.MIN_SAMPLES_FOR_MEDIAN) {
+      return false;
+    }
+
+    // Calcular desviación estándar de las últimas muestras
+    const values = this.stabilityBuffer.map(s => type === 'cholesterol' ? s.cholesterol : s.triglycerides);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Calcular coeficiente de variación
+    const cv = (stdDev / mean) * 100;
+
+    // Más permisivo con valores fuera de rango si son consistentes
+    const maxAllowedCV = value > this.REFERENCE_RANGES[type].borderline.max ? 15 : 10;
+
+    return cv <= maxAllowedCV;
   }
 
   private handleCalibration(ppgValues: number[]): {
@@ -217,24 +337,23 @@ export class LipidProcessor {
   private calculateCholesterol(features: ReturnType<typeof this.extractAdvancedFeatures>): number {
     const { amplitude, spectralFeatures } = features;
     
-    // Modelo no lineal mejorado basado en características múltiples
+    // Modelo ajustado para detectar valores altos
     const spectralRatio = spectralFeatures.lowFreqPower / (spectralFeatures.highFreqPower + 0.001);
     const frequencyFactor = Math.exp(-Math.abs(spectralFeatures.peakFrequency - 0.1) * 5);
     
     const cholesterolChange = (
-      (amplitude * 20) +
+      (amplitude * 25) + // Aumentado para mejor detección de valores altos
       (spectralRatio * 15) +
       (frequencyFactor * 10)
     ) * this.cholesterolFactor;
     
-    // Aplicar cambio con tendencia hacia valor objetivo
+    // Aplicar cambio con menor tendencia hacia valor objetivo para valores altos
     const currentValue = this.baselineCholesterol + cholesterolChange;
     const targetDiff = this.TARGET_CHOLESTEROL - currentValue;
-    const correctedValue = currentValue + (targetDiff * 0.1);
+    const adaptiveFactor = currentValue > 240 ? 0.05 : 0.15;
+    const correctedValue = currentValue + (targetDiff * adaptiveFactor);
     
-    return Math.max(this.MIN_CHOLESTEROL,
-           Math.min(this.MAX_CHOLESTEROL,
-           correctedValue));
+    return correctedValue; // No aplicar límites aquí
   }
 
   private calculateTriglycerides(features: ReturnType<typeof this.extractAdvancedFeatures>): number {
@@ -264,7 +383,20 @@ export class LipidProcessor {
     cholesterol: number;
     triglycerides: number;
     quality: number;
+    timestamp: number;
   }): void {
+    // Verificar si el valor es muy diferente del promedio actual
+    if (this.stabilityBuffer.length > 0) {
+      const avgCholesterol = this.stabilityBuffer.reduce((sum, v) => sum + v.cholesterol, 0) / 
+                           this.stabilityBuffer.length;
+      const deviation = Math.abs(values.cholesterol - avgCholesterol) / avgCholesterol;
+      
+      // Si la desviación es muy alta, reducir la calidad
+      if (deviation > 0.15) {
+        values.quality *= (1 - deviation);
+      }
+    }
+    
     this.stabilityBuffer.push(values);
     
     if (this.stabilityBuffer.length > this.STABILITY_BUFFER_SIZE) {
@@ -272,56 +404,14 @@ export class LipidProcessor {
     }
   }
 
-  private getStableValues(): {
-    cholesterol: number;
+  private getLastStableMedian(): {
+    totalCholesterol: number;
     triglycerides: number;
   } {
-    if (this.stabilityBuffer.length < 5) {
-      return {
-        cholesterol: this.TARGET_CHOLESTEROL,
-        triglycerides: this.TARGET_TRIGLYCERIDES
-      };
-    }
-
-    // Calcular mediana ponderada por calidad
-    const sortedCholesterol = [...this.stabilityBuffer]
-      .sort((a, b) => a.cholesterol - b.cholesterol);
-    const sortedTriglycerides = [...this.stabilityBuffer]
-      .sort((a, b) => a.triglycerides - b.triglycerides);
-    
-    const totalQuality = this.stabilityBuffer.reduce((sum, v) => sum + v.quality, 0);
-    const medianQuality = totalQuality / 2;
-    
-    let accumQuality = 0;
-    let cholesterol = this.TARGET_CHOLESTEROL;
-    let triglycerides = this.TARGET_TRIGLYCERIDES;
-    
-    for (let i = 0; i < sortedCholesterol.length; i++) {
-      accumQuality += sortedCholesterol[i].quality;
-      if (accumQuality >= medianQuality) {
-        cholesterol = sortedCholesterol[i].cholesterol;
-        triglycerides = sortedTriglycerides[i].triglycerides;
-        break;
-      }
-    }
-    
-    return { cholesterol, triglycerides };
-  }
-
-  private getLastStableValues(): {
-    cholesterol: number;
-    triglycerides: number;
-  } {
-    if (this.stabilityBuffer.length === 0) {
-      return {
-        cholesterol: this.TARGET_CHOLESTEROL,
-        triglycerides: this.TARGET_TRIGLYCERIDES
-      };
-    }
-    
+    const medianValues = this.calculateWeightedMedian();
     return {
-      cholesterol: this.stabilityBuffer[this.stabilityBuffer.length - 1].cholesterol,
-      triglycerides: this.stabilityBuffer[this.stabilityBuffer.length - 1].triglycerides
+      totalCholesterol: Math.round(medianValues.cholesterol),
+      triglycerides: Math.round(medianValues.triglycerides)
     };
   }
 
