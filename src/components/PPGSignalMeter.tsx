@@ -80,6 +80,19 @@ const PPGSignalMeter = ({
     }
   }, [measurementEnded, showArrhythmiaAlert]);
 
+  useEffect(() => {
+    if (arrhythmiaStatus && arrhythmiaStatus.includes("SIN ARRITMIAS") && !calibrationCompleted) {
+      if (quality > 60 && isFingerDetected) {
+        setCalibrationCompleted(true);
+      }
+    }
+    
+    if (arrhythmiaStatus && arrhythmiaStatus.includes("ARRITMIA")) {
+      setShowArrhythmiaAlert(true);
+      setCalibrationCompleted(false);
+    }
+  }, [arrhythmiaStatus, quality, isFingerDetected, calibrationCompleted]);
+
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
     if (q > 75) return 'from-green-500 to-emerald-500';
@@ -452,8 +465,15 @@ const PPGSignalMeter = ({
     if (showArrhythmiaAlert) {
       setMeasurementEnded(true);
     }
+    
+    if (!calibrationCompleted && !showArrhythmiaAlert && isFingerDetected && quality > 60) {
+      setTimeout(() => {
+        setCalibrationCompleted(true);
+      }, 3000);
+    }
+    
     onStartMeasurement();
-  }, [onStartMeasurement, showArrhythmiaAlert]);
+  }, [onStartMeasurement, showArrhythmiaAlert, calibrationCompleted, isFingerDetected, quality]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
