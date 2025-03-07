@@ -146,25 +146,28 @@ const Index = () => {
     });
     
     let step = 0;
-    const totalSteps = 5;
+    const totalSteps = 6;
+    const stepDuration = 500;
     const calibrationInterval = setInterval(() => {
       step += 1;
       
       if (step <= totalSteps) {
-        const progressPercent = step * (100/totalSteps);
+        const progressPercent = Math.min(100, Math.round((step / totalSteps) * 100));
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
+        const stepProgress = {
+          heartRate: progressPercent,
+          spo2: progressPercent,
+          pressure: progressPercent,
+          arrhythmia: progressPercent,
+          glucose: progressPercent,
+          lipids: progressPercent,
+          hemoglobin: progressPercent
+        };
+
         setCalibrationProgress({
           isCalibrating: true,
-          progress: {
-            heartRate: progressPercent,
-            spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 15),
-            arrhythmia: Math.max(0, progressPercent - 10),
-            glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 20),
-            hemoglobin: Math.max(0, progressPercent - 25)
-          }
+          progress: stepProgress
         });
 
         if (step === 1) {
@@ -181,69 +184,57 @@ const Index = () => {
             arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0",
             lastArrhythmiaData: null
           }));
-        }
-      } else {
-        console.log("Finalizando calibración automática");
-        clearInterval(calibrationInterval);
-        
-        if (isCalibrating) {
-          console.log("Completando calibración");
-          setCalibrationMessage("Calibración completada con éxito");
-          forceCalibrationCompletion();
-          setIsCalibrating(false);
-          
-          setCalibrationProgress(undefined);
-          
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
-            lastArrhythmiaData: null
-          }));
-          
-          if (navigator.vibrate) {
-            navigator.vibrate([100, 50, 100]);
-          }
-          
-          setTimeout(() => {
-            if (!isCalibrating) {
-              setCalibrationMessage("");
-              setVitalSigns(prev => ({
-                ...prev,
-                arrhythmiaStatus: "SIN ARRITMIAS|0",
-                lastArrhythmiaData: null
-              }));
-            }
-          }, 1500);
+        } else if (step === totalSteps) {
+          finishCalibration(calibrationInterval);
         }
       }
-    }, 600);
+    }, stepDuration);
     
     setTimeout(() => {
       if (isCalibrating) {
-        console.log("Forzando finalización de calibración por tiempo límite");
-        clearInterval(calibrationInterval);
-        forceCalibrationCompletion();
-        setIsCalibrating(false);
-        setCalibrationMessage("Finalización de calibración por tiempo límite");
-        
-        setCalibrationProgress(undefined);
-        
-        setVitalSigns(prev => ({
-          ...prev,
-          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
-          lastArrhythmiaData: null
-        }));
-        
-        setTimeout(() => {
-          setCalibrationMessage("");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "SIN ARRITMIAS|0",
-            lastArrhythmiaData: null
-          }));
-        }, 1500);
+        finishCalibration(calibrationInterval);
       }
-    }, 5000);
+    }, (totalSteps * stepDuration) + 500);
+  };
+
+  const finishCalibration = (intervalId: number) => {
+    console.log("Completando calibración");
+    clearInterval(intervalId);
+    forceCalibrationCompletion();
+    setIsCalibrating(false);
+    setCalibrationMessage("Calibración completada con éxito");
+    
+    setCalibrationProgress({
+      isCalibrating: false,
+      progress: {
+        heartRate: 100,
+        spo2: 100,
+        pressure: 100,
+        arrhythmia: 100,
+        glucose: 100,
+        lipids: 100,
+        hemoglobin: 100
+      }
+    });
+    
+    setVitalSigns(prev => ({
+      ...prev,
+      arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
+      lastArrhythmiaData: null
+    }));
+    
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+    
+    setTimeout(() => {
+      setCalibrationMessage("");
+      setVitalSigns(prev => ({
+        ...prev,
+        arrhythmiaStatus: "SIN ARRITMIAS|0",
+        lastArrhythmiaData: null
+      }));
+    }, 1500);
   };
 
   const finalizeMeasurement = () => {
