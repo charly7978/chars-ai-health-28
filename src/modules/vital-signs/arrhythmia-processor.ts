@@ -75,12 +75,7 @@ export class ArrhythmiaProcessor {
       }
       
       if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
-        const shouldEvaluateFrame = 
-          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS;
-        
-        if (shouldEvaluateFrame) {
-          this.detectArrhythmia();
-        }
+        this.detectArrhythmia();
       }
     }
 
@@ -93,21 +88,14 @@ export class ArrhythmiaProcessor {
     if (this.isLearningPhase) {
       arrhythmiaStatus = "CALIBRANDO...";
     } else if (this.hasDetectedFirstArrhythmia) {
-      if (this.arrhythmiaCount > 1) {
-        arrhythmiaStatus = `ARRITMIA_DETECTADA|${this.arrhythmiaCount}`;
-      } else {
-        arrhythmiaStatus = "ARRITMIA_DETECTADA|1";
-      }
+      arrhythmiaStatus = `ARRITMIA_DETECTADA|${this.arrhythmiaCount}`;
     } else {
       arrhythmiaStatus = "LATIDO_NORMAL|0";
     }
 
-    const lastArrhythmiaData = this.arrhythmiaDetected ? 
-      this.lastArrhythmiaData : null;
-
     return {
       arrhythmiaStatus,
-      lastArrhythmiaData
+      lastArrhythmiaData: this.arrhythmiaDetected ? this.lastArrhythmiaData : null
     };
   }
 
@@ -128,13 +116,8 @@ export class ArrhythmiaProcessor {
     }
     
     const rmssd = Math.sqrt(sumSquaredDiff / (recentRR.length - 1));
-    
     const avgRR = recentRR.reduce((a, b) => a + b, 0) / recentRR.length;
     const lastRR = recentRR[recentRR.length - 1];
-    
-    const rrStandardDeviation = Math.sqrt(recentRR.reduce((sum, val) => 
-      sum + Math.pow(val - avgRR, 2), 0) / recentRR.length);
-    const coefficientOfVariation = rrStandardDeviation / avgRR;
     const rrVariation = Math.abs(lastRR - avgRR) / avgRR;
     
     this.addToMedianBuffer(this.rmssdBuffer, rmssd);
@@ -142,8 +125,6 @@ export class ArrhythmiaProcessor {
     
     const medianRMSSD = this.calculateMedian(this.rmssdBuffer);
     const medianRRVariation = this.calculateMedian(this.rrVariationBuffer);
-    
-    this.calculateNonLinearMetrics(recentRR);
     
     this.lastRMSSD = medianRMSSD;
     this.lastRRVariation = medianRRVariation;
@@ -163,7 +144,8 @@ export class ArrhythmiaProcessor {
         rmssd: medianRMSSD,
         rrVariation: medianRRVariation
       };
-    } else if (currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
+    } else if (currentTime - this.lastArrhythmiaTime > 500) {
+      // Mantener la detección activa por 500ms para asegurar la visualización
       this.arrhythmiaDetected = false;
       this.lastArrhythmiaData = null;
     }
@@ -304,18 +286,13 @@ export class ArrhythmiaProcessor {
     this.hasDetectedFirstArrhythmia = false;
     this.arrhythmiaDetected = false;
     this.arrhythmiaCount = 0;
-    this.measurementStartTime = Date.now();
     this.lastRMSSD = 0;
     this.lastRRVariation = 0;
     this.lastArrhythmiaTime = 0;
-    this.shannonEntropy = 0;
-    this.sampleEntropy = 0;
-    this.pnnX = 0;
-    this.consecutiveArrhythmiaFrames = 0;
-    this.pendingArrhythmiaDetection = false;
-    this.lastArrhythmiaData = null;
+    this.measurementStartTime = Date.now();
     this.rmssdBuffer = [];
     this.rrVariationBuffer = [];
+    this.lastArrhythmiaData = null;
   }
 
   /**

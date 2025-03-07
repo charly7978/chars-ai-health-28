@@ -258,6 +258,10 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
+    // Limpiar el canvas completamente
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
     drawGrid(ctx);
     
     if (preserveResults && !isFingerDetected) {
@@ -298,6 +302,7 @@ const PPGSignalMeter = ({
     detectPeaks(points, now);
 
     if (points.length > 1) {
+      // Dibujar la señal PPG
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
@@ -345,36 +350,42 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
+      // Limpiar área de mensajes
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(40, 10, canvas.width - 80, 80);
+
       // Mostrar estado de arritmia y contador
       if (arrhythmiaStatus) {
         const [status, count] = arrhythmiaStatus.split('|');
         
         if (status === "LATIDO_NORMAL") {
+          // Mensaje de latido normal
           ctx.fillStyle = '#0EA5E9';
-          ctx.font = 'bold 16px Inter';
-          ctx.textAlign = 'left';
-          ctx.fillText("LATIDO NORMAL", 45, 35);
+          ctx.font = 'bold 20px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
         } else if (status === "ARRITMIA_DETECTADA") {
-          // Mostrar alerta de arritmia
+          // Alerta de arritmia
           ctx.fillStyle = '#DC2626';
-          ctx.font = 'bold 16px Inter';
-          ctx.textAlign = 'left';
-          ctx.fillText("ARRITMIA DETECTADA", 45, 35);
+          ctx.font = 'bold 20px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
           
-          // Si hay más de una arritmia, mostrar contador
-          if (parseInt(count) > 1) {
-            ctx.font = 'bold 14px Inter';
-            ctx.fillText(`Arritmias detectadas: ${count}`, 45, 60);
+          // Contador de arritmias
+          if (parseInt(count) > 0) {
+            ctx.font = 'bold 16px Inter';
+            ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
           }
         }
       }
 
-      // Dibujar puntos de arritmia
+      // Dibujar puntos y valores
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
+          // Dibujar círculo del pico
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
@@ -388,18 +399,35 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta para arritmias
-            ctx.font = 'bold 12px Inter';
-            ctx.fillStyle = '#DC2626';
+            // Etiqueta de arritmia con fondo para mejor visibilidad
+            const label = 'ARRITMIA';
+            ctx.font = 'bold 14px Inter';
+            const labelWidth = ctx.measureText(label).width;
+            
+            // Fondo semi-transparente para el texto
+            ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
+            ctx.fillRect(x - labelWidth/2 - 4, y - 39, labelWidth + 8, 18);
+            
+            // Texto "ARRITMIA" en amarillo
+            ctx.fillStyle = '#F59E0B';
             ctx.textAlign = 'center';
-            ctx.fillText('ARRITMIA', x, y - 25);
+            ctx.fillText(label, x, y - 25);
           }
           
-          // Valor del pico
-          ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          // Valor del pico con fondo para mejor visibilidad
+          const value = Math.abs(peak.value / verticalScale).toFixed(2);
+          ctx.font = 'bold 14px Inter';
+          const textColor = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
+          
+          // Fondo blanco semi-transparente para el texto
+          const textWidth = ctx.measureText(value).width;
+          ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
+          ctx.fillRect(x - textWidth/2 - 4, y - 15 - 14, textWidth + 8, 18);
+          
+          // Texto del valor
+          ctx.fillStyle = textColor;
           ctx.textAlign = 'center';
-          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
+          ctx.fillText(value, x, y - 15);
         }
       });
     }
