@@ -5,6 +5,11 @@ export class BloodPressureProcessor {
   private readonly BP_ALPHA = 0.7;
   private systolicBuffer: number[] = [];
   private diastolicBuffer: number[] = [];
+  private systolicReference: number = 120;
+  private diastolicReference: number = 80;
+  private calibrationInProgress: boolean = false;
+  private calibrationSamples: number[] = [];
+  private readonly MIN_CALIBRATION_SAMPLES = 50;
 
   /**
    * Calculates blood pressure using PPG signal features
@@ -14,6 +19,17 @@ export class BloodPressureProcessor {
     diastolic: number;
   } {
     if (values.length < 30) {
+      return { systolic: 0, diastolic: 0 };
+    }
+
+    // Si estamos calibrando, recolectar muestras
+    if (this.calibrationInProgress) {
+      this.calibrationSamples.push(...values);
+      
+      if (this.calibrationSamples.length >= this.MIN_CALIBRATION_SAMPLES) {
+        this.completeCalibration();
+      }
+      
       return { systolic: 0, diastolic: 0 };
     }
 
@@ -94,9 +110,18 @@ export class BloodPressureProcessor {
     finalSystolic = smoothingWeightSum > 0 ? finalSystolic / smoothingWeightSum : instantSystolic;
     finalDiastolic = smoothingWeightSum > 0 ? finalDiastolic / smoothingWeightSum : instantDiastolic;
 
+    // Calcular presión usando valores de referencia calibrados
+    const ac = Math.max(...values) - Math.min(...values);
+    const dc = values.reduce((a, b) => a + b, 0) / values.length;
+    const ratio = ac / dc;
+
+    // Aplicar factores de calibración
+    const systolic = this.systolicReference * (1 + (ratio - 1) * 0.15);
+    const diastolic = this.diastolicReference * (1 + (ratio - 1) * 0.1);
+
     return {
-      systolic: Math.round(finalSystolic),
-      diastolic: Math.round(finalDiastolic)
+      systolic: Math.round(Math.max(70, Math.min(200, systolic))),
+      diastolic: Math.round(Math.max(40, Math.min(130, diastolic)))
     };
   }
 
@@ -106,5 +131,39 @@ export class BloodPressureProcessor {
   public reset(): void {
     this.systolicBuffer = [];
     this.diastolicBuffer = [];
+    this.calibrationInProgress = false;
+    this.calibrationSamples = [];
+  }
+
+  public setCalibrationValues(systolic: number, diastolic: number): void {
+    this.systolicReference = systolic;
+    this.diastolicReference = diastolic;
+  }
+
+  public startCalibration(): void {
+    this.calibrationInProgress = true;
+    this.calibrationSamples = [];
+  }
+
+  public isCalibrating(): boolean {
+    return this.calibrationInProgress;
+  }
+
+  private completeCalibration(): void {
+    if (!this.calibrationInProgress || this.calibrationSamples.length < this.MIN_CALIBRATION_SAMPLES) {
+      return;
+    }
+
+    // Analizar muestras de calibración para ajustar referencias
+    const sortedSamples = [...this.calibrationSamples].sort((a, b) => a - b);
+    const medianValue = sortedSamples[Math.floor(sortedSamples.length / 2)];
+    
+    // Ajustar referencias basadas en la mediana de las muestras
+    const adjustmentFactor = medianValue / this.systolicReference;
+    this.systolicReference = Math.round(this.systolicReference * adjustmentFactor);
+    this.diastolicReference = Math.round(this.diastolicReference * adjustmentFactor);
+
+    this.calibrationInProgress = false;
+    this.calibrationSamples = [];
   }
 }

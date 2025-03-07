@@ -43,8 +43,8 @@ export class VitalSignsProcessor {
   private isCalibrating: boolean = false;
   private calibrationStartTime: number = 0;
   private calibrationSamples: number = 0;
-  private readonly CALIBRATION_REQUIRED_SAMPLES: number = 40;
-  private readonly CALIBRATION_DURATION_MS: number = 6000;
+  private readonly CALIBRATION_REQUIRED_SAMPLES: number = 100;
+  private readonly CALIBRATION_DURATION_MS: number = 10000;
   
   private spo2Samples: number[] = [];
   private pressureSamples: number[] = [];
@@ -61,18 +61,11 @@ export class VitalSignsProcessor {
     lipids: 0,
     hemoglobin: 0
   };
-  
-  private forceCompleteCalibration: boolean = false;
-  private calibrationTimer: any = null;
-  
-  private readonly MEDIAN_WINDOW_SIZE = 5; // Últimas 5 mediciones para calcular mediana
-  private spo2Buffer: number[] = [];
-  private systolicBuffer: number[] = [];
-  private diastolicBuffer: number[] = [];
-  private glucoseBuffer: number[] = [];
-  private cholesterolBuffer: number[] = [];
-  private triglyceridesBuffer: number[] = [];
-  private hemoglobinBuffer: number[] = [];
+
+  private readonly SIGNAL_QUALITY_THRESHOLD = 0.75;
+  private readonly MIN_CALIBRATION_QUALITY = 0.60;
+  private signalQualityBuffer: number[] = [];
+  private readonly QUALITY_BUFFER_SIZE = 10;
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -81,162 +74,99 @@ export class VitalSignsProcessor {
     this.signalProcessor = new SignalProcessor();
     this.glucoseProcessor = new GlucoseProcessor();
     this.lipidProcessor = new LipidProcessor();
+
+    // Cargar calibración previa si existe
+    const savedCalibration = localStorage.getItem('calibrationData');
+    if (savedCalibration) {
+      const calibrationData = JSON.parse(savedCalibration);
+      this.bpProcessor.setCalibrationValues(calibrationData.systolic, calibrationData.diastolic);
+    }
   }
 
-  /**
-   * Inicia el proceso de calibración que analiza y optimiza los algoritmos
-   * para las condiciones específicas del usuario y dispositivo
-   */
   public startCalibration(): void {
-    console.log("VitalSignsProcessor: Iniciando calibración avanzada");
+    console.log("Iniciando calibración con datos reales");
     this.isCalibrating = true;
     this.calibrationStartTime = Date.now();
     this.calibrationSamples = 0;
-    this.forceCompleteCalibration = false;
+    this.signalQualityBuffer = [];
+    this.resetCalibrationBuffers();
     
-    // Resetear muestras de calibración
+    // Iniciar calibración en cada procesador
+    this.spo2Processor.startCalibration();
+    this.bpProcessor.startCalibration();
+    this.arrhythmiaProcessor.startCalibration();
+    this.glucoseProcessor.startCalibration();
+    this.lipidProcessor.startCalibration();
+  }
+
+  private resetCalibrationBuffers(): void {
     this.spo2Samples = [];
     this.pressureSamples = [];
     this.heartRateSamples = [];
     this.glucoseSamples = [];
     this.lipidSamples = [];
-    
-    // Resetear progreso de calibración
-    for (const key in this.calibrationProgress) {
-      this.calibrationProgress[key as keyof typeof this.calibrationProgress] = 0;
-    }
-    
-    // Establecer un temporizador de seguridad para finalizar la calibración
-    if (this.calibrationTimer) {
-      clearTimeout(this.calibrationTimer);
-    }
-    
-    this.calibrationTimer = setTimeout(() => {
-      if (this.isCalibrating) {
-        console.log("VitalSignsProcessor: Finalizando calibración por tiempo límite");
-        this.completeCalibration();
-      }
-    }, this.CALIBRATION_DURATION_MS);
-    
-    console.log("VitalSignsProcessor: Calibración iniciada con parámetros:", {
-      muestrasRequeridas: this.CALIBRATION_REQUIRED_SAMPLES,
-      tiempoMáximo: this.CALIBRATION_DURATION_MS,
-      inicioCalibración: new Date(this.calibrationStartTime).toISOString()
-    });
-  }
-  
-  /**
-   * Finaliza el proceso de calibración y aplica los parámetros optimizados
-   */
-  public completeCalibration(): void {
-    if (this.isCalibrating) {
-      console.log("Forzando finalización de calibración");
-      this.isCalibrating = false;
-      this.calibrationStartTime = Date.now();
-      
-      // Asegurar que todos los procesadores completen su calibración
-      this.arrhythmiaProcessor.completeCalibration();
-      
-      // Actualizar el progreso de calibración a 100%
-      this.calibrationProgress = {
-        heartRate: 100,
-        spo2: 100,
-        pressure: 100,
-        arrhythmia: 100,
-        glucose: 100,
-        lipids: 100,
-        hemoglobin: 100
-      };
-    }
   }
 
-  /**
-   * Calcula la mediana de un array de números
-   * @param values Array de valores numéricos
-   * @returns Valor de la mediana
-   */
-  private calculateMedian(values: number[]): number {
-    if (values.length === 0) return 0;
+  private updateSignalQuality(value: number): number {
+    // Calcular calidad de señal basada en variabilidad y estabilidad
+    const normalizedValue = Math.abs(value);
+    this.signalQualityBuffer.push(normalizedValue);
     
-    // Crear una copia y ordenarla para no modificar el original
-    const sortedValues = [...values].sort((a, b) => a - b);
-    
-    const mid = Math.floor(sortedValues.length / 2);
-    
-    // Si hay un número impar de elementos, la mediana es el valor central
-    if (sortedValues.length % 2 === 1) {
-      return sortedValues[mid];
+    if (this.signalQualityBuffer.length > this.QUALITY_BUFFER_SIZE) {
+      this.signalQualityBuffer.shift();
     }
+
+    if (this.signalQualityBuffer.length < 5) return 0;
+
+    const mean = this.signalQualityBuffer.reduce((a, b) => a + b, 0) / this.signalQualityBuffer.length;
+    const variance = this.signalQualityBuffer.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / this.signalQualityBuffer.length;
+    const stability = Math.exp(-variance);
     
-    // Si hay un número par de elementos, la mediana es el promedio de los dos centrales
-    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+    return Math.min(1, stability * (normalizedValue > 0.1 ? 1 : 0.5));
   }
-  
-  /**
-   * Añade un valor al buffer de mediana y mantiene el tamaño máximo
-   * @param buffer Buffer donde se almacenan los valores
-   * @param value Nuevo valor a añadir
-   */
-  private addToMedianBuffer(buffer: number[], value: number): void {
-    // Solo añadir valores válidos (mayores que cero)
-    if (value > 0) {
-      buffer.push(value);
-      
-      // Mantener el tamaño del buffer limitado
-      if (buffer.length > this.MEDIAN_WINDOW_SIZE) {
-        buffer.shift();
-      }
-    }
-  }
-  
-  /**
-   * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
-   * Implementa lógica para no incluir valores durante la calibración
-   */
+
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
   ): VitalSignsResult | null {
     const timestamp = Date.now();
+    const signalQuality = this.updateSignalQuality(ppgValue);
 
-    // Si estamos calibrando, incrementamos el contador de muestras de calibración
     if (this.isCalibrating) {
       this.calibrationSamples++;
       
-      // Proporcionar feedback detallado durante la calibración
-      console.log(`[CALIBRACIÓN] Muestra #${this.calibrationSamples} de ${this.CALIBRATION_REQUIRED_SAMPLES}`);
-      
-      // Estimar el progreso de la calibración basado en el número de muestras
-      const calibrationProgress = Math.min(
-        100, 
-        Math.round((this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100)
-      );
-      
-      // Actualizar el progreso de calibración para todos los parámetros
-      this.calibrationProgress = {
-        heartRate: calibrationProgress,
-        spo2: Math.max(0, calibrationProgress - 5),
-        pressure: Math.max(0, calibrationProgress - 10),
-        arrhythmia: Math.max(0, calibrationProgress - 5),
-        glucose: Math.max(0, calibrationProgress - 5),
-        lipids: Math.max(0, calibrationProgress - 15),
-        hemoglobin: Math.max(0, calibrationProgress - 20)
-      };
-      
-      // Verificar si la calibración ha terminado
-      if (this.calibrationSamples >= this.CALIBRATION_REQUIRED_SAMPLES) {
-        console.log("[CALIBRACIÓN] Calibración completada después de recolectar suficientes muestras");
-        this.isCalibrating = false;
-        this.calibrationStartTime = timestamp;
+      // Solo procesar muestras con calidad suficiente
+      if (signalQuality >= this.MIN_CALIBRATION_QUALITY) {
+        this.spo2Samples.push(ppgValue);
+        this.pressureSamples.push(ppgValue);
+        this.heartRateSamples.push(ppgValue);
+        
+        // Actualizar progreso basado en muestras válidas
+        const progress = Math.min(100, (this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100);
+        this.updateCalibrationProgress(progress);
+        
+        // Verificar si tenemos suficientes muestras de calidad
+        if (this.calibrationSamples >= this.CALIBRATION_REQUIRED_SAMPLES && 
+            this.getAverageSignalQuality() >= this.SIGNAL_QUALITY_THRESHOLD) {
+          this.completeCalibration();
+        }
       }
-      
-      // Durante la calibración, retornar un resultado con valores de placeholder
-      // para indicar que todavía estamos calibrando
+
+      // Timeout de seguridad
+      if (timestamp - this.calibrationStartTime > this.CALIBRATION_DURATION_MS) {
+        if (this.getAverageSignalQuality() >= this.MIN_CALIBRATION_QUALITY) {
+          this.completeCalibration();
+        } else {
+          console.warn("Calibración fallida por baja calidad de señal");
+          this.reset();
+        }
+      }
+
       return {
         timestamp,
-        spo2: 0,  // Usar 0 como valor de placeholder durante calibración
-        pressure: "--/--", // Usar texto especial para indicar calibración
-        arrhythmiaStatus: `CALIBRANDO...|${calibrationProgress}`,
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaStatus: `CALIBRANDO...|${Math.round(this.getCalibrationProgress().progress.heartRate)}`,
         lastArrhythmiaData: null,
         glucose: 0,
         lipids: {
@@ -247,162 +177,62 @@ export class VitalSignsProcessor {
         calibration: this.getCalibrationProgress()
       };
     }
-    
-    // Procesar señal a través de los diferentes procesadores
+
+    // Procesar señal solo si la calidad es suficiente
+    if (signalQuality < this.MIN_CALIBRATION_QUALITY) {
+      return this.lastValidResults || {
+        timestamp,
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaStatus: "SEÑAL DÉBIL|0",
+        lastArrhythmiaData: null,
+        glucose: 0,
+        lipids: {
+          totalCholesterol: 0,
+          triglycerides: 0
+        },
+        hemoglobin: 0
+      };
+    }
+
+    // Procesar con cada procesador especializado
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     const ppgValues = this.signalProcessor.getPPGValues();
     
-    // Extraer intervalos RR para el procesador de arritmias
-    const rrIntervals = rrData?.intervals || [];
+    // Procesar arritmias
+    const arrhythmiaResult = this.arrhythmiaProcessor.processHeartbeat(filtered, rrData?.intervals || []);
     
-    // Procesar arritmias con el nuevo método
-    const arrhythmiaResult = this.arrhythmiaProcessor.processHeartbeat(ppgValue, rrIntervals);
-    
-    // Calcular valores individuales con los procesadores específicos
-    const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
-    const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
+    // Calcular valores vitales
+    const spo2 = this.spo2Processor.calculateSpO2(ppgValues);
+    const bp = this.bpProcessor.calculateBloodPressure(ppgValues);
     const glucose = this.glucoseProcessor.calculateGlucose(ppgValues);
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     const hemoglobin = this.calculateHemoglobin(ppgValues);
+
+    // Aplicar filtro de mediana a los resultados
+    this.updateMedianBuffers(spo2, bp, glucose, lipids, hemoglobin);
     
-    // Solo si no estamos calibrando, añadir los valores a los búferes para el filtro de mediana
-    // y solo añadir valores válidos (mayores que cero)
-    if (spo2 > 0) {
-      this.spo2Buffer.push(spo2);
-      if (this.spo2Buffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.spo2Buffer.shift();
-      }
-    }
-    
-    if (bp.systolic > 0 && bp.diastolic > 0) {
-      this.systolicBuffer.push(bp.systolic);
-      this.diastolicBuffer.push(bp.diastolic);
-      
-      if (this.systolicBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.systolicBuffer.shift();
-      }
-      if (this.diastolicBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.diastolicBuffer.shift();
-      }
-    }
-    
-    if (glucose > 0) {
-      this.glucoseBuffer.push(glucose);
-      if (this.glucoseBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.glucoseBuffer.shift();
-      }
-    }
-    
-    if (lipids.totalCholesterol > 0) {
-      this.cholesterolBuffer.push(lipids.totalCholesterol);
-      if (this.cholesterolBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.cholesterolBuffer.shift();
-      }
-    }
-    
-    if (lipids.triglycerides > 0) {
-      this.triglyceridesBuffer.push(lipids.triglycerides);
-      if (this.triglyceridesBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.triglyceridesBuffer.shift();
-      }
-    }
-    
-    if (hemoglobin > 0) {
-      this.hemoglobinBuffer.push(hemoglobin);
-      if (this.hemoglobinBuffer.length > this.MEDIAN_WINDOW_SIZE) {
-        this.hemoglobinBuffer.shift();
-      }
-    }
-    
-    // Calcular las medianas solo si tenemos suficientes valores
-    let finalSpo2 = 0;
-    if (this.spo2Buffer.length > 0) {
-      const sortedSpo2 = [...this.spo2Buffer].sort((a, b) => a - b);
-      finalSpo2 = sortedSpo2[Math.floor(sortedSpo2.length / 2)];
-    } else {
-      finalSpo2 = spo2; // Usar el valor actual si no hay suficientes muestras
-    }
-    
-    let finalSystolic = 0;
-    let finalDiastolic = 0;
-    if (this.systolicBuffer.length > 0 && this.diastolicBuffer.length > 0) {
-      const sortedSystolic = [...this.systolicBuffer].sort((a, b) => a - b);
-      const sortedDiastolic = [...this.diastolicBuffer].sort((a, b) => a - b);
-      
-      finalSystolic = sortedSystolic[Math.floor(sortedSystolic.length / 2)];
-      finalDiastolic = sortedDiastolic[Math.floor(sortedDiastolic.length / 2)];
-    } else {
-      finalSystolic = bp.systolic;
-      finalDiastolic = bp.diastolic;
-    }
-    
-    let finalGlucose = 0;
-    if (this.glucoseBuffer.length > 0) {
-      const sortedGlucose = [...this.glucoseBuffer].sort((a, b) => a - b);
-      finalGlucose = sortedGlucose[Math.floor(sortedGlucose.length / 2)];
-    } else {
-      finalGlucose = glucose;
-    }
-    
-    let finalCholesterol = 0;
-    if (this.cholesterolBuffer.length > 0) {
-      const sortedCholesterol = [...this.cholesterolBuffer].sort((a, b) => a - b);
-      finalCholesterol = sortedCholesterol[Math.floor(sortedCholesterol.length / 2)];
-    } else {
-      finalCholesterol = lipids.totalCholesterol;
-    }
-    
-    let finalTriglycerides = 0;
-    if (this.triglyceridesBuffer.length > 0) {
-      const sortedTriglycerides = [...this.triglyceridesBuffer].sort((a, b) => a - b);
-      finalTriglycerides = sortedTriglycerides[Math.floor(sortedTriglycerides.length / 2)];
-    } else {
-      finalTriglycerides = lipids.triglycerides;
-    }
-    
-    let finalHemoglobin = 0;
-    if (this.hemoglobinBuffer.length > 0) {
-      const sortedHemoglobin = [...this.hemoglobinBuffer].sort((a, b) => a - b);
-      finalHemoglobin = sortedHemoglobin[Math.floor(sortedHemoglobin.length / 2)];
-    } else {
-      finalHemoglobin = hemoglobin;
-    }
-    
-    // Construir formato de presión: "sistólica/diastólica"
-    const pressureFormatted = (finalSystolic > 0 && finalDiastolic > 0) 
-      ? `${Math.round(finalSystolic)}/${Math.round(finalDiastolic)}`
-      : "--/--";
-    
-    // Crear el resultado final
     const result: VitalSignsResult = {
       timestamp,
-      spo2: Math.round(finalSpo2),
-      pressure: pressureFormatted,
+      spo2: this.getMedianSpo2(),
+      pressure: this.getMedianPressure(),
       arrhythmiaStatus: arrhythmiaResult.status,
       lastArrhythmiaData: arrhythmiaResult.data,
-      glucose: Math.round(finalGlucose * 10) / 10, // Mantener 1 decimal
+      glucose: this.getMedianGlucose(),
       lipids: {
-        totalCholesterol: Math.round(finalCholesterol),
-        triglycerides: Math.round(finalTriglycerides)
+        totalCholesterol: this.getMedianCholesterol(),
+        triglycerides: this.getMedianTriglycerides()
       },
-      hemoglobin: Math.round(finalHemoglobin * 10) / 10, // Mantener 1 decimal
-      calibration: this.getCalibrationProgress()
+      hemoglobin: this.getMedianHemoglobin()
     };
-    
-    // Guardar el último resultado válido si no estamos calibrando
-    // y si los valores son válidos (mayores que cero)
-    if (!this.isCalibrating && 
-        finalSpo2 > 0 && 
-        finalSystolic > 0 && 
-        finalDiastolic > 0 && 
-        finalGlucose > 0 && 
-        finalCholesterol > 0 && 
-        finalTriglycerides > 0 && 
-        finalHemoglobin > 0) {
-      this.lastValidResults = { ...result };
-    }
-    
+
+    this.lastValidResults = result;
     return result;
+  }
+
+  private getAverageSignalQuality(): number {
+    if (this.signalQualityBuffer.length === 0) return 0;
+    return this.signalQualityBuffer.reduce((a, b) => a + b, 0) / this.signalQualityBuffer.length;
   }
 
   private calculateHemoglobin(ppgValues: number[]): number {
@@ -436,11 +266,114 @@ export class VitalSignsProcessor {
     };
   }
 
-  public forceCalibrationCompletion(): void {
-    if (!this.isCalibrating) return;
+  public completeCalibration(): void {
+    if (this.isCalibrating) {
+      console.log("Forzando finalización de calibración");
+      this.isCalibrating = false;
+      this.calibrationStartTime = Date.now();
+      
+      // Asegurar que todos los procesadores completen su calibración
+      this.arrhythmiaProcessor.completeCalibration();
+      
+      // Actualizar el progreso de calibración a 100%
+      this.calibrationProgress = {
+        heartRate: 100,
+        spo2: 100,
+        pressure: 100,
+        arrhythmia: 100,
+        glucose: 100,
+        lipids: 100,
+        hemoglobin: 100
+      };
+    }
+  }
+
+  private updateCalibrationProgress(progress: number): void {
+    this.calibrationProgress = {
+      heartRate: Math.min(100, Math.max(0, Math.round(progress))),
+      spo2: Math.min(100, Math.max(0, Math.round(progress - 5))),
+      pressure: Math.min(100, Math.max(0, Math.round(progress - 10))),
+      arrhythmia: Math.min(100, Math.max(0, Math.round(progress - 5))),
+      glucose: Math.min(100, Math.max(0, Math.round(progress - 5))),
+      lipids: Math.min(100, Math.max(0, Math.round(progress - 15))),
+      hemoglobin: Math.min(100, Math.max(0, Math.round(progress - 20)))
+    };
+  }
+
+  private updateMedianBuffers(spo2: number, bp: { systolic: number; diastolic: number }, glucose: number, lipids: { totalCholesterol: number; triglycerides: number }, hemoglobin: number): void {
+    if (spo2 > 0) {
+      this.spo2Samples.push(spo2);
+    }
     
-    console.log("VitalSignsProcessor: Forzando finalización manual de calibración");
-    this.forceCompleteCalibration = true;
+    if (bp.systolic > 0 && bp.diastolic > 0) {
+      this.pressureSamples.push(bp.systolic);
+      this.pressureSamples.push(bp.diastolic);
+    }
+    
+    if (glucose > 0) {
+      this.glucoseSamples.push(glucose);
+    }
+    
+    if (lipids.totalCholesterol > 0) {
+      this.lipidSamples.push(lipids.totalCholesterol);
+    }
+    
+    if (lipids.triglycerides > 0) {
+      this.lipidSamples.push(lipids.triglycerides);
+    }
+    
+    if (hemoglobin > 0) {
+      this.heartRateSamples.push(hemoglobin);
+    }
+  }
+
+  private getMedianSpo2(): number {
+    if (this.spo2Samples.length === 0) return 0;
+    return this.calculateMedian(this.spo2Samples);
+  }
+
+  private getMedianPressure(): string {
+    if (this.pressureSamples.length < 2) return "--/--";
+    const sorted = [...this.pressureSamples].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return `${Math.round(sorted[mid - 1])}/${Math.round(sorted[mid])}`;
+  }
+
+  private getMedianGlucose(): number {
+    if (this.glucoseSamples.length === 0) return 0;
+    return this.calculateMedian(this.glucoseSamples);
+  }
+
+  private getMedianCholesterol(): number {
+    if (this.lipidSamples.length === 0) return 0;
+    return this.calculateMedian(this.lipidSamples);
+  }
+
+  private getMedianTriglycerides(): number {
+    if (this.lipidSamples.length === 0) return 0;
+    return this.calculateMedian(this.lipidSamples);
+  }
+
+  private getMedianHemoglobin(): number {
+    if (this.heartRateSamples.length === 0) return 0;
+    return this.calculateMedian(this.heartRateSamples);
+  }
+
+  private calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    
+    // Crear una copia y ordenarla para no modificar el original
+    const sortedValues = [...values].sort((a, b) => a - b);
+    
+    const mid = Math.floor(sortedValues.length / 2);
+    
+    // Si hay un número impar de elementos, la mediana es el valor central
+    if (sortedValues.length % 2 === 1) {
+      return sortedValues[mid];
+    }
+    
+    // Si hay un número par de elementos, la mediana es el promedio de los dos centrales
+    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
   }
 
   /**
@@ -459,21 +392,14 @@ export class VitalSignsProcessor {
     this.lipidProcessor.reset();
     
     // Resetear buffers de mediana
-    this.spo2Buffer = [];
-    this.systolicBuffer = [];
-    this.diastolicBuffer = [];
-    this.glucoseBuffer = [];
-    this.cholesterolBuffer = [];
-    this.triglyceridesBuffer = [];
-    this.hemoglobinBuffer = [];
+    this.spo2Samples = [];
+    this.pressureSamples = [];
+    this.heartRateSamples = [];
+    this.glucoseSamples = [];
+    this.lipidSamples = [];
     
     // Resetear estado de calibración
     this.isCalibrating = false;
-    
-    if (this.calibrationTimer) {
-      clearTimeout(this.calibrationTimer);
-      this.calibrationTimer = null;
-    }
     
     return savedResults;
   }

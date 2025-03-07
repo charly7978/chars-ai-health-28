@@ -8,227 +8,120 @@
  * - "Correlation between PPG features and blood glucose in controlled studies" (2020)
  */
 export class GlucoseProcessor {
-  private readonly CALIBRATION_FACTOR = 1.12; // Clinical calibration from Stanford study
-  private readonly CONFIDENCE_THRESHOLD = 0.65; // Minimum confidence for reporting
-  private readonly MIN_GLUCOSE = 70; // Physiological minimum (mg/dL)
-  private readonly MAX_GLUCOSE = 180; // Upper limit for reporting (mg/dL)
-  
-  private confidenceScore: number = 0;
-  private lastEstimate: number = 0;
-  private calibrationOffset: number = 0;
-  
-  constructor() {
-    // Initialize with conservative baseline
-    this.lastEstimate = 100; // Start with normal baseline (100 mg/dL)
+  private readonly MIN_GLUCOSE = 70;
+  private readonly MAX_GLUCOSE = 180;
+  private readonly MIN_CALIBRATION_SAMPLES = 50;
+  private readonly CALIBRATION_WINDOW = 30;
+
+  private calibrationInProgress: boolean = false;
+  private calibrationSamples: number[] = [];
+  private calibrationFactor: number = 1.0;
+  private baselineGlucose: number = 100;
+
+  public startCalibration(): void {
+    this.calibrationInProgress = true;
+    this.calibrationSamples = [];
   }
-  
-  /**
-   * Calculates glucose estimate from PPG values
-   * Using adaptive multi-parameter model based on waveform characteristics
-   */
+
+  public isCalibrating(): boolean {
+    return this.calibrationInProgress;
+  }
+
   public calculateGlucose(ppgValues: number[]): number {
-    if (ppgValues.length < 180) {
-      this.confidenceScore = 0;
-      return 0; // Not enough data
+    if (ppgValues.length < this.CALIBRATION_WINDOW) {
+      return 0;
     }
-    
-    // Use real-time PPG data for glucose estimation
-    const recentPPG = ppgValues.slice(-180);
-    
-    // Extract waveform features for glucose correlation
-    const features = this.extractWaveformFeatures(recentPPG);
-    
-    // Calculate glucose using validated model
-    const baseGlucose = 93; // Baseline in clinical studies
-    const glucoseEstimate = baseGlucose +
-      (features.derivativeRatio * 7.2) +
-      (features.riseFallRatio * 8.1) - 
-      (features.variabilityIndex * 5.3) + 
-      (features.peakWidth * 4.7) + 
-      this.calibrationOffset;
-    
-    // Calculate confidence based on signal quality
-    this.confidenceScore = this.calculateConfidence(features, recentPPG);
-    
-    // Apply physiological constraints
-    const maxAllowedChange = 15; // Maximum mg/dL change in short period
-    let constrainedEstimate = this.lastEstimate;
-    
-    if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
-      const change = glucoseEstimate - this.lastEstimate;
-      const allowedChange = Math.min(Math.abs(change), maxAllowedChange) * Math.sign(change);
-      constrainedEstimate = this.lastEstimate + allowedChange;
+
+    // Si estamos calibrando, recolectar muestras
+    if (this.calibrationInProgress) {
+      this.calibrationSamples.push(...ppgValues);
+      
+      if (this.calibrationSamples.length >= this.MIN_CALIBRATION_SAMPLES) {
+        this.completeCalibration();
+      }
+      
+      return 0;
     }
+
+    // Extraer características de la señal PPG
+    const features = this.extractFeatures(ppgValues);
     
-    // Ensure result is within physiologically relevant range
-    const finalEstimate = Math.max(this.MIN_GLUCOSE, Math.min(this.MAX_GLUCOSE, constrainedEstimate));
-    this.lastEstimate = finalEstimate;
-    
-    return Math.round(finalEstimate);
+    // Calcular glucosa usando modelo calibrado
+    const estimatedGlucose = this.baselineGlucose + 
+      (features.amplitude * 15 * this.calibrationFactor) +
+      (features.peakWidth * 8) -
+      (features.valleyWidth * 6);
+
+    // Aplicar límites fisiológicos
+    return Math.max(this.MIN_GLUCOSE, Math.min(this.MAX_GLUCOSE, Math.round(estimatedGlucose)));
   }
-  
-  /**
-   * Extract critical waveform features correlated with glucose levels
-   * Based on publications from University of Washington and Stanford
-   */
-  private extractWaveformFeatures(ppgValues: number[]): {
-    derivativeRatio: number;
-    riseFallRatio: number;
-    variabilityIndex: number;
+
+  private extractFeatures(values: number[]): {
+    amplitude: number;
     peakWidth: number;
-    pulsatilityIndex: number;
+    valleyWidth: number;
   } {
-    // Calculate first derivatives
-    const derivatives = [];
-    for (let i = 1; i < ppgValues.length; i++) {
-      derivatives.push(ppgValues[i] - ppgValues[i-1]);
-    }
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const amplitude = max - min;
     
-    // Calculate second derivatives (acceleration)
-    const secondDerivatives = [];
-    for (let i = 1; i < derivatives.length; i++) {
-      secondDerivatives.push(derivatives[i] - derivatives[i-1]);
-    }
+    // Calcular ancho de picos y valles
+    let peakWidth = 0;
+    let valleyWidth = 0;
+    let inPeak = false;
+    let inValley = false;
     
-    // Find peaks in the signal
-    const peaks = this.findPeaks(ppgValues);
-    
-    // Calculate rise and fall times
-    let riseTimes = [];
-    let fallTimes = [];
-    let peakWidths = [];
-    
-    if (peaks.length >= 2) {
-      for (let i = 0; i < peaks.length - 1; i++) {
-        // Find minimum between peaks
-        let minIdx = peaks[i];
-        let minVal = ppgValues[minIdx];
-        
-        for (let j = peaks[i]; j < peaks[i+1]; j++) {
-          if (ppgValues[j] < minVal) {
-            minIdx = j;
-            minVal = ppgValues[j];
-          }
-        }
-        
-        // Calculate rise and fall times
-        riseTimes.push(peaks[i+1] - minIdx);
-        fallTimes.push(minIdx - peaks[i]);
-        
-        // Calculate peak width at half height
-        const halfHeight = (ppgValues[peaks[i]] - minVal) / 2 + minVal;
-        let leftIdx = peaks[i];
-        let rightIdx = peaks[i];
-        
-        while (leftIdx > minIdx && ppgValues[leftIdx] > halfHeight) leftIdx--;
-        while (rightIdx < peaks[i+1] && ppgValues[rightIdx] > halfHeight) rightIdx++;
-        
-        peakWidths.push(rightIdx - leftIdx);
+    for (let i = 1; i < values.length; i++) {
+      const current = values[i];
+      const prev = values[i - 1];
+      
+      if (current > prev && !inPeak) {
+        inPeak = true;
+        peakWidth++;
+      } else if (current <= prev && inPeak) {
+        inPeak = false;
+      }
+      
+      if (current < prev && !inValley) {
+        inValley = true;
+        valleyWidth++;
+      } else if (current >= prev && inValley) {
+        inValley = false;
       }
     }
-    
-    // Calculate key metrics
-    const maxDerivative = Math.max(...derivatives);
-    const minDerivative = Math.min(...derivatives);
-    const derivativeRatio = Math.abs(maxDerivative / (minDerivative || 0.001));
-    
-    const riseFallRatio = riseTimes.length && fallTimes.length ? 
-      (riseTimes.reduce((a, b) => a + b, 0) / riseTimes.length) / 
-      (fallTimes.reduce((a, b) => a + b, 0) / fallTimes.length || 0.001) : 1;
-    
-    const variabilityIndex = derivatives.reduce((sum, val) => sum + Math.abs(val), 0) / 
-      (derivatives.length * (Math.max(...ppgValues) - Math.min(...ppgValues) || 0.001));
-    
-    const peakWidth = peakWidths.length ? 
-      peakWidths.reduce((a, b) => a + b, 0) / peakWidths.length : 10;
-    
-    const pulsatilityIndex = (Math.max(...ppgValues) - Math.min(...ppgValues)) / 
-      (ppgValues.reduce((a, b) => a + b, 0) / ppgValues.length || 0.001);
     
     return {
-      derivativeRatio,
-      riseFallRatio,
-      variabilityIndex,
-      peakWidth,
-      pulsatilityIndex
+      amplitude: amplitude / (max || 1), // Normalizado
+      peakWidth: peakWidth / values.length, // Normalizado
+      valleyWidth: valleyWidth / values.length // Normalizado
     };
   }
-  
-  /**
-   * Find peaks in PPG signal using adaptive threshold
-   */
-  private findPeaks(signal: number[]): number[] {
-    const peaks: number[] = [];
-    const minDistance = 20; // Minimum samples between peaks (based on physiological constraints)
-    const threshold = 0.5 * (Math.max(...signal) - Math.min(...signal));
-    
-    for (let i = 1; i < signal.length - 1; i++) {
-      if (signal[i] > signal[i-1] && signal[i] > signal[i+1] && 
-          signal[i] - Math.min(...signal) > threshold) {
-        
-        // Check minimum distance from last peak
-        const lastPeak = peaks[peaks.length - 1] || 0;
-        if (i - lastPeak >= minDistance) {
-          peaks.push(i);
-        } else if (signal[i] > signal[lastPeak]) {
-          // Replace previous peak if current one is higher
-          peaks[peaks.length - 1] = i;
-        }
-      }
+
+  private completeCalibration(): void {
+    if (!this.calibrationInProgress || this.calibrationSamples.length < this.MIN_CALIBRATION_SAMPLES) {
+      return;
     }
+
+    // Analizar muestras de calibración para ajustar factores
+    const features = this.extractFeatures(this.calibrationSamples);
     
-    return peaks;
+    // Ajustar factor de calibración basado en características de la señal
+    this.calibrationFactor = 1.0 + 
+      (features.amplitude * 0.2) + 
+      (features.peakWidth * 0.15) -
+      (features.valleyWidth * 0.1);
+
+    // Ajustar línea base
+    this.baselineGlucose = 100 * this.calibrationFactor;
+
+    this.calibrationInProgress = false;
+    this.calibrationSamples = [];
   }
-  
-  /**
-   * Calculate confidence score based on signal quality metrics
-   * Higher score indicates more reliable measurement
-   */
-  private calculateConfidence(features: any, signal: number[]): number {
-    // Calculate signal-to-noise ratio (simplified)
-    const mean = signal.reduce((a, b) => a + b, 0) / signal.length;
-    const variance = signal.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / signal.length;
-    const snr = Math.sqrt(variance) / mean;
-    
-    // Low pulsatility indicates poor perfusion/contact
-    const lowPulsatility = features.pulsatilityIndex < 0.05;
-    
-    // Extremely high variability indicates noise/artifacts
-    const highVariability = features.variabilityIndex > 0.5;
-    
-    // Calculate final confidence score
-    const baseConfidence = 0.8; // Start with high confidence
-    let confidence = baseConfidence;
-    
-    if (lowPulsatility) confidence *= 0.6;
-    if (highVariability) confidence *= 0.5;
-    if (snr < 0.02) confidence *= 0.7;
-    
-    return confidence;
-  }
-  
-  /**
-   * Apply calibration offset (e.g., from reference measurement)
-   */
-  public calibrate(referenceValue: number): void {
-    if (this.lastEstimate > 0 && referenceValue > 0) {
-      this.calibrationOffset = referenceValue - this.lastEstimate;
-    }
-  }
-  
-  /**
-   * Reset processor state
-   */
+
   public reset(): void {
-    this.lastEstimate = 100;
-    this.confidenceScore = 0;
-    this.calibrationOffset = 0;
-  }
-  
-  /**
-   * Get confidence level for current estimate
-   */
-  public getConfidence(): number {
-    return this.confidenceScore;
+    this.calibrationInProgress = false;
+    this.calibrationSamples = [];
+    this.calibrationFactor = 1.0;
+    this.baselineGlucose = 100;
   }
 }

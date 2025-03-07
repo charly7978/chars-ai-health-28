@@ -65,6 +65,18 @@ export class ArrhythmiaProcessor {
   private thresholdRMSSD: number = 50; // Umbral ajustado para detectar arritmias
   private medianRRInterval: number = 0; // Valor mediano normal para intervalos RR
 
+  private readonly RMSSD_THRESHOLD = 25;
+  private readonly MIN_RR_SAMPLES = 10;
+  private readonly MAX_RR_SAMPLES = 50;
+  private readonly MIN_CONFIDENCE = 0.6;
+  private readonly LEARNING_PERIOD_MS = 5000;
+
+  private calibrationInProgress: boolean = false;
+  private calibrationStartTime: number = 0;
+  private baselineRMSSD: number = 0;
+  private baselineRRMean: number = 0;
+  private baselineRRSD: number = 0;
+
   constructor() {
     // Inicialización del procesador
     console.log("ArrhythmiaProcessor inicializado con umbral RMSSD de", this.thresholdRMSSD);
@@ -78,115 +90,56 @@ export class ArrhythmiaProcessor {
     ppgValue: number,
     rrData: number[]
   ): ArrhythmiaResult {
-    // Si no está inicializado, inicializar y devolver estado inicial
-    if (!this.isInitialized) {
-      this.isInitialized = true;
-      console.log("ArrhythmiaProcessor: primera inicialización");
-      return {
-        status: "INICIALIZANDO|0",
-        data: null
-      };
-    }
-
-    // Si está calibrando, incrementar contador de muestras
-    if (this.isCalibrating) {
-      this.calibrationSamples++;
+    if (this.calibrationInProgress) {
+      this.calibrationSamples.push(ppgValue);
       
-      // Guardar datos durante calibración para establecer línea base
-      if (rrData && rrData.length > 0) {
-        this.previousRRData = [...this.previousRRData, ...rrData];
-        
-        // Mantener solo las últimas 20 muestras para la calibración
-        if (this.previousRRData.length > 20) {
-          this.previousRRData = this.previousRRData.slice(-20);
-        }
+      // Procesar calibración después del período de aprendizaje
+      if (Date.now() - this.calibrationStartTime >= this.LEARNING_PERIOD_MS) {
+        this.completeCalibration(rrData);
       }
       
-      // Si se han recolectado suficientes muestras, finalizar calibración
-      // y establecer umbrales basados en los datos recolectados
-      if (this.calibrationSamples >= this.calibrationRequiredSamples) {
-        this.isCalibrating = false;
-        
-        // Calcular la mediana de los intervalos RR durante calibración
-        // para establecer la línea base personal del usuario
-        if (this.previousRRData.length > 5) {
-          const sortedRRData = [...this.previousRRData].sort((a, b) => a - b);
-          this.medianRRInterval = sortedRRData[Math.floor(sortedRRData.length / 2)];
-          
-          // Ajustar umbral RMSSD basado en la variabilidad normal del usuario
-          const calibrationRMSSD = calculateRMSSD(this.previousRRData);
-          // El umbral será 2.5 veces la RMSSD normal del usuario, o el valor predeterminado
-          this.thresholdRMSSD = Math.max(this.thresholdRMSSD, calibrationRMSSD * 2.5);
-          
-          console.log("ArrhythmiaProcessor: Calibración completada", {
-            medianaRR: this.medianRRInterval,
-            umbralRMSSD: this.thresholdRMSSD,
-            baseRMSSD: calibrationRMSSD
-          });
-        }
-      }
-      
-      // Durante calibración, reportar que se está calibrando
       return {
-        status: `CALIBRANDO...|${Math.min(100, Math.round((this.calibrationSamples / this.calibrationRequiredSamples) * 100))}`,
+        status: "CALIBRANDO...|0",
         data: null
       };
     }
 
-    // Si no hay datos RR válidos, mantener el estado anterior
-    if (!rrData || rrData.length === 0) {
+    if (rrData.length < this.MIN_RR_SAMPLES) {
       return {
-        status: this.arrhythmiaCount > 0 ? `ARRITMIA DETECTADA|${this.arrhythmiaCount}` : `SIN ARRITMIAS|0`,
+        status: "ANALIZANDO...|0",
         data: null
       };
     }
 
-    // Procesar solo después de completar la calibración
-    // Almacenar los últimos intervalos RR (máximo 30)
-    this.previousRRData = [...this.previousRRData, ...rrData];
-    if (this.previousRRData.length > 30) {
-      this.previousRRData = this.previousRRData.slice(-30);
-    }
+    // Calcular métricas de variabilidad
+    const recentRR = rrData.slice(-this.MAX_RR_SAMPLES);
+    const rmssd = this.calculateRMSSD(recentRR);
+    const { mean: rrMean, sd: rrSD } = this.calculateRRStats(recentRR);
+    
+    // Detectar arritmias usando umbrales calibrados
+    const isArrhythmic = 
+      rmssd > this.baselineRMSSD * 1.5 || // RMSSD significativamente mayor
+      Math.abs(rrMean - this.baselineRRMean) > this.baselineRRSD * 2 || // RR medio muy diferente
+      rrSD > this.baselineRRSD * 1.8; // Variabilidad excesiva
+    
+    const confidence = this.calculateConfidence(rmssd, rrMean, rrSD);
 
-    // Necesitamos al menos 8 intervalos RR para un análisis confiable
-    if (this.previousRRData.length < 8) {
+    if (confidence < this.MIN_CONFIDENCE) {
       return {
-        status: "ANALIZANDO|0",
+        status: "SEÑAL DÉBIL|0",
         data: null
       };
     }
 
-    // Calcular variabilidad del ritmo cardíaco (RMSSD)
-    const rmssd = calculateRMSSD(this.previousRRData);
-    
-    // Calcular la variación porcentual de los intervalos RR
-    const rrVariation = this.calculateRRVariationPercent(this.previousRRData);
-    
-    // Crear objeto con los datos de análisis
-    const data = {
-      timestamp: Date.now(),
-      rmssd,
-      rrVariation
-    };
-    
-    // Detección de arritmia basada en RMSSD y variación porcentual
-    // Consideramos que hay arritmia si la RMSSD supera el umbral calibrado
-    // o si la variación porcentual es muy alta
-    let isArrhythmia = false;
-    
-    if (rmssd > this.thresholdRMSSD || rrVariation > 25) {
-      isArrhythmia = true;
-      this.arrhythmiaCount++;
-      console.log(`ArrhythmiaProcessor: Arritmia detectada (#${this.arrhythmiaCount})`, {
-        rmssd,
-        umbral: this.thresholdRMSSD,
-        variacion: rrVariation
-      });
-    }
-    
     return {
-      status: isArrhythmia ? `ARRITMIA DETECTADA|${this.arrhythmiaCount}` : `SIN ARRITMIAS|${this.arrhythmiaCount}`,
-      data
+      status: isArrhythmic ? "ARRITMIA DETECTADA|1" : "RITMO NORMAL|0",
+      data: {
+        timestamp: Date.now(),
+        rmssd,
+        rrMean,
+        rrSD,
+        confidence
+      }
     };
   }
   
@@ -240,17 +193,68 @@ export class ArrhythmiaProcessor {
     this.previousRRData = [];
     this.isCalibrating = true;
     this.calibrationSamples = 0;
+    this.calibrationInProgress = false;
+    this.baselineRMSSD = 0;
+    this.baselineRRMean = 0;
+    this.baselineRRSD = 0;
     console.log("ArrhythmiaProcessor: reset completo y calibración reiniciada");
   }
   
   /**
    * Establece que la calibración ha terminado (usado cuando se fuerza finalización).
    */
-  public completeCalibration(): void {
-    if (this.isCalibrating) {
-      this.isCalibrating = false;
-      console.log("ArrhythmiaProcessor: calibración finalizada manualmente");
+  public completeCalibration(rrIntervals: number[]): void {
+    if (!this.calibrationInProgress || rrIntervals.length < this.MIN_RR_SAMPLES) {
+      return;
     }
+
+    // Calcular línea base de métricas de variabilidad
+    this.baselineRMSSD = this.calculateRMSSD(rrIntervals);
+    const stats = this.calculateRRStats(rrIntervals);
+    this.baselineRRMean = stats.mean;
+    this.baselineRRSD = stats.sd;
+
+    this.calibrationInProgress = false;
+    this.calibrationSamples = [];
+  }
+
+  private calculateRMSSD(intervals: number[]): number {
+    if (intervals.length < 2) return 0;
+    
+    let sumSquaredDiff = 0;
+    let validIntervals = 0;
+    
+    for (let i = 1; i < intervals.length; i++) {
+      if (intervals[i] > 0 && intervals[i-1] > 0) {
+        const diff = intervals[i] - intervals[i-1];
+        sumSquaredDiff += diff * diff;
+        validIntervals++;
+      }
+    }
+    
+    return validIntervals > 0 ? Math.sqrt(sumSquaredDiff / validIntervals) : 0;
+  }
+
+  private calculateRRStats(intervals: number[]): { mean: number; sd: number } {
+    if (intervals.length === 0) return { mean: 0, sd: 0 };
+    
+    const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const squaredDiffs = intervals.map(x => Math.pow(x - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / intervals.length;
+    
+    return {
+      mean,
+      sd: Math.sqrt(variance)
+    };
+  }
+
+  private calculateConfidence(rmssd: number, rrMean: number, rrSD: number): number {
+    // Calcular confianza basada en la estabilidad de las métricas
+    const rmssdStability = Math.min(1, this.baselineRMSSD / (rmssd + 1));
+    const meanStability = Math.min(1, this.baselineRRMean / (Math.abs(rrMean - this.baselineRRMean) + 1));
+    const sdStability = Math.min(1, this.baselineRRSD / (Math.abs(rrSD - this.baselineRRSD) + 1));
+    
+    return (rmssdStability + meanStability + sdStability) / 3;
   }
 
   /**
@@ -420,5 +424,18 @@ export class ArrhythmiaProcessor {
    */
   public setThresholds(rmssdThreshold: number): void {
     this.RMSSD_THRESHOLD = rmssdThreshold;
+  }
+
+  public startCalibration(): void {
+    this.calibrationInProgress = true;
+    this.calibrationStartTime = Date.now();
+    this.calibrationSamples = [];
+    this.baselineRMSSD = 0;
+    this.baselineRRMean = 0;
+    this.baselineRRSD = 0;
+  }
+
+  public isCalibrating(): boolean {
+    return this.calibrationInProgress;
   }
 }

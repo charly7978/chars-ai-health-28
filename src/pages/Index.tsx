@@ -18,6 +18,7 @@ const Index = () => {
     spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
+    lastArrhythmiaData: null,
     glucose: 0,
     lipids: {
       totalCholesterol: 0,
@@ -32,11 +33,6 @@ const Index = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration']>();
   const measurementTimerRef = useRef<number | null>(null);
-  const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
-    timestamp: number;
-    rmssd: number;
-    rrVariation: number;
-  } | null>(null);
   const [calibrationMessage, setCalibrationMessage] = useState<string>("");
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
@@ -92,7 +88,8 @@ const Index = () => {
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0"
+        arrhythmiaStatus: "SIN ARRITMIAS|0",
+        lastArrhythmiaData: null
       }));
       
       // Iniciar calibración automática
@@ -135,6 +132,7 @@ const Index = () => {
       spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "CALIBRANDO...|0",
+      lastArrhythmiaData: null,
       glucose: 0,
       lipids: {
         totalCholesterol: 0,
@@ -187,13 +185,15 @@ const Index = () => {
           setCalibrationMessage("Calibrando sensores y ajustando parámetros");
           setVitalSigns(prev => ({
             ...prev,
-            arrhythmiaStatus: "CALIBRANDO SENSORES|0"
+            arrhythmiaStatus: "CALIBRANDO SENSORES|0",
+            lastArrhythmiaData: null
           }));
         } else if (step === 3) {
           setCalibrationMessage("Ajustando algoritmos para mayor precisión");
           setVitalSigns(prev => ({
             ...prev,
-            arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0"
+            arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0",
+            lastArrhythmiaData: null
           }));
         }
       } else {
@@ -214,7 +214,8 @@ const Index = () => {
           // Actualizar mensaje para mostrar que la calibración se completó
           setVitalSigns(prev => ({
             ...prev,
-            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0"
+            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
+            lastArrhythmiaData: null
           }));
           
           // Opcional: vibración si está disponible
@@ -228,7 +229,8 @@ const Index = () => {
               setCalibrationMessage("");
               setVitalSigns(prev => ({
                 ...prev,
-                arrhythmiaStatus: "SIN ARRITMIAS|0"
+                arrhythmiaStatus: "SIN ARRITMIAS|0",
+                lastArrhythmiaData: null
               }));
             }
           }, 1500);
@@ -251,7 +253,8 @@ const Index = () => {
         // Marcar explícitamente que la calibración ha finalizado
         setVitalSigns(prev => ({
           ...prev,
-          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0"
+          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
+          lastArrhythmiaData: null
         }));
         
         // Después de un breve retraso, reestablecer el estado normal
@@ -259,7 +262,8 @@ const Index = () => {
           setCalibrationMessage("");
           setVitalSigns(prev => ({
             ...prev,
-            arrhythmiaStatus: "SIN ARRITMIAS|0"
+            arrhythmiaStatus: "SIN ARRITMIAS|0",
+            lastArrhythmiaData: null
           }));
         }, 1500);
       }
@@ -311,20 +315,20 @@ const Index = () => {
     fullResetVitalSigns();
     setElapsedTime(0);
     setHeartRate(0);
-    setVitalSigns({ 
-      spo2: 0, 
+    setVitalSigns({
+      spo2: 0,
       pressure: "--/--",
-      arrhythmiaStatus: "--",
+      arrhythmiaStatus: "SIN ARRITMIAS|0",
       glucose: 0,
       lipids: {
         totalCholesterol: 0,
         triglycerides: 0
       },
-      hemoglobin: 0
+      hemoglobin: 0,
+      lastArrhythmiaData: null
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
-    setLastArrhythmiaData(null);
     setCalibrationProgress(undefined);
   };
 
@@ -449,11 +453,8 @@ const Index = () => {
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
         setVitalSigns(vitals);
-        
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
+        if (vitals.arrhythmiaStatus) {
+          setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
         }
       }
       
@@ -486,7 +487,7 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-              rawArrhythmiaData={lastArrhythmiaData}
+              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
               preserveResults={showResults}
             />
           </div>
