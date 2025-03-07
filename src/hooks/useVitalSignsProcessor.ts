@@ -75,15 +75,9 @@ export const useVitalSignsProcessor = () => {
   const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
     
-    console.log("useVitalSignsProcessor: Procesando señal", {
-      valorEntrada: value,
-      rrDataPresente: !!rrData,
-      intervalosRR: rrData?.intervals.length || 0,
-      ultimosIntervalos: rrData?.intervals.slice(-3) || [],
-      contadorArritmias: arrhythmiaCounter,
+    console.log("useVitalSignsProcessor: Procesando señal durante calibración", {
       señalNúmero: processedSignals.current,
-      sessionId: sessionId.current,
-      timestamp: new Date().toISOString(),
+      valorEntrada: value,
       calibrando: processor.isCurrentlyCalibrating(),
       progresoCalibración: processor.getCalibrationProgress()
     });
@@ -91,6 +85,11 @@ export const useVitalSignsProcessor = () => {
     // Process signal through the vital signs processor
     const result = processor.processSignal(value, rrData);
     const currentTime = Date.now();
+
+    // Si estamos calibrando, asegurarnos de que el progreso se actualice
+    if (result.calibration?.isCalibrating) {
+      console.log("Progreso de calibración actualizado:", result.calibration.progress);
+    }
     
     // Guardar para depuración
     if (processedSignals.current % 20 === 0) {

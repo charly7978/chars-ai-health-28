@@ -87,7 +87,7 @@ export class VitalSignsProcessor {
   }
 
   public startCalibration(): void {
-    console.log("VitalSignsProcessor: Iniciando calibración avanzada");
+    console.log("VitalSignsProcessor: Iniciando calibración");
     this.isCalibrating = true;
     this.calibrationStartTime = Date.now();
     this.calibrationSamples = 0;
@@ -99,9 +99,9 @@ export class VitalSignsProcessor {
     this.glucoseSamples = [];
     this.lipidSamples = [];
     
-    for (const key in this.calibrationProgress) {
+    Object.keys(this.calibrationProgress).forEach(key => {
       this.calibrationProgress[key as keyof typeof this.calibrationProgress] = 0;
-    }
+    });
     
     if (this.calibrationTimer) {
       clearTimeout(this.calibrationTimer);
@@ -109,16 +109,10 @@ export class VitalSignsProcessor {
     
     this.calibrationTimer = setTimeout(() => {
       if (this.isCalibrating) {
-        console.log("VitalSignsProcessor: Finalizando calibración por tiempo límite");
+        console.log("VitalSignsProcessor: Completando calibración por tiempo");
         this.completeCalibration();
       }
     }, this.CALIBRATION_DURATION_MS);
-    
-    console.log("VitalSignsProcessor: Calibración iniciada con parámetros:", {
-      muestrasRequeridas: this.CALIBRATION_REQUIRED_SAMPLES,
-      tiempoMáximo: this.CALIBRATION_DURATION_MS,
-      inicioCalibración: new Date(this.calibrationStartTime).toISOString()
-    });
   }
   
   private completeCalibration(): void {
@@ -221,14 +215,22 @@ export class VitalSignsProcessor {
       this.calibrationSamples++;
       
       const elapsedTime = Date.now() - this.calibrationStartTime;
-      const timeProgress = Math.min(100, (elapsedTime / this.CALIBRATION_DURATION_MS) * 100);
-      const samplesProgress = Math.min(100, (this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100);
+      const timeProgress = (elapsedTime / this.CALIBRATION_DURATION_MS) * 100;
+      const samplesProgress = (this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100;
       
-      const progress = Math.min(timeProgress, samplesProgress);
+      const progress = Math.min(100, Math.max(timeProgress, samplesProgress));
       
-      for (const key in this.calibrationProgress) {
+      console.log("VitalSignsProcessor: Actualizando progreso de calibración", {
+        muestras: this.calibrationSamples,
+        tiempoTranscurrido: elapsedTime,
+        progresoTiempo: timeProgress.toFixed(1) + "%",
+        progresoMuestras: samplesProgress.toFixed(1) + "%",
+        progresoTotal: progress.toFixed(1) + "%"
+      });
+      
+      Object.keys(this.calibrationProgress).forEach(key => {
         this.calibrationProgress[key as keyof typeof this.calibrationProgress] = progress;
-      }
+      });
       
       if (progress >= 100 || this.forceCompleteCalibration) {
         this.completeCalibration();

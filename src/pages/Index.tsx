@@ -71,41 +71,37 @@ const Index = () => {
   }, [lastValidResults, isMonitoring, isCalibrating]);
 
   const startMonitoring = () => {
-    if (isMonitoring) {
-      finalizeMeasurement();
-    } else {
-      console.log("Iniciando monitoreo y calibración");
-      enterFullScreen();
-      setIsMonitoring(true);
-      setIsCameraOn(true);
-      setShowResults(false);
-      startProcessing();
-      setElapsedTime(0);
-      
-      // Reset all values before starting calibration
-      setVitalSigns({
-        spo2: 0,
-        pressure: "--/--",
-        arrhythmiaStatus: "--",
-        lastArrhythmiaData: null,
-        glucose: 0,
-        lipids: {
-          totalCholesterol: 0,
-          triglycerides: 0
-        },
-        hemoglobin: 0
-      });
-      
-      setHeartRate(0);
-      startAutoCalibration();
-    }
+    console.log("Iniciando monitoreo y calibración");
+    enterFullScreen();
+    setIsMonitoring(true);
+    setIsCameraOn(true);
+    setShowResults(false);
+    startProcessing();
+    setElapsedTime(0);
+    
+    // Reset all values before starting calibration
+    setVitalSigns({
+      spo2: 0,
+      pressure: "--/--",
+      arrhythmiaStatus: "--",
+      lastArrhythmiaData: null,
+      glucose: 0,
+      lipids: {
+        totalCholesterol: 0,
+        triglycerides: 0
+      },
+      hemoglobin: 0
+    });
+    
+    setHeartRate(0);
+    startAutoCalibration();
   };
 
   const startAutoCalibration = () => {
-    console.log("Iniciando calibración con control estricto");
+    console.log("Iniciando calibración automática");
     setIsCalibrating(true);
     
-    // Reset calibration progress first
+    // Reset calibration progress
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -126,14 +122,14 @@ const Index = () => {
   useEffect(() => {
     if (lastSignal?.fingerDetected && isMonitoring) {
       if (isCalibrating) {
-        // During calibration, only process calibration updates
+        // Durante calibración, solo procesar actualizaciones de calibración
         const vitals = processVitalSigns(lastSignal.filteredValue, null);
         
         if (vitals?.calibration) {
           console.log("Progreso de calibración:", vitals.calibration.progress);
           setCalibrationProgress(vitals.calibration);
           
-          // Check if calibration is complete
+          // Verificar si la calibración está completa
           const isComplete = Object.values(vitals.calibration.progress)
             .every(value => value >= 100);
             
@@ -144,7 +140,7 @@ const Index = () => {
           }
         }
       } else {
-        // Only process measurements after calibration is complete
+        // Solo procesar mediciones después de que la calibración esté completa
         const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
         setHeartRate(heartBeatResult.bpm);
         
