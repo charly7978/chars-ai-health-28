@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -67,6 +68,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const numValue = Number(value);
       if (numValue === 0) return { text: "--", color: "text-white", status: "" };
       
+      // Expanded glucose ranges
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
@@ -123,42 +125,34 @@ const VitalSign: React.FC<VitalSignProps> = ({
     }
     
     if (isArrhythmiaDisplay) {
-      console.log("Datos de arritmia recibidos:", value);
-      
       if (value === "--") {
         return { 
-          text: "--", 
-          color: "text-white",
-          status: ""
+          text: "--/--", 
+          color: "text-white" 
         };
       }
       
-      const parts = String(value).split('|');
-      const status = parts[0] || "";
-      const count = parts[1] || "";
+      const [status, count] = String(value).split('|');
       
-      if (status.includes("ARRITMIA DETECTADA")) {
+      if (status === "ARRITMIA DETECTADA") {
         const displayCount = count ? `(${count})` : "";
         return {
           text: `ARRITMIA DETECTADA ${displayCount}`.trim(),
-          color: "text-red-500",
-          status: "¡Arritmia detectada!"
+          color: "text-red-500"
         };
       }
       
-      if (status.includes("CALIBRANDO")) {
+      if (status === "CALIBRANDO...") {
         return {
           text: status,
-          color: "text-yellow-500",
-          status: "Calibrando sensores"
+          color: "text-yellow-500"
         };
       }
       
       const noArrhythmiaCount = count ? `(${count})` : "";
       return {
         text: `SIN ARRITMIAS ${noArrhythmiaCount}`.trim(),
-        color: "text-cyan-500",
-        status: "Ritmo normal"
+        color: "text-cyan-500"
       };
     }
     

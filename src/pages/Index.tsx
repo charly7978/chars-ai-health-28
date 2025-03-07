@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -411,27 +410,12 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        console.log("Vital signs processed: ", {
-          arrhythmiaStatus: vitals.arrhythmiaStatus,
-          lastArrhythmiaData: vitals.lastArrhythmiaData ? {
-            timestamp: vitals.lastArrhythmiaData.timestamp,
-            timeAgo: Date.now() - vitals.lastArrhythmiaData.timestamp
-          } : null,
-          timestamp: new Date().toISOString()
-        });
-        
         setVitalSigns(vitals);
         
-        // Asegurarnos de actualizar el contador de arritmias basado en el estado
-        if (vitals.arrhythmiaStatus) {
-          const parts = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(parts[1] || "0");
-          
-          // Si hay datos de la última arritmia, actualizarlos
-          if (vitals.lastArrhythmiaData) {
-            console.log("Nueva arritmia detectada, actualizando datos de visualización:", vitals.lastArrhythmiaData);
-            setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          }
+        if (vitals.lastArrhythmiaData) {
+          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          const [status, count] = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(count || "0");
         }
       }
       
@@ -511,7 +495,8 @@ const Index = () => {
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids?.totalCholesterol || '--'}/${vitalSigns.lipids?.triglycerides || '--'}`}
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
                 highlighted={showResults}
               />
             </div>

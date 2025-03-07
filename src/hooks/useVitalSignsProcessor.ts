@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -22,10 +21,10 @@ export const useVitalSignsProcessor = () => {
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   
-  // Advanced configuration based on clinical guidelines - configuración más sensible
-  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 300; // Reducido a 300ms para aumentar sensibilidad aún más
-  const MAX_ARRHYTHMIAS_PER_SESSION = 50; // Aumentado para permitir más detecciones
-  const SIGNAL_QUALITY_THRESHOLD = 0.35; // Reducido aún más para permitir detección con menor calidad
+  // Advanced configuration based on clinical guidelines
+  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
+  const MAX_ARRHYTHMIAS_PER_SESSION = 20; // Reasonable maximum for 30 seconds
+  const SIGNAL_QUALITY_THRESHOLD = 0.55; // Signal quality required for reliable detection
   
   useEffect(() => {
     console.log("useVitalSignsProcessor: Hook inicializado", {
@@ -126,7 +125,7 @@ export const useVitalSignsProcessor = () => {
     }
     
     // Enhanced RR interval analysis (more robust than previous)
-    if (rrData?.intervals && rrData.intervals.length >= 2) { // Reducido para detectar con menos intervalos
+    if (rrData?.intervals && rrData.intervals.length >= 3) {
       const lastThreeIntervals = rrData.intervals.slice(-3);
       const avgRR = lastThreeIntervals.reduce((a, b) => a + b, 0) / lastThreeIntervals.length;
       
@@ -135,7 +134,7 @@ export const useVitalSignsProcessor = () => {
       for (let i = 1; i < lastThreeIntervals.length; i++) {
         rmssd += Math.pow(lastThreeIntervals[i] - lastThreeIntervals[i-1], 2);
       }
-      rmssd = Math.sqrt(rmssd / (lastThreeIntervals.length - 1) || 1); // Evitar división por cero
+      rmssd = Math.sqrt(rmssd / (lastThreeIntervals.length - 1));
       
       // Enhanced arrhythmia detection criteria with SD metrics
       const lastRR = lastThreeIntervals[lastThreeIntervals.length - 1];
@@ -160,20 +159,20 @@ export const useVitalSignsProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Multi-parametric arrhythmia detection algorithm - Parámetros extremadamente sensibles
-      if ((rmssd > 20 && rrVariation > 0.10) || // Extremadamente sensible
-          (rrSD > 15 && rrVariation > 0.08) ||  // Extremadamente sensible
-          (lastRR > 1.15 * avgRR) ||            // Extremadamente sensible
-          (lastRR < 0.85 * avgRR)) {            // Extremadamente sensible
+      // Multi-parametric arrhythmia detection algorithm
+      if ((rmssd > 50 && rrVariation > 0.20) || // Primary condition
+          (rrSD > 35 && rrVariation > 0.18) ||  // Secondary condition
+          (lastRR > 1.4 * avgRR) ||             // Extreme outlier condition
+          (lastRR < 0.6 * avgRR)) {             // Extreme outlier condition
           
         console.log("useVitalSignsProcessor: Posible arritmia detectada", {
           rmssd,
           rrVariation,
           rrSD,
-          condición1: rmssd > 20 && rrVariation > 0.10,
-          condición2: rrSD > 15 && rrVariation > 0.08,
-          condición3: lastRR > 1.15 * avgRR,
-          condición4: lastRR < 0.85 * avgRR,
+          condición1: rmssd > 50 && rrVariation > 0.20,
+          condición2: rrSD > 35 && rrVariation > 0.18,
+          condición3: lastRR > 1.4 * avgRR,
+          condición4: lastRR < 0.6 * avgRR,
           timestamp: new Date().toISOString()
         });
         
@@ -218,7 +217,7 @@ export const useVitalSignsProcessor = () => {
       }
     }
     
-    // Si anteriormente se detectó una arritmia, mantener ese estado
+    // If we previously detected an arrhythmia, maintain that state
     if (hasDetectedArrhythmia.current) {
       return {
         ...result,
@@ -232,7 +231,7 @@ export const useVitalSignsProcessor = () => {
       ...result,
       arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
     };
-  }, [processor, arrhythmiaCounter, MIN_TIME_BETWEEN_ARRHYTHMIAS, MAX_ARRHYTHMIAS_PER_SESSION]);
+  }, [processor, arrhythmiaCounter]);
 
   // Soft reset: mantener los resultados pero reiniciar los procesadores
   const reset = useCallback(() => {
