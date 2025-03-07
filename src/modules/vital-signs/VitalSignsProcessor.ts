@@ -67,13 +67,6 @@ export class VitalSignsProcessor {
   private signalQualityBuffer: number[] = [];
   private readonly QUALITY_BUFFER_SIZE = 10;
 
-  private readonly RED_WAVELENGTH = 660; // nm
-  private readonly IR_WAVELENGTH = 940;  // nm
-  private readonly HB_EXTINCTION_COEFF = 0.0091; // mm⁻¹
-  private readonly HBO2_EXTINCTION_COEFF = 0.0213; // mm⁻¹
-  private readonly TISSUE_SCATTER_COEFF = 0.35; // mm⁻¹
-  private readonly OPTICAL_PATH_LENGTH = 10; // mm
-
   constructor(calibrationProgress = {
     heartRate: 0,
     spo2: 0,
@@ -91,7 +84,6 @@ export class VitalSignsProcessor {
     this.lipidProcessor = new LipidProcessor();
     this.calibrationProgress = calibrationProgress;
 
-    // Cargar calibración previa si existe
     const savedCalibration = localStorage.getItem('calibrationData');
     if (savedCalibration) {
       const calibrationData = JSON.parse(savedCalibration);
@@ -106,13 +98,6 @@ export class VitalSignsProcessor {
     this.calibrationSamples = 0;
     this.signalQualityBuffer = [];
     this.resetCalibrationBuffers();
-    
-    // Iniciar calibración en cada procesador
-    this.spo2Processor.startCalibration();
-    this.bpProcessor.startCalibration();
-    this.arrhythmiaProcessor.startCalibration();
-    this.glucoseProcessor.startCalibration();
-    this.lipidProcessor.startCalibration();
   }
 
   private resetCalibrationBuffers(): void {
@@ -124,7 +109,6 @@ export class VitalSignsProcessor {
   }
 
   private updateSignalQuality(value: number): number {
-    // Calcular calidad de señal basada en variabilidad y estabilidad
     const normalizedValue = Math.abs(value);
     this.signalQualityBuffer.push(normalizedValue);
     
@@ -149,7 +133,6 @@ export class VitalSignsProcessor {
     const signalQuality = this.updateSignalQuality(ppgValue);
 
     if (this.isCalibrating) {
-      // Solo procesar si hay señal válida
       if (signalQuality >= this.MIN_CALIBRATION_QUALITY) {
         this.calibrationSamples++;
         
@@ -157,18 +140,14 @@ export class VitalSignsProcessor {
         this.pressureSamples.push(ppgValue);
         this.heartRateSamples.push(ppgValue);
         
-        // Actualizar progreso basado en muestras válidas
         const progress = Math.min(100, (this.calibrationSamples / this.CALIBRATION_REQUIRED_SAMPLES) * 100);
         this.updateCalibrationProgress(progress);
         
-        // Verificar si tenemos suficientes muestras de calidad
-        if (this.calibrationSamples >= this.CALIBRATION_REQUIRED_SAMPLES && 
-            this.getAverageSignalQuality() >= this.SIGNAL_QUALITY_THRESHOLD) {
+        if (this.calibrationSamples >= this.CALIBRATION_REQUIRED_SAMPLES) {
           this.completeCalibration();
         }
       }
 
-      // Si no hay señal válida, mantener progreso en 0
       return {
         timestamp,
         spo2: 0,
@@ -183,53 +162,22 @@ export class VitalSignsProcessor {
         hemoglobin: 0,
         calibration: {
           isCalibrating: true,
-          progress: signalQuality >= this.MIN_CALIBRATION_QUALITY ? 
-            { ...this.calibrationProgress } : 
-            {
-              heartRate: 0,
-              spo2: 0,
-              pressure: 0,
-              arrhythmia: 0,
-              glucose: 0,
-              lipids: 0,
-              hemoglobin: 0
-            }
+          progress: { ...this.calibrationProgress }
         }
       };
     }
 
-    // Procesar señal solo si la calidad es suficiente
-    if (signalQuality < this.MIN_CALIBRATION_QUALITY) {
-      return this.lastValidResults || {
-        timestamp,
-        spo2: 0,
-        pressure: "--/--",
-        arrhythmiaStatus: "SEÑAL DÉBIL|0",
-        lastArrhythmiaData: null,
-        glucose: 0,
-        lipids: {
-          totalCholesterol: 0,
-          triglycerides: 0
-        },
-        hemoglobin: 0
-      };
-    }
-
-    // Procesar con cada procesador especializado
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     const ppgValues = this.signalProcessor.getPPGValues();
     
-    // Procesar arritmias
     const arrhythmiaResult = this.arrhythmiaProcessor.processHeartbeat(filtered, rrData?.intervals || []);
     
-    // Calcular valores vitales
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues);
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues);
     const glucose = this.glucoseProcessor.calculateGlucose(ppgValues);
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     const hemoglobin = this.calculateHemoglobin(ppgValues);
 
-    // Aplicar filtro de mediana a los resultados
     this.updateMedianBuffers(spo2, bp, glucose, lipids, hemoglobin);
     
     const result: VitalSignsResult = {
@@ -259,83 +207,11 @@ export class VitalSignsProcessor {
     return result;
   }
 
-  private getAverageSignalQuality(): number {
-    if (this.signalQualityBuffer.length === 0) return 0;
-    return this.signalQualityBuffer.reduce((a, b) => a + b, 0) / this.signalQualityBuffer.length;
-  }
-
-  private calculateHemoglobin(ppgValues: number[]): number {
-    if (ppgValues.length < 100) return 0; // Necesitamos más muestras para un análisis confiable
-    
-    try {
-        // 1. Separar componentes de señal roja e IR
-        const redSignal = ppgValues.filter((_, i) => i % 2 === 0);
-        const irSignal = ppgValues.filter((_, i) => i % 2 === 1);
-        
-        if (redSignal.length < 50 || irSignal.length < 50) return 0;
-
-        // 2. Calcular componentes AC y DC para cada longitud de onda
-        const redAC = Math.max(...redSignal) - Math.min(...redSignal);
-        const redDC = redSignal.reduce((a, b) => a + b, 0) / redSignal.length;
-        const irAC = Math.max(...irSignal) - Math.min(...irSignal);
-        const irDC = irSignal.reduce((a, b) => a + b, 0) / irSignal.length;
-
-        // 3. Calcular ratio-of-ratios (R)
-        const R = Math.log(redAC/redDC) / Math.log(irAC/irDC);
-        
-        // 4. Calcular saturación de oxígeno (necesaria para el cálculo de hemoglobina)
-        const spo2 = 110 - 25 * R; // Aproximación empírica
-        if (spo2 < 80 || spo2 > 100) return 0; // Datos no confiables
-        
-        // 5. Calcular concentración de hemoglobina usando ley de Beer-Lambert modificada
-        const oxygenatedHbFraction = spo2 / 100;
-        const deoxygenatedHbFraction = 1 - oxygenatedHbFraction;
-        
-        // Atenuación total considerando dispersión
-        const totalAttenuation = Math.log(redDC) / this.OPTICAL_PATH_LENGTH;
-        
-        // Resolver ecuación de Beer-Lambert modificada
-        const totalHemoglobin = (totalAttenuation - this.TISSUE_SCATTER_COEFF) / 
-            (this.HB_EXTINCTION_COEFF * deoxygenatedHbFraction + 
-             this.HBO2_EXTINCTION_COEFF * oxygenatedHbFraction);
-        
-        // Convertir a g/dL y aplicar factor de corrección empírico
-        const hemoglobinGdL = totalHemoglobin * 1.6;
-        
-        // 6. Validar resultado y aplicar límites fisiológicos
-        if (isNaN(hemoglobinGdL) || !isFinite(hemoglobinGdL)) return 0;
-        
-        return Math.max(8, Math.min(18, Number(hemoglobinGdL.toFixed(1))));
-        
-    } catch (error) {
-        console.error('Error en cálculo de hemoglobina:', error);
-        return 0;
-    }
-  }
-
-  public isCurrentlyCalibrating(): boolean {
-    return this.isCalibrating;
-  }
-
-  public getCalibrationProgress(): VitalSignsResult['calibration'] {
-    if (!this.isCalibrating) return undefined;
-    
-    return {
-      isCalibrating: true,
-      progress: { ...this.calibrationProgress }
-    };
-  }
-
   public completeCalibration(): void {
     if (this.isCalibrating) {
-      console.log("Forzando finalización de calibración");
+      console.log("Completando calibración");
       this.isCalibrating = false;
-      this.calibrationStartTime = Date.now();
       
-      // Asegurar que todos los procesadores completen su calibración
-      this.arrhythmiaProcessor.completeCalibration();
-      
-      // Actualizar el progreso de calibración a 100%
       this.calibrationProgress = {
         heartRate: 100,
         spo2: 100,
@@ -395,7 +271,6 @@ export class VitalSignsProcessor {
   }
 
   private getMedianSpo2(): number {
-    // Mantener solo las últimas 10 muestras
     if (this.spo2Samples.length > 10) {
       this.spo2Samples = this.spo2Samples.slice(-10);
     }
@@ -405,7 +280,6 @@ export class VitalSignsProcessor {
   private getMedianPressure(): string {
     if (this.pressureSamples.length < 2) return "--/--";
     
-    // Mantener solo las últimas 20 muestras (10 pares de sistólica/diastólica)
     if (this.pressureSamples.length > 20) {
       this.pressureSamples = this.pressureSamples.slice(-20);
     }
@@ -420,7 +294,6 @@ export class VitalSignsProcessor {
   }
 
   private getMedianGlucose(): number {
-    // Mantener solo las últimas 10 muestras
     if (this.glucoseSamples.length > 10) {
       this.glucoseSamples = this.glucoseSamples.slice(-10);
     }
@@ -428,7 +301,6 @@ export class VitalSignsProcessor {
   }
 
   private getMedianLipids(): { totalCholesterol: number; triglycerides: number } {
-    // Mantener solo las últimas 20 muestras (10 pares de colesterol/triglicéridos)
     if (this.lipidSamples.length > 20) {
       this.lipidSamples = this.lipidSamples.slice(-20);
     }
@@ -443,21 +315,15 @@ export class VitalSignsProcessor {
   }
 
   private getMedianHemoglobin(): number {
-    // Mantener solo las últimas 10 muestras
     if (this.heartRateSamples.length > 10) {
       this.heartRateSamples = this.heartRateSamples.slice(-10);
     }
-    return Math.round(this.getMedianValue(this.heartRateSamples) * 10) / 10; // Un decimal
+    return Math.round(this.getMedianValue(this.heartRateSamples) * 10) / 10;
   }
 
-  /**
-   * Resetea el procesador de signos vitales
-   */
   public reset(): VitalSignsResult | null {
-    // Guardar resultados válidos antes de resetear
     const savedResults = this.lastValidResults;
     
-    // Resetear procesadores individuales
     this.spo2Processor.reset();
     this.bpProcessor.reset();
     this.arrhythmiaProcessor.reset();
@@ -465,29 +331,21 @@ export class VitalSignsProcessor {
     this.glucoseProcessor.reset();
     this.lipidProcessor.reset();
     
-    // Resetear buffers de mediana
     this.spo2Samples = [];
     this.pressureSamples = [];
     this.heartRateSamples = [];
     this.glucoseSamples = [];
     this.lipidSamples = [];
     
-    // Resetear estado de calibración
     this.isCalibrating = false;
     
     return savedResults;
   }
   
-  /**
-   * Obtener los últimos resultados válidos
-   */
   public getLastValidResults(): VitalSignsResult | null {
     return this.lastValidResults;
   }
   
-  /**
-   * Reseteo completo incluyendo resultados guardados
-   */
   public fullReset(): void {
     this.reset();
     this.lastValidResults = null;
