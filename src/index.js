@@ -5,6 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
+import MonitorButton from "@/components/MonitorButton";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -154,15 +155,12 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
       setHeartRate(calculatedHeartRate);
       
-      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        // Solo actualizar cuando tengamos valores reales
         setVitalSigns({
           spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
           pressure: vitals.pressure || "--/--",
@@ -173,7 +171,6 @@ const Index = () => {
       
       setSignalQuality(lastSignal.quality);
     } else {
-      // Si no hay señal válida, resetear valores
       setHeartRate(0);
       setVitalSigns({ 
         spo2: 0, 
@@ -189,9 +186,11 @@ const Index = () => {
     <div 
       className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
-        height: 'calc(100vh + env(safe-area-inset-bottom))',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)'
+        height: '100vh',
+        width: '100vw',
+        overflow: 'hidden',
+        margin: 0,
+        padding: 0
       }}
     >
       <div className="flex-1 relative">
@@ -206,6 +205,9 @@ const Index = () => {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex-1">
+            <div className="absolute top-0 left-0 right-0 bg-amber-700 bg-opacity-80 p-1">
+              <span className="text-lg font-bold text-white">PPG Vital Signs Monitor</span>
+            </div>
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
@@ -249,15 +251,14 @@ const Index = () => {
           )}
 
           <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <button 
+            <MonitorButton 
+              isMonitoring={isMonitoring}
               onClick={startMonitoring}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
-            >
-              INICIAR
-            </button>
+            />
             <button 
               onClick={stopMonitoring}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
             >
               RESET
             </button>

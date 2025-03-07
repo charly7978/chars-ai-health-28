@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle, Heart, Check } from 'lucide-react';
+import { Fingerprint } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -37,9 +37,6 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
-  const [calibrationCompleted, setCalibrationCompleted] = useState(false);
-  const [measurementEnded, setMeasurementEnded] = useState(false);
-  const [arrhythmiaAlertEndTime, setArrhythmiaAlertEndTime] = useState<number | null>(null);
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -73,37 +70,6 @@ const PPGSignalMeter = ({
       lastValueRef.current = null;
     }
   }, [preserveResults, isFingerDetected]);
-
-  useEffect(() => {
-    if (measurementEnded && showArrhythmiaAlert) {
-      setArrhythmiaAlertEndTime(Date.now() + 10000);
-    }
-  }, [measurementEnded, showArrhythmiaAlert]);
-
-  useEffect(() => {
-    if (arrhythmiaStatus && arrhythmiaStatus.includes("SIN ARRITMIAS") && !calibrationCompleted) {
-      if (quality > 60 && isFingerDetected) {
-        setCalibrationCompleted(true);
-        setShowArrhythmiaAlert(false);
-      }
-    }
-    
-    if (arrhythmiaStatus && arrhythmiaStatus.includes("ARRITMIA")) {
-      const currentTime = Date.now();
-      const [_, countPart] = arrhythmiaStatus.split('|');
-      const newCount = parseInt(countPart || '0', 10);
-      
-      if (newCount > arrhythmiaCountRef.current) {
-        setShowArrhythmiaAlert(true);
-        setCalibrationCompleted(false);
-        arrhythmiaCountRef.current = newCount;
-        lastArrhythmiaTime.current = currentTime;
-      } else if (currentTime - lastArrhythmiaTime.current > 5000 && !measurementEnded) {
-        setShowArrhythmiaAlert(false);
-        setCalibrationCompleted(true);
-      }
-    }
-  }, [arrhythmiaStatus, quality, isFingerDetected, calibrationCompleted, measurementEnded]);
 
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
@@ -182,83 +148,26 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     if (arrhythmiaStatus) {
-      const [status, countStr] = arrhythmiaStatus.split('|');
+      const [status, count] = arrhythmiaStatus.split('|');
       
-      if (status.includes("ARRITMIA") && rawArrhythmiaData && 
-          Date.now() - rawArrhythmiaData.timestamp < 500 && !showArrhythmiaAlert) {
-        setShowArrhythmiaAlert(true);
-      } 
-    }
-    
-    if (calibrationCompleted && !showArrhythmiaAlert) {
-      const gradient = ctx.createLinearGradient(10, 15, 160, 45);
-      gradient.addColorStop(0, '#D3E4FD');
-      gradient.addColorStop(1, '#E6F4FF');
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.roundRect(10, 15, 160, 30, 8);
-      ctx.fill();
-      
-      ctx.strokeStyle = '#33C3F0';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      
-      ctx.fillStyle = '#0369A1';
-      ctx.font = 'bold 16px Inter';
-      ctx.textAlign = 'left';
-      ctx.fillText('LATIDO NORMAL', 45, 35);
-      
-      ctx.beginPath();
-      ctx.arc(30, 30, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#33C3F0';
-      ctx.fill();
-      
-      ctx.beginPath();
-      ctx.moveTo(25, 30);
-      ctx.lineTo(29, 34);
-      ctx.lineTo(35, 26);
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    if (showArrhythmiaAlert) {
-      const now = Date.now();
-      if (arrhythmiaAlertEndTime && now > arrhythmiaAlertEndTime) {
-        setShowArrhythmiaAlert(false);
-        setArrhythmiaAlertEndTime(null);
-      } else {
-        ctx.fillStyle = 'rgba(254, 202, 202, 0.7)';
-        ctx.beginPath();
-        ctx.roundRect(10, 15, 180, 30, 5);
-        ctx.fill();
-        
-        ctx.fillStyle = '#ea384c';
+      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
+        ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText('ARRITMIA DETECTADA', 45, 35);
+        ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
+        setShowArrhythmiaAlert(true);
+      } 
+      else if (status.includes("ARRITMIA") && Number(count) > 1) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
         
-        ctx.beginPath();
-        ctx.arc(30, 30, 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#DC2626';
-        ctx.fill();
-        
-        ctx.beginPath();
-        ctx.moveTo(30, 25);
-        ctx.lineTo(30, 32);
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.arc(30, 35, 1, 0, Math.PI * 2);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
+        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
       }
     }
     
     ctx.stroke();
-  }, [arrhythmiaStatus, showArrhythmiaAlert, calibrationCompleted, arrhythmiaAlertEndTime, rawArrhythmiaData]);
+  }, [arrhythmiaStatus, showArrhythmiaAlert]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
@@ -346,6 +255,8 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
     drawGrid(ctx);
     
     if (preserveResults && !isFingerDetected) {
@@ -369,8 +280,7 @@ const PPGSignalMeter = ({
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
         arrhythmiaStatus?.includes("ARRITMIA") && 
-        now - rawArrhythmiaData.timestamp < 500 && 
-        !showArrhythmiaAlert) {
+        now - rawArrhythmiaData.timestamp < 500) {
       isArrhythmia = true;
       lastArrhythmiaTime.current = rawArrhythmiaData.timestamp;
     }
@@ -434,6 +344,27 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
+      if (arrhythmiaStatus) {
+        const [status, count] = arrhythmiaStatus.split('|');
+        
+        if (status === "LATIDO_NORMAL") {
+          ctx.fillStyle = '#0EA5E9';
+          ctx.font = 'bold 20px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
+        } else if (status === "ARRITMIA_DETECTADA") {
+          ctx.fillStyle = '#DC2626';
+          ctx.font = 'bold 20px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
+          
+          if (parseInt(count) > 0) {
+            ctx.font = 'bold 16px Inter';
+            ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
+          }
+        }
+      }
+
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
@@ -451,16 +382,21 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            ctx.font = 'bold 12px Inter';
-            ctx.fillStyle = '#F97316';
+            ctx.font = 'bold 14px Inter';
             ctx.textAlign = 'center';
+            ctx.strokeStyle = '#DC2626';
+            ctx.lineWidth = 1;
+            ctx.strokeText('ARRITMIA', x, y - 25);
+            
+            ctx.fillStyle = '#F59E0B';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
-
-          ctx.font = 'bold 12px Inter';
+          
+          const value = Math.abs(peak.value / verticalScale).toFixed(2);
+          ctx.font = 'bold 14px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
-          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
+          ctx.fillText(value, x, y - 15);
         }
       });
     }
@@ -480,31 +416,13 @@ const PPGSignalMeter = ({
 
   const handleReset = useCallback(() => {
     setShowArrhythmiaAlert(false);
-    setCalibrationCompleted(false);
-    setMeasurementEnded(false);
-    setArrhythmiaAlertEndTime(null);
-    arrhythmiaCountRef.current = 0;
     peaksRef.current = [];
     onReset();
   }, [onReset]);
 
-  const handleStartStop = useCallback(() => {
-    if (showArrhythmiaAlert) {
-      setMeasurementEnded(true);
-    }
-    
-    if (!calibrationCompleted && !showArrhythmiaAlert && isFingerDetected && quality > 60) {
-      setTimeout(() => {
-        setCalibrationCompleted(true);
-      }, 3000);
-    }
-    
-    onStartMeasurement();
-  }, [onStartMeasurement, showArrhythmiaAlert, calibrationCompleted, isFingerDetected, quality]);
-
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-3">
+    <div className="fixed inset-0">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="w-[180px]">
@@ -546,7 +464,7 @@ const PPGSignalMeter = ({
 
       <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
-          onClick={handleStartStop}
+          onClick={onStartMeasurement}
           className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
         >
           <span className="text-base font-semibold">
