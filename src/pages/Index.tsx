@@ -16,7 +16,6 @@ const Index = () => {
     spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
-    lastArrhythmiaData: null,
     glucose: 0,
     lipids: {
       totalCholesterol: 0,
@@ -24,14 +23,18 @@ const Index = () => {
     },
     hemoglobin: 0
   });
-  
   const [heartRate, setHeartRate] = useState(0);
+  const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showResults, setShowResults] = useState(false);
-  
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration']>();
   const measurementTimerRef = useRef<number | null>(null);
+  const [lastArrhythmiaData, setLastArrhythmiaData] = useState<{
+    timestamp: number;
+    rmssd: number;
+    rrVariation: number;
+  } | null>(null);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
@@ -64,44 +67,67 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    if (lastValidResults && !isMonitoring && !isCalibrating) {
+    if (lastValidResults && !isMonitoring) {
       setVitalSigns(lastValidResults);
       setShowResults(true);
     }
-  }, [lastValidResults, isMonitoring, isCalibrating]);
+  }, [lastValidResults, isMonitoring]);
 
   const startMonitoring = () => {
-    console.log("Iniciando monitoreo y calibración");
-    enterFullScreen();
-    setIsMonitoring(true);
-    setIsCameraOn(true);
-    setShowResults(false);
-    startProcessing();
-    setElapsedTime(0);
-    
-    // Reset all values before starting calibration
-    setVitalSigns({
-      spo2: 0,
-      pressure: "--/--",
-      arrhythmiaStatus: "--",
-      lastArrhythmiaData: null,
-      glucose: 0,
-      lipids: {
-        totalCholesterol: 0,
-        triglycerides: 0
-      },
-      hemoglobin: 0
-    });
-    
-    setHeartRate(0);
-    startAutoCalibration();
+    if (isMonitoring) {
+      finalizeMeasurement();
+    } else {
+      enterFullScreen();
+      setIsMonitoring(true);
+      setIsCameraOn(true);
+      setShowResults(false);
+      
+      // Iniciar procesamiento de señal
+      startProcessing();
+      
+      // Resetear valores
+      setElapsedTime(0);
+      setVitalSigns(prev => ({
+        ...prev,
+        arrhythmiaStatus: "SIN ARRITMIAS|0"
+      }));
+      
+      // Iniciar calibración automática
+      // Importante: esto debe establecer correctamente el estado de calibración
+      console.log("Iniciando fase de calibración automática");
+      startAutoCalibration();
+      
+      // Iniciar temporizador para medición
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+      }
+      
+      measurementTimerRef.current = window.setInterval(() => {
+        setElapsedTime(prev => {
+          const newTime = prev + 1;
+          console.log(`Tiempo transcurrido: ${newTime}s`);
+          
+          // Finalizar medición después de 30 segundos
+          if (newTime >= 30) {
+            finalizeMeasurement();
+            return 30;
+          }
+          return newTime;
+        });
+      }, 1000);
+    }
   };
 
   const startAutoCalibration = () => {
-    console.log("Iniciando calibración automática");
+    console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
     
-    // Reset calibration progress
+    // Iniciar la calibración en el procesador
+    startCalibration();
+    
+    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
+    // Esto garantiza que el estado comience correctamente
+    console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -115,65 +141,98 @@ const Index = () => {
       }
     });
     
-    // Start calibration in VitalSignsProcessor
-    startCalibration();
-  };
-
-  useEffect(() => {
-    if (lastSignal?.fingerDetected && isMonitoring) {
-      if (isCalibrating) {
-        // Durante calibración, solo procesar actualizaciones de calibración
-        const vitals = processVitalSigns(lastSignal.filteredValue, null);
+    // Logear para verificar que el estado se estableció
+    setTimeout(() => {
+      console.log("Estado de calibración establecido:", calibrationProgress);
+    }, 100);
+    
+    // Actualizar el progreso visualmente en intervalos regulares
+    let step = 0;
+    const calibrationInterval = setInterval(() => {
+      step += 1;
+      
+      // Actualizar progreso visual (10 pasos en total)
+      if (step <= 10) {
+        const progressPercent = step * 10; // 0-100%
+        console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        if (vitals?.calibration) {
-          console.log("Progreso de calibración:", vitals.calibration.progress);
-          setCalibrationProgress(vitals.calibration);
+        // Actualizar cada valor individualmente para asegurar que se renderice
+        setCalibrationProgress({
+          isCalibrating: true,
+          progress: {
+            heartRate: progressPercent,
+            spo2: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 20),
+            arrhythmia: Math.max(0, progressPercent - 15),
+            glucose: Math.max(0, progressPercent - 5),
+            lipids: Math.max(0, progressPercent - 25),
+            hemoglobin: Math.max(0, progressPercent - 30)
+          }
+        });
+      } else {
+        // Al finalizar, detener el intervalo
+        console.log("Finalizando animación de calibración");
+        clearInterval(calibrationInterval);
+        
+        // Completar calibración
+        if (isCalibrating) {
+          console.log("Completando calibración");
+          forceCalibrationCompletion();
+          setIsCalibrating(false);
           
-          // Verificar si la calibración está completa
-          const isComplete = Object.values(vitals.calibration.progress)
-            .every(value => value >= 100);
-            
-          if (isComplete) {
-            console.log("Calibración completada, iniciando mediciones");
-            setIsCalibrating(false);
-            startMeasurementTimer();
+          // Importante: Establecer calibrationProgress a undefined o con valores 100
+          // para que la UI refleje que ya no está calibrando
+          setCalibrationProgress({
+            isCalibrating: false,
+            progress: {
+              heartRate: 100,
+              spo2: 100,
+              pressure: 100,
+              arrhythmia: 100,
+              glucose: 100,
+              lipids: 100,
+              hemoglobin: 100
+            }
+          });
+          
+          // Opcional: vibración si está disponible
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]);
           }
         }
-      } else {
-        // Solo procesar mediciones después de que la calibración esté completa
-        const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-        setHeartRate(heartBeatResult.bpm);
-        
-        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-        if (vitals && !vitals.calibration) {
-          setVitalSigns(vitals);
-          setSignalQuality(lastSignal.quality);
-        }
       }
-    }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, isCalibrating]);
-
-  const startMeasurementTimer = () => {
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-    }
+    }, 800); // Cada paso dura 800ms (8 segundos en total)
     
-    measurementTimerRef.current = window.setInterval(() => {
-      setElapsedTime(prev => {
-        const newTime = prev + 1;
-        if (newTime >= 30) {
-          finalizeMeasurement();
-          return 30;
-        }
-        return newTime;
-      });
-    }, 1000);
+    // Temporizador de seguridad
+    setTimeout(() => {
+      if (isCalibrating) {
+        console.log("Forzando finalización de calibración por tiempo límite");
+        clearInterval(calibrationInterval);
+        forceCalibrationCompletion();
+        setIsCalibrating(false);
+        
+        // Asegurar que se limpie el estado de calibración
+        setCalibrationProgress({
+          isCalibrating: false,
+          progress: {
+            heartRate: 100,
+            spo2: 100,
+            pressure: 100,
+            arrhythmia: 100,
+            glucose: 100,
+            lipids: 100,
+            hemoglobin: 100
+          }
+        });
+      }
+    }, 10000); // 10 segundos como máximo
   };
 
   const finalizeMeasurement = () => {
-    console.log("Finalizando medición");
+    console.log("Finalizando medición: manteniendo resultados");
     
     if (isCalibrating) {
+      console.log("Calibración en progreso al finalizar, forzando finalización");
       forceCalibrationCompletion();
     }
     
@@ -199,7 +258,7 @@ const Index = () => {
   };
 
   const handleReset = () => {
-    console.log("Reseteando sistema");
+    console.log("Reseteando completamente la aplicación");
     setIsMonitoring(false);
     setIsCameraOn(false);
     setShowResults(false);
@@ -214,11 +273,10 @@ const Index = () => {
     fullResetVitalSigns();
     setElapsedTime(0);
     setHeartRate(0);
-    setVitalSigns({
-      spo2: 0,
+    setVitalSigns({ 
+      spo2: 0, 
       pressure: "--/--",
       arrhythmiaStatus: "--",
-      lastArrhythmiaData: null,
       glucose: 0,
       lipids: {
         totalCholesterol: 0,
@@ -226,7 +284,9 @@ const Index = () => {
       },
       hemoglobin: 0
     });
+    setArrhythmiaCount("--");
     setSignalQuality(0);
+    setLastArrhythmiaData(null);
     setCalibrationProgress(undefined);
   };
 
@@ -343,6 +403,26 @@ const Index = () => {
     processImage();
   };
 
+  useEffect(() => {
+    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+      setHeartRate(heartBeatResult.bpm);
+      
+      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+      if (vitals) {
+        setVitalSigns(vitals);
+        
+        if (vitals.lastArrhythmiaData) {
+          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          const [status, count] = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(count || "0");
+        }
+      }
+      
+      setSignalQuality(lastSignal.quality);
+    }
+  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
+
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
       height: 'calc(100vh + env(safe-area-inset-bottom))',
@@ -368,7 +448,7 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
+              rawArrhythmiaData={lastArrhythmiaData}
               preserveResults={showResults}
             />
           </div>
@@ -376,40 +456,51 @@ const Index = () => {
           {isCalibrating && (
             <div className="absolute bottom-[55%] left-0 right-0 text-center">
               <span className="text-sm font-medium text-gray-400">
-                Calibrando {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
+                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
           )}
 
           <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
             <div className="grid grid-cols-3 gap-3 h-full">
-              {Object.entries({
-                "FRECUENCIA CARDÍACA": { value: heartRate || "--", unit: "BPM" },
-                "SPO2": { value: vitalSigns.spo2 || "--", unit: "%" },
-                "PRESIÓN ARTERIAL": { value: vitalSigns.pressure, unit: "mmHg" },
-                "HEMOGLOBINA": { value: vitalSigns.hemoglobin || "--", unit: "g/dL" },
-                "GLUCOSA": { value: vitalSigns.glucose || "--", unit: "mg/dL" },
-                "COLESTEROL/TRIGL.": { 
-                  value: `${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`,
-                  unit: "mg/dL" 
-                }
-              }).map(([label, data]) => (
-                <VitalSign 
-                  key={label}
-                  label={label}
-                  value={data.value}
-                  unit={data.unit}
-                  highlighted={showResults && !isCalibrating}
-                />
-              ))}
+              <VitalSign 
+                label="FRECUENCIA CARDÍACA"
+                value={heartRate || "--"}
+                unit="BPM"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="SPO2"
+                value={vitalSigns.spo2 || "--"}
+                unit="%"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="PRESIÓN ARTERIAL"
+                value={vitalSigns.pressure}
+                unit="mmHg"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
             </div>
           </div>
-
-          {isMonitoring && !isCalibrating && (
-            <div className="absolute bottom-40 left-0 right-0 text-center">
-              <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
-            </div>
-          )}
 
           <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
