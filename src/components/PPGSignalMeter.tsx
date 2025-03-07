@@ -182,6 +182,11 @@ const PPGSignalMeter = ({
     }
     
     if (calibrationCompleted && !showArrhythmiaAlert) {
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(10, 15, 150, 30, 5);
+      ctx.fill();
+      
       ctx.fillStyle = '#0EA5E9';
       ctx.font = 'bold 16px Inter';
       ctx.textAlign = 'left';
@@ -207,6 +212,11 @@ const PPGSignalMeter = ({
         setShowArrhythmiaAlert(false);
         setArrhythmiaAlertEndTime(null);
       } else {
+        ctx.fillStyle = 'rgba(254, 202, 202, 0.7)';
+        ctx.beginPath();
+        ctx.roundRect(10, 15, 180, 30, 5);
+        ctx.fill();
+        
         ctx.fillStyle = '#ea384c';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
