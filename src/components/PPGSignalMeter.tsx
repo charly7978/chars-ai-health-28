@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -148,22 +148,15 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     if (arrhythmiaStatus) {
-      const [status, count] = arrhythmiaStatus.split('|');
+      const [status, _] = arrhythmiaStatus.split('|');
       
-      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
+      if (status.includes("ARRITMIA") && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
-      else if (status.includes("ARRITMIA") && Number(count) > 1) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 16px Inter';
-        ctx.textAlign = 'left';
-        
-        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
-      }
     }
     
     ctx.stroke();
@@ -255,8 +248,6 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
     drawGrid(ctx);
     
     if (preserveResults && !isFingerDetected) {
@@ -344,27 +335,6 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      if (arrhythmiaStatus) {
-        const [status, count] = arrhythmiaStatus.split('|');
-        
-        if (status === "LATIDO_NORMAL") {
-          ctx.fillStyle = '#0EA5E9';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
-        } else if (status === "ARRITMIA_DETECTADA") {
-          ctx.fillStyle = '#DC2626';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
-          
-          if (parseInt(count) > 0) {
-            ctx.font = 'bold 16px Inter';
-            ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
-          }
-        }
-      }
-
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
@@ -382,21 +352,16 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            ctx.font = 'bold 14px Inter';
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
-            ctx.strokeStyle = '#DC2626';
-            ctx.lineWidth = 1;
-            ctx.strokeText('ARRITMIA', x, y - 25);
-            
-            ctx.fillStyle = '#F59E0B';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
-          
-          const value = Math.abs(peak.value / verticalScale).toFixed(2);
-          ctx.font = 'bold 14px Inter';
+
+          ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
-          ctx.fillText(value, x, y - 15);
+          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
       });
     }
@@ -421,8 +386,8 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center pt-3">
+    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="w-[180px]">
