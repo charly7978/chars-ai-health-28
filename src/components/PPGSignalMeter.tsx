@@ -92,8 +92,8 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#f1f5f9');
-    gradient.addColorStop(1, '#e2e8f0');
+    gradient.addColorStop(0, '#FEF7CD');
+    gradient.addColorStop(1, '#FDE1D3');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -255,8 +255,7 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
-    ctx.fillStyle = '#F8FAFC';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawGrid(ctx);
     
