@@ -40,8 +40,21 @@ export class SignalProcessor {
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
    */
   public applySMAFilter(value: number): number {
+    console.log("[PPG_SIGNAL]", {
+      timestamp: Date.now(),
+      stage: "FILTER_INPUT",
+      rawValue: value,
+      bufferSize: this.ppgValues.length,
+      baseline: this.baselineValue
+    });
+
     if (typeof value !== 'number' || isNaN(value)) {
-      console.warn('SignalProcessor: Invalid input value', value);
+      console.log("[PPG_SIGNAL]", {
+        timestamp: Date.now(),
+        stage: "FILTER_ERROR",
+        error: "invalid_input",
+        value
+      });
       return 0;
     }
 
@@ -63,14 +76,34 @@ export class SignalProcessor {
     const smaBuffer = this.ppgValues.slice(-this.SMA_WINDOW);
     const smaValue = smaBuffer.reduce((a, b) => a + b, 0) / smaBuffer.length;
     
+    console.log("[PPG_SIGNAL]", {
+      timestamp: Date.now(),
+      stage: "SMA_FILTER",
+      inputValue: value,
+      smaValue,
+      windowSize: smaBuffer.length,
+      baseline: this.baselineValue
+    });
+    
     // Apply denoising and SG filter
     const denoised = this.waveletDenoise(smaValue);
     
+    let finalValue = denoised;
     if (this.ppgValues.length >= this.SG_COEFFS.length) {
-      return this.applySavitzkyGolayFilter(denoised);
+      finalValue = this.applySavitzkyGolayFilter(denoised);
     }
+
+    console.log("[PPG_SIGNAL]", {
+      timestamp: Date.now(),
+      stage: "FILTER_OUTPUT",
+      inputValue: value,
+      smaValue,
+      denoised,
+      finalValue,
+      baseline: this.baselineValue
+    });
     
-    return denoised;
+    return finalValue;
   }
 
   /**

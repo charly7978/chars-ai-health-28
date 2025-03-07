@@ -26,3 +26,20 @@ jobs:
       run: |
         npm install
         gulp
+
+    - name: Detect Peaks
+      run: |
+        if (points.length >= 10) {
+          detectPeaks(points, now);
+        }
+
+    - name: Log PPG Debug
+      run: |
+        console.log("[PPG_DEBUG]", {
+          stage: "RAW_INPUT",
+          value: ppgValue,
+          timestamp: Date.now(),
+          hasFingerDetected: isFingerDetected,
+          quality: quality,
+          // Más métricas...
+        });
