@@ -104,9 +104,8 @@ const Index = () => {
   const startAutoCalibration = () => {
     console.log("Iniciando calibración con control estricto");
     setIsCalibrating(true);
-    startCalibration();
     
-    // Initialize calibration progress
+    // Reset calibration progress first
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -119,31 +118,40 @@ const Index = () => {
         hemoglobin: 0
       }
     });
+    
+    // Start calibration in VitalSignsProcessor
+    startCalibration();
   };
 
   useEffect(() => {
     if (lastSignal?.fingerDetected && isMonitoring) {
-      // Only process and show results if calibration is complete
-      if (!isCalibrating) {
+      if (isCalibrating) {
+        // During calibration, only process calibration updates
+        const vitals = processVitalSigns(lastSignal.filteredValue, null);
+        
+        if (vitals?.calibration) {
+          console.log("Progreso de calibración:", vitals.calibration.progress);
+          setCalibrationProgress(vitals.calibration);
+          
+          // Check if calibration is complete
+          const isComplete = Object.values(vitals.calibration.progress)
+            .every(value => value >= 100);
+            
+          if (isComplete) {
+            console.log("Calibración completada, iniciando mediciones");
+            setIsCalibrating(false);
+            startMeasurementTimer();
+          }
+        }
+      } else {
+        // Only process measurements after calibration is complete
         const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
         setHeartRate(heartBeatResult.bpm);
         
         const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-        if (vitals) {
-          if (vitals.calibration) {
-            setCalibrationProgress(vitals.calibration);
-            
-            // Check if calibration is complete
-            const isComplete = Object.values(vitals.calibration.progress).every(value => value >= 100);
-            if (isComplete) {
-              console.log("Calibración completada, iniciando mediciones");
-              setIsCalibrating(false);
-              startMeasurementTimer();
-            }
-          } else {
-            setVitalSigns(vitals);
-            setSignalQuality(lastSignal.quality);
-          }
+        if (vitals && !vitals.calibration) {
+          setVitalSigns(vitals);
+          setSignalQuality(lastSignal.quality);
         }
       }
     }
@@ -338,8 +346,6 @@ const Index = () => {
 
     processImage();
   };
-
-  
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
