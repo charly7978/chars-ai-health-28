@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -156,15 +155,12 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
       setHeartRate(calculatedHeartRate);
       
-      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        // Solo actualizar cuando tengamos valores reales
         setVitalSigns({
           spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
           pressure: vitals.pressure || "--/--",
@@ -175,7 +171,6 @@ const Index = () => {
       
       setSignalQuality(lastSignal.quality);
     } else {
-      // Si no hay señal válida, resetear valores
       setHeartRate(0);
       setVitalSigns({ 
         spo2: 0, 
@@ -210,6 +205,9 @@ const Index = () => {
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex-1">
+            <div className="absolute top-0 left-0 right-0 bg-amber-700 bg-opacity-80 p-1">
+              <span className="text-lg font-bold text-white">PPG Vital Signs Monitor</span>
+            </div>
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
