@@ -500,7 +500,7 @@ const Index = () => {
             />
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-[#2C2A2B] px-3 py-4">
             <div className="grid grid-cols-3 gap-3 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -540,7 +540,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+          <div className="h-[70px] grid grid-cols-2 gap-px bg-[#2C2A2B] mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
