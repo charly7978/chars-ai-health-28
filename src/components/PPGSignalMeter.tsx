@@ -263,8 +263,71 @@ const PPGSignalMeter = ({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     drawGrid(ctx);
+
+    // Validación estricta de señal PPG
+    const isPPGSignalValid = (val: number): boolean => {
+      // 1. Verificar que el valor esté en el rango típico de PPG (0-255 para señal raw)
+      if (val < 0 || val > 255) return false;
+
+      // 2. Verificar que haya variación periódica en la señal
+      if (dataBufferRef.current && dataBufferRef.current.getPoints().length > 30) {
+        const recentPoints = dataBufferRef.current.getPoints().slice(-30);
+        const maxVal = Math.max(...recentPoints.map(p => p.value));
+        const minVal = Math.min(...recentPoints.map(p => p.value));
+        const variation = maxVal - minVal;
+        
+        // La señal PPG debe tener una variación mínima característica
+        if (variation < 0.5) return false;
+
+        // 3. Verificar periodicidad (característica fundamental de PPG)
+        let crossings = 0;
+        const mean = recentPoints.reduce((a, b) => a + b.value, 0) / recentPoints.length;
+        for (let i = 1; i < recentPoints.length; i++) {
+          if ((recentPoints[i].value - mean) * (recentPoints[i-1].value - mean) < 0) {
+            crossings++;
+          }
+        }
+        // Una señal PPG válida debe tener un número razonable de cruces por cero
+        if (crossings < 4 || crossings > 15) return false;
+      }
+
+      return true;
+    };
+    
+    // No procesar si no hay señal PPG válida
+    if (!isPPGSignalValid(value)) {
+      // Limpiar datos anteriores
+      dataBufferRef.current.clear();
+      baselineRef.current = null;
+      lastValueRef.current = null;
+      peaksRef.current = [];
+      
+      lastRenderTimeRef.current = currentTime;
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
+    
+    // No procesar señal si no hay dedo detectado o la calidad es muy baja
+    if (!isFingerDetected || quality < 40) {
+      // Limpiar datos anteriores
+      dataBufferRef.current.clear();
+      baselineRef.current = null;
+      lastValueRef.current = null;
+      peaksRef.current = [];
+      
+      lastRenderTimeRef.current = currentTime;
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
     
     if (preserveResults && !isFingerDetected) {
+      lastRenderTimeRef.current = currentTime;
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
+    
+    // Validar que el valor esté dentro de rangos razonables
+    if (Math.abs(value) > 255 || value < 0) {
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
@@ -281,6 +344,14 @@ const PPGSignalMeter = ({
 
     const normalizedValue = (baselineRef.current || 0) - smoothedValue;
     const scaledValue = normalizedValue * verticalScale;
+    
+    // Validar que la señal tenga suficiente variación
+    const minVariation = 0.5;
+    if (Math.abs(scaledValue) < minVariation) {
+      lastRenderTimeRef.current = currentTime;
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
     
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
@@ -299,7 +370,10 @@ const PPGSignalMeter = ({
     dataBufferRef.current.push(dataPoint);
     const points = dataBufferRef.current.getPoints();
     
-    detectPeaks(points, now);
+    // Solo detectar picos si hay suficientes puntos válidos
+    if (points.length >= 10) {
+      detectPeaks(points, now);
+    }
 
     if (points.length > 1) {
       // Dibujar la señal PPG

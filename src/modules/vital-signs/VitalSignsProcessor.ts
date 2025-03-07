@@ -77,6 +77,12 @@ export class VitalSignsProcessor {
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
 
+  private readonly WINDOW_SIZE = 300;
+  private ppgValues: number[] = [];
+  private ppgBuffer: number[] = [];
+  private lastValidPPGTime: number = 0;
+  private readonly MIN_PPG_INTERVAL = 100; // Mínimo 100ms entre muestras válidas
+
   constructor() {
     this.spo2Processor = new SpO2Processor();
     this.bpProcessor = new BloodPressureProcessor();
@@ -251,13 +257,62 @@ export class VitalSignsProcessor {
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
   ): VitalSignsResult {
+    // Validar que tengamos una señal PPG válida antes de procesar
+    if (!this.isValidPPGSignal(ppgValue)) {
+      // Limpiar buffer si ha pasado mucho tiempo sin señal válida
+      if (Date.now() - this.lastValidPPGTime > 1000) {
+        this.ppgValues = [];
+        this.ppgBuffer = [];
+      }
+      return {
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaStatus: "--",
+        glucose: 0,
+        lipids: {
+          totalCholesterol: 0,
+          triglycerides: 0
+        },
+        hemoglobin: 0
+      };
+    }
+
+    this.lastValidPPGTime = Date.now();
+    
+    // Procesar solo si ha pasado suficiente tiempo desde la última muestra
+    if (this.ppgBuffer.length > 0 && 
+        Date.now() - this.lastValidPPGTime < this.MIN_PPG_INTERVAL) {
+      return this.lastValidResults || {
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaStatus: "--",
+        glucose: 0,
+        lipids: {
+          totalCholesterol: 0,
+          triglycerides: 0
+        },
+        hemoglobin: 0
+      };
+    }
+
+    // Actualizar buffers
+    this.ppgValues.push(ppgValue);
+    if (this.ppgValues.length > this.WINDOW_SIZE) {
+      this.ppgValues.shift();
+    }
+
+    this.ppgBuffer.push(ppgValue);
+    if (this.ppgBuffer.length > 30) {
+      this.ppgBuffer.shift();
+    }
+
     if (this.isCalibrating) {
       this.calibrationSamples++;
     }
     
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     
-    const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
+    const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(filtered);
     
     // Get the latest PPG values for processing
     const ppgValues = this.signalProcessor.getPPGValues();
@@ -356,6 +411,43 @@ export class VitalSignsProcessor {
     return Math.max(8, Math.min(18, Number(hemoglobin.toFixed(1))));
   }
 
+  private isValidPPGSignal(value: number): boolean {
+    // 1. Verificar rango válido de señal PPG
+    if (value < 0 || value > 255) return false;
+
+    // 2. Verificar que tengamos suficientes muestras
+    if (this.ppgBuffer.length < 30) {
+      return false;
+    }
+
+    // 3. Verificar variación característica de PPG
+    const recentValues = this.ppgBuffer.slice(-30);
+    const maxVal = Math.max(...recentValues);
+    const minVal = Math.min(...recentValues);
+    const variation = maxVal - minVal;
+
+    if (variation < 0.5) return false;
+
+    // 4. Verificar periodicidad (característica de PPG)
+    let crossings = 0;
+    const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
+    for (let i = 1; i < recentValues.length; i++) {
+      if ((recentValues[i] - mean) * (recentValues[i-1] - mean) < 0) {
+        crossings++;
+      }
+    }
+
+    // Una señal PPG válida debe tener un número razonable de cruces por cero
+    if (crossings < 4 || crossings > 15) return false;
+
+    // 5. Verificar perfusión (indicador de calidad de señal)
+    const perfusionIndex = variation / mean;
+    if (perfusionIndex < 0.1) return false;
+
+    // Si pasa todas las validaciones, es una señal PPG válida
+    return true;
+  }
+
   public isCurrentlyCalibrating(): boolean {
     return this.isCalibrating;
   }
@@ -379,7 +471,10 @@ export class VitalSignsProcessor {
   /**
    * Resetea el procesador de signos vitales
    */
-  public reset(): VitalSignsResult | null {
+  public reset(): void {
+    this.ppgValues = [];
+    this.ppgBuffer = [];
+    this.lastValidPPGTime = 0;
     // Guardar resultados válidos antes de resetear
     const savedResults = this.lastValidResults;
     
@@ -408,7 +503,7 @@ export class VitalSignsProcessor {
       this.calibrationTimer = null;
     }
     
-    return savedResults;
+    this.lastValidResults = null;
   }
   
   /**
