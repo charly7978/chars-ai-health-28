@@ -350,10 +350,6 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Limpiar área de mensajes
-      ctx.fillStyle = '#F8FAFC';
-      ctx.fillRect(40, 10, canvas.width - 80, 80);
-
       // Mostrar estado de arritmia y contador
       if (arrhythmiaStatus) {
         const [status, count] = arrhythmiaStatus.split('|');
@@ -399,33 +395,17 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia con fondo para mejor visibilidad
-            const label = 'ARRITMIA';
+            // Etiqueta de arritmia
             ctx.font = 'bold 14px Inter';
-            const labelWidth = ctx.measureText(label).width;
-            
-            // Fondo semi-transparente para el texto
-            ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
-            ctx.fillRect(x - labelWidth/2 - 4, y - 39, labelWidth + 8, 18);
-            
-            // Texto "ARRITMIA" en amarillo
             ctx.fillStyle = '#F59E0B';
             ctx.textAlign = 'center';
-            ctx.fillText(label, x, y - 25);
+            ctx.fillText('ARRITMIA', x, y - 25);
           }
           
-          // Valor del pico con fondo para mejor visibilidad
+          // Valor del pico
           const value = Math.abs(peak.value / verticalScale).toFixed(2);
           ctx.font = 'bold 14px Inter';
-          const textColor = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
-          
-          // Fondo blanco semi-transparente para el texto
-          const textWidth = ctx.measureText(value).width;
-          ctx.fillStyle = 'rgba(248, 250, 252, 0.85)';
-          ctx.fillRect(x - textWidth/2 - 4, y - 15 - 14, textWidth + 8, 18);
-          
-          // Texto del valor
-          ctx.fillStyle = textColor;
+          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.textAlign = 'center';
           ctx.fillText(value, x, y - 15);
         }
