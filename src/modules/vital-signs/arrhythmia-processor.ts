@@ -23,6 +23,9 @@ export class ArrhythmiaProcessor {
   private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
   private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Máximo 1 latido arrítmico consecutivo
   
+  // Parámetros para filtrado de mediana
+  private readonly MEDIAN_BUFFER_SIZE = 5; // Tamaño del buffer para filtro de mediana
+  
   // State variables
   private rrIntervals: number[] = [];
   private rrDifferences: number[] = [];
@@ -41,10 +44,14 @@ export class ArrhythmiaProcessor {
   private sampleEntropy: number = 0;
   private pnnX: number = 0;
 
-  // Nuevo: variables para prevenir falsos positivos consecutivos
+  // Variables para prevenir falsos positivos consecutivos
   private consecutiveArrhythmiaFrames: number = 0;
   private pendingArrhythmiaDetection: boolean = false;
   private lastArrhythmiaData: { timestamp: number; rmssd: number; rrVariation: number; } | null = null;
+  
+  // Buffers para filtrado de mediana
+  private rmssdBuffer: number[] = []; // Buffer para RMSSD
+  private rrVariationBuffer: number[] = []; // Buffer para variación RR
 
   /**
    * Processes heart beat data to detect arrhythmias using advanced HRV analysis
@@ -115,9 +122,9 @@ export class ArrhythmiaProcessor {
       arrhythmiaStatus = "CALIBRANDO...";
     } else if (this.arrhythmiaDetected) { 
       // Solo muestra detección durante la ventana activa
-      arrhythmiaStatus = `ARRITMIA DETECTADA|${this.arrhythmiaCount}`;
+      arrhythmiaStatus = `ARRITMIA|${this.arrhythmiaCount}`;
     } else {
-      arrhythmiaStatus = `SIN ARRITMIAS|${this.arrhythmiaCount}`;
+      arrhythmiaStatus = `NORMAL|${this.arrhythmiaCount}`;
     }
 
     // Solo enviar datos de arritmia si está actualmente detectada
@@ -160,19 +167,27 @@ export class ArrhythmiaProcessor {
     const coefficientOfVariation = rrStandardDeviation / avgRR;
     const rrVariation = Math.abs(lastRR - avgRR) / avgRR;
     
+    // Añadir valores al buffer de mediana para estabilización
+    this.addToMedianBuffer(this.rmssdBuffer, rmssd);
+    this.addToMedianBuffer(this.rrVariationBuffer, rrVariation);
+    
+    // Calcular medianas para mayor estabilidad en la detección
+    const medianRMSSD = this.calculateMedian(this.rmssdBuffer);
+    const medianRRVariation = this.calculateMedian(this.rrVariationBuffer);
+    
     // Advanced non-linear dynamics metrics
     this.calculateNonLinearMetrics(recentRR);
     
-    this.lastRMSSD = rmssd;
-    this.lastRRVariation = rrVariation;
+    this.lastRMSSD = medianRMSSD;
+    this.lastRRVariation = medianRRVariation;
     
-    // Algoritmo de decisión mejorado
+    // Algoritmo de decisión mejorado con uso de mediana
     // Criterios más estrictos para reducir falsos positivos
     const isArrhythmia = 
       // Requiere alta variación del último intervalo RR respecto al promedio
-      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.25) ||
+      (medianRMSSD > this.RMSSD_THRESHOLD && medianRRVariation > 0.25) ||
       // O una variación extrema del intervalo R-R
-      (rrVariation > 0.40);
+      (medianRRVariation > 0.40);
     
     // Si detectamos una arritmia potencial
     if (isArrhythmia) {
@@ -187,14 +202,14 @@ export class ArrhythmiaProcessor {
         // Guardar la información de esta arritmia
         this.lastArrhythmiaData = {
           timestamp: currentTime,
-          rmssd: rmssd,
-          rrVariation: rrVariation
+          rmssd: medianRMSSD,
+          rrVariation: medianRRVariation
         };
         
         console.log('ArrhythmiaProcessor - Nueva arritmia real confirmada:', {
           contador: this.arrhythmiaCount,
-          rmssd: rmssd.toFixed(2),
-          rrVariation: rrVariation.toFixed(2),
+          rmssd: medianRMSSD.toFixed(2),
+          rrVariation: medianRRVariation.toFixed(2),
           avgRR: avgRR.toFixed(2),
           lastRR: lastRR.toFixed(2),
           timestamp: new Date(currentTime).toISOString()
@@ -217,6 +232,34 @@ export class ArrhythmiaProcessor {
         this.arrhythmiaDetected = false;
         this.consecutiveArrhythmiaFrames = 0;
       }
+    }
+  }
+  
+  /**
+   * Añade un valor al buffer de mediana y mantiene el tamaño
+   */
+  private addToMedianBuffer(buffer: number[], value: number): void {
+    buffer.push(value);
+    if (buffer.length > this.MEDIAN_BUFFER_SIZE) {
+      buffer.shift();
+    }
+  }
+  
+  /**
+   * Calcula la mediana de un array de números
+   */
+  private calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    
+    // Crear copia ordenada del buffer
+    const sorted = [...values].sort((a, b) => a - b);
+    
+    // Calcular mediana
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      return sorted[mid];
     }
   }
   
@@ -249,47 +292,71 @@ export class ArrhythmiaProcessor {
    * Information theory approach from MIT research
    */
   private calculateShannonEntropy(intervals: number[]): void {
-    // Simplified histogram-based entropy calculation
-    const bins: {[key: string]: number} = {};
-    const binWidth = 25; // 25ms bin width
+    if (intervals.length < 4) {
+      this.shannonEntropy = 0;
+      return;
+    }
     
-    intervals.forEach(interval => {
-      const binKey = Math.floor(interval / binWidth);
-      bins[binKey] = (bins[binKey] || 0) + 1;
-    });
+    // Bin RR intervals
+    const min = Math.min(...intervals);
+    const max = Math.max(...intervals);
+    const range = max - min;
+    const binWidth = range / 8; // Use 8 bins
     
+    const bins = new Array(8).fill(0);
+    for (const interval of intervals) {
+      const binIndex = Math.min(7, Math.floor((interval - min) / binWidth));
+      bins[binIndex]++;
+    }
+    
+    // Calculate Shannon Entropy
     let entropy = 0;
-    const totalPoints = intervals.length;
-    
-    Object.values(bins).forEach(count => {
-      const probability = count / totalPoints;
-      entropy -= probability * Math.log2(probability);
-    });
+    for (const binCount of bins) {
+      if (binCount > 0) {
+        const probability = binCount / intervals.length;
+        entropy -= probability * Math.log2(probability);
+      }
+    }
     
     this.shannonEntropy = entropy;
   }
   
   /**
-   * Estimate Sample Entropy (simplified implementation)
-   * Based on Massachusetts General Hospital research
+   * Estimate Sample Entropy of RR intervals
+   * Simplified implementation based on PhysioNet sample entropy algorithm
    */
   private estimateSampleEntropy(intervals: number[]): number {
-    if (intervals.length < 4) return 0;
-    
-    // Simplified sample entropy estimation
-    // In a full implementation, this would use template matching
-    const normalizedIntervals = intervals.map(interval => 
-      (interval - intervals.reduce((a, b) => a + b, 0) / intervals.length) / 
-      Math.max(1, Math.sqrt(intervals.reduce((a, b) => a + Math.pow(b, 2), 0) / intervals.length))
-    );
-    
-    let sumCorr = 0;
-    for (let i = 0; i < normalizedIntervals.length - 1; i++) {
-      sumCorr += Math.abs(normalizedIntervals[i + 1] - normalizedIntervals[i]);
+    if (intervals.length < 4) {
+      return 0;
     }
     
-    // Convert to entropy-like measure
-    return -Math.log(sumCorr / (normalizedIntervals.length - 1));
+    // Normalize intervals to have 0 mean and unit variance
+    const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const stdev = Math.sqrt(
+      intervals.reduce((a, b) => a + (b - mean) ** 2, 0) / intervals.length
+    );
+    
+    if (stdev === 0) return 0;
+    
+    const normalized = intervals.map(i => (i - mean) / stdev);
+    
+    // Count matches with tolerance r=0.2 (20% of SD)
+    const r = 0.2;
+    let count1 = 0, count2 = 0;
+    
+    for (let i = 0; i < normalized.length - 1; i++) {
+      for (let j = i + 1; j < normalized.length - 1; j++) {
+        if (Math.abs(normalized[i] - normalized[j]) < r) {
+          count1++;
+          if (Math.abs(normalized[i + 1] - normalized[j + 1]) < r) {
+            count2++;
+          }
+        }
+      }
+    }
+    
+    // Calculate Sample Entropy
+    return count1 === 0 ? 0 : -Math.log(count2 / count1);
   }
 
   /**
@@ -313,6 +380,8 @@ export class ArrhythmiaProcessor {
     this.consecutiveArrhythmiaFrames = 0;
     this.pendingArrhythmiaDetection = false;
     this.lastArrhythmiaData = null;
+    this.rmssdBuffer = [];
+    this.rrVariationBuffer = [];
   }
 
   /**

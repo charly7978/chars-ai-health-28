@@ -345,6 +345,18 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
+      // Mostrar el contador de arritmias
+      if (arrhythmiaStatus) {
+        const [status, count] = arrhythmiaStatus.split('|');
+        if (status === "ARRITMIA") {
+          ctx.fillStyle = '#DC2626';
+          ctx.font = 'bold 16px Inter';
+          ctx.textAlign = 'left';
+          ctx.fillText(`Arritmias: ${count}`, 45, 35);
+        }
+      }
+
+      // Dibujar puntos de arritmia
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
@@ -361,17 +373,7 @@ const PPGSignalMeter = ({
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
-            
-            ctx.font = 'bold 12px Inter';
-            ctx.fillStyle = '#F97316';
-            ctx.textAlign = 'center';
-            ctx.fillText('ARRITMIA', x, y - 25);
           }
-
-          ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = '#000000';
-          ctx.textAlign = 'center';
-          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
       });
     }
