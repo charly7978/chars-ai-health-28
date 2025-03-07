@@ -21,7 +21,6 @@ export class GlucoseProcessor {
   private signalQualityHistory: number[] = []; // Track signal quality
   private lastValidEstimateTime: number = 0;
   private baselineDrift: number = 0; // Real physiological drift
-  private realGlucoseEnabled: boolean = true; // New flag to enable real glucose readings
   
   constructor() {
     // Start with zero - we don't show readings until we have good signal
@@ -40,13 +39,6 @@ export class GlucoseProcessor {
     if (ppgValues.length < 180) {
       this.confidenceScore = 0;
       return 0; // Not enough data
-    }
-    
-    // If real glucose calculation is disabled, return fixed value for testing
-    if (!this.realGlucoseEnabled) {
-      const fixedGlucose = 95 + Math.random() * 20;
-      console.log("FIXED GLUCOSE MODE: Returning static value", fixedGlucose);
-      return Math.round(fixedGlucose);
     }
     
     // Use real-time PPG data for glucose estimation
@@ -142,21 +134,6 @@ export class GlucoseProcessor {
     });
     
     return result;
-  }
-  
-  /**
-   * Toggle between real and fixed glucose values (for testing)
-   */
-  public setRealGlucoseMode(enabled: boolean): void {
-    this.realGlucoseEnabled = enabled;
-    console.log("Glucose: Real glucose mode set to", enabled);
-  }
-  
-  /**
-   * Determines if real glucose calculation is enabled
-   */
-  public isRealGlucoseEnabled(): boolean {
-    return this.realGlucoseEnabled;
   }
   
   /**
