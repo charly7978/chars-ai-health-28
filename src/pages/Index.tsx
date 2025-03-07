@@ -91,6 +91,19 @@ const Index = () => {
         arrhythmiaStatus: "CALIBRANDO|0"
       }));
       
+      setCalibrationProgress({
+        isCalibrating: true,
+        progress: {
+          heartRate: 0,
+          spo2: 0,
+          pressure: 0,
+          arrhythmia: 0,
+          glucose: 0,
+          lipids: 0,
+          hemoglobin: 0
+        }
+      });
+      
       setTimeout(() => {
         if (measurementTimerRef.current) {
           clearInterval(measurementTimerRef.current);
