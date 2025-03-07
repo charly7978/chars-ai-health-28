@@ -81,10 +81,8 @@ const Index = () => {
       setIsCameraOn(true);
       setShowResults(false);
       
-      // Iniciar procesamiento de señal
       startProcessing();
       
-      // Resetear valores
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
@@ -92,12 +90,8 @@ const Index = () => {
         lastArrhythmiaData: null
       }));
       
-      // Iniciar calibración automática
-      // Importante: esto debe establecer correctamente el estado de calibración
-      console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
-      // Iniciar temporizador para medición
       if (measurementTimerRef.current) {
         clearInterval(measurementTimerRef.current);
       }
@@ -107,7 +101,6 @@ const Index = () => {
           const newTime = prev + 1;
           console.log(`Tiempo transcurrido: ${newTime}s`);
           
-          // Finalizar medición después de 30 segundos
           if (newTime >= 30) {
             finalizeMeasurement();
             return 30;
@@ -123,10 +116,8 @@ const Index = () => {
     setIsCalibrating(true);
     setCalibrationMessage("Iniciando proceso de calibración de sensores");
     
-    // Iniciar la calibración real en el procesador
     startCalibration();
     
-    // Mostrar indicador explícito de calibración
     setVitalSigns(prev => ({
       ...prev,
       spo2: 0,
@@ -141,7 +132,6 @@ const Index = () => {
       hemoglobin: 0
     }));
     
-    // Establecer claramente el estado de calibración en UI
     setCalibrationProgress({
       isCalibrating: true,
       progress: {
@@ -155,18 +145,15 @@ const Index = () => {
       }
     });
     
-    // Actualizar el progreso de calibración visualmente
     let step = 0;
-    const totalSteps = 5; // Reducido a 5 pasos (de 10)
+    const totalSteps = 5;
     const calibrationInterval = setInterval(() => {
       step += 1;
       
-      // Actualizar progreso visual (5 pasos en total)
       if (step <= totalSteps) {
-        const progressPercent = step * (100/totalSteps); // 0-100%
+        const progressPercent = step * (100/totalSteps);
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        // Actualizar cada valor individualmente para asegurar que se renderice
         setCalibrationProgress({
           isCalibrating: true,
           progress: {
@@ -180,7 +167,6 @@ const Index = () => {
           }
         });
         
-        // Actualizar mensaje para mostrar claramente que está calibrando
         if (step === 1) {
           setCalibrationMessage("Calibrando sensores y ajustando parámetros");
           setVitalSigns(prev => ({
@@ -197,33 +183,27 @@ const Index = () => {
           }));
         }
       } else {
-        // Al finalizar, detener el intervalo - Completar después de 5 pasos
         console.log("Finalizando calibración automática");
         clearInterval(calibrationInterval);
         
-        // Completar calibración
         if (isCalibrating) {
           console.log("Completando calibración");
           setCalibrationMessage("Calibración completada con éxito");
           forceCalibrationCompletion();
           setIsCalibrating(false);
           
-          // Establecer calibrationProgress a undefined para que no muestre más el progreso
           setCalibrationProgress(undefined);
           
-          // Actualizar mensaje para mostrar que la calibración se completó
           setVitalSigns(prev => ({
             ...prev,
             arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0",
             lastArrhythmiaData: null
           }));
           
-          // Opcional: vibración si está disponible
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100]);
           }
           
-          // Después de un breve retraso, reestablecer el estado normal
           setTimeout(() => {
             if (!isCalibrating) {
               setCalibrationMessage("");
@@ -236,9 +216,8 @@ const Index = () => {
           }, 1500);
         }
       }
-    }, 600); // Cada paso dura 600ms (3 segundos en total)
+    }, 600);
     
-    // Temporizador de seguridad más corto
     setTimeout(() => {
       if (isCalibrating) {
         console.log("Forzando finalización de calibración por tiempo límite");
@@ -247,17 +226,14 @@ const Index = () => {
         setIsCalibrating(false);
         setCalibrationMessage("Finalización de calibración por tiempo límite");
         
-        // Asegurar que se limpie el estado de calibración
         setCalibrationProgress(undefined);
         
-        // Marcar explícitamente que la calibración ha finalizado
         setVitalSigns(prev => ({
           ...prev,
           arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0",
           lastArrhythmiaData: null
         }));
         
-        // Después de un breve retraso, reestablecer el estado normal
         setTimeout(() => {
           setCalibrationMessage("");
           setVitalSigns(prev => ({
@@ -267,7 +243,7 @@ const Index = () => {
           }));
         }, 1500);
       }
-    }, 5000); // 5 segundos como máximo (reducido de 10)
+    }, 5000);
   };
 
   const finalizeMeasurement = () => {
@@ -338,7 +314,6 @@ const Index = () => {
     const videoTrack = stream.getVideoTracks()[0];
     const imageCapture = new ImageCapture(videoTrack);
     
-    // Asegurar que la linterna esté encendida para mediciones de PPG
     if (videoTrack.getCapabilities()?.torch) {
       console.log("Activando linterna para mejorar la señal PPG");
       videoTrack.applyConstraints({
@@ -348,7 +323,6 @@ const Index = () => {
       console.warn("Esta cámara no tiene linterna disponible, la medición puede ser menos precisa");
     }
     
-    // Crear un canvas de tamaño óptimo para el procesamiento
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d', {willReadFrequently: true});
     if (!tempCtx) {
@@ -356,17 +330,15 @@ const Index = () => {
       return;
     }
     
-    // Variables para controlar el rendimiento y la tasa de frames
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/30; // Apuntar a 30 FPS para precisión
+    const targetFrameInterval = 1000/30;
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
     
-    // Crearemos un contexto dedicado para el procesamiento de imagen
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
-    enhanceCanvas.width = 320;  // Tamaño óptimo para procesamiento PPG
+    enhanceCanvas.width = 320;
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
@@ -375,56 +347,41 @@ const Index = () => {
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
-      // Control de tasa de frames para no sobrecargar el dispositivo
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
-          // Capturar frame 
           const frame = await imageCapture.grabFrame();
           
-          // Configurar tamaño adecuado del canvas para procesamiento
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
           
           tempCanvas.width = targetWidth;
           tempCanvas.height = targetHeight;
           
-          // Dibujar el frame en el canvas
           tempCtx.drawImage(
             frame, 
             0, 0, frame.width, frame.height, 
             0, 0, targetWidth, targetHeight
           );
           
-          // Mejorar la imagen para detección PPG
           if (enhanceCtx) {
-            // Resetear canvas
             enhanceCtx.clearRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
-            
-            // Dibujar en el canvas de mejora
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
-            // Opcionales: Ajustes para mejorar la señal roja
             enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
+            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';
             enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             enhanceCtx.globalCompositeOperation = 'source-over';
-          
-            // Obtener datos de la imagen mejorada
-            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             
-            // Procesar el frame mejorado
+            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             processFrame(imageData);
           } else {
-            // Fallback a procesamiento normal
             const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
             processFrame(imageData);
           }
           
-          // Actualizar contadores para monitoreo de rendimiento
           frameCount++;
           lastProcessTime = now;
           
-          // Calcular FPS cada segundo
           if (now - lastFpsUpdateTime > 1000) {
             processingFps = frameCount;
             frameCount = 0;
@@ -436,7 +393,6 @@ const Index = () => {
         }
       }
       
-      // Programar el siguiente frame
       if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
