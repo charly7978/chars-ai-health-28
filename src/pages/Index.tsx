@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -412,6 +413,10 @@ const Index = () => {
       if (vitals) {
         console.log("Vital signs processed: ", {
           arrhythmiaStatus: vitals.arrhythmiaStatus,
+          lastArrhythmiaData: vitals.lastArrhythmiaData ? {
+            timestamp: vitals.lastArrhythmiaData.timestamp,
+            timeAgo: Date.now() - vitals.lastArrhythmiaData.timestamp
+          } : null,
           timestamp: new Date().toISOString()
         });
         
@@ -424,6 +429,7 @@ const Index = () => {
           
           // Si hay datos de la última arritmia, actualizarlos
           if (vitals.lastArrhythmiaData) {
+            console.log("Nueva arritmia detectada, actualizando datos de visualización:", vitals.lastArrhythmiaData);
             setLastArrhythmiaData(vitals.lastArrhythmiaData);
           }
         }
@@ -504,8 +510,8 @@ const Index = () => {
                 highlighted={showResults}
               />
               <VitalSign 
-                label="ARRITMIAS"
-                value={vitalSigns.arrhythmiaStatus || "--"}
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || '--'}/${vitalSigns.lipids?.triglycerides || '--'}`}
                 highlighted={showResults}
               />
             </div>

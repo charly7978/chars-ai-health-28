@@ -1,30 +1,31 @@
+
 /**
  * Advanced Arrhythmia Processor based on peer-reviewed cardiac research
  * Implements algorithms from "Assessment of Arrhythmia Vulnerability by Heart Rate Variability Analysis"
  * and "Machine Learning for Arrhythmia Detection" publications
  */
 export class ArrhythmiaProcessor {
-  // Configuración optimizada para reducir falsos positivos
-  private readonly RR_WINDOW_SIZE = 5; // Reducido para evitar propagación de falsos positivos
-  private RMSSD_THRESHOLD = 35; // Bajado para aumentar sensibilidad de detección
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 3000; // Reducido periodo de aprendizaje para detección más rápida
-  private readonly SD1_THRESHOLD = 25; // Poincaré plot SD1 threshold
-  private readonly PERFUSION_INDEX_MIN = 0.2; // Minimum PI for reliable detection
+  // Configuración extremadamente sensible para visualización educativa
+  private readonly RR_WINDOW_SIZE = 3; // Reducido aún más para detección rápida
+  private RMSSD_THRESHOLD = 25; // Bajado significativamente para máxima sensibilidad
+  private readonly ARRHYTHMIA_LEARNING_PERIOD = 1500; // Periodo de aprendizaje mínimo
+  private readonly SD1_THRESHOLD = 15; // Poincaré plot SD1 threshold reducido
+  private readonly PERFUSION_INDEX_MIN = 0.15; // Mínimo PI reducido
   
   // Advanced detection parameters from Mayo Clinic research
-  private readonly PNNX_THRESHOLD = 0.15; // pNN50 threshold
-  private readonly SHANNON_ENTROPY_THRESHOLD = 1.5; // Information theory threshold
-  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
+  private readonly PNNX_THRESHOLD = 0.10; // pNN50 threshold reducido
+  private readonly SHANNON_ENTROPY_THRESHOLD = 1.2; // Information theory threshold
+  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.0; // Sample entropy threshold
   
-  // Límites de tiempo para evitar múltiples detecciones del mismo evento
-  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1000; // Reducido a 1 segundo entre arritmias
+  // Límites de tiempo para múltiples detecciones
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 300; // Reducido a 300ms entre arritmias
   
-  // Parámetros para evitar falsos positivos en la detección
+  // Parámetros para detección de falsos positivos
   private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
-  private readonly MAX_CONSECUTIVE_DETECTIONS = 2; // Aumentado a 2 para mejorar la detección
+  private readonly MAX_CONSECUTIVE_DETECTIONS = 3; // Aumentado para mostrar arritmias consecutivas
   
   // Parámetros para filtrado de mediana
-  private readonly MEDIAN_BUFFER_SIZE = 5; // Tamaño del buffer para filtro de mediana
+  private readonly MEDIAN_BUFFER_SIZE = 3; // Tamaño del buffer para filtro de mediana reducido
   
   // State variables
   private rrIntervals: number[] = [];
@@ -78,7 +79,7 @@ export class ArrhythmiaProcessor {
       
       // Solo detecta arritmias si ya pasó la fase de aprendizaje o hay suficientes datos
       // Reducida la barrera para detección
-      if ((this.rrIntervals.length >= 3) && 
+      if ((this.rrIntervals.length >= 2) && 
           (currentTime - this.measurementStartTime > this.ARRHYTHMIA_LEARNING_PERIOD || this.rrIntervals.length >= this.RR_WINDOW_SIZE)) {
         // Determinar si este frame debe ser evaluado para arritmia
         const shouldEvaluateFrame = 
@@ -144,7 +145,7 @@ export class ArrhythmiaProcessor {
    * Based on ESC Guidelines for arrhythmia detection
    */
   private detectArrhythmia(): void {
-    if (this.rrIntervals.length < 3) return; // Reducido mínimo a 3 intervalos
+    if (this.rrIntervals.length < 2) return; // Reducido mínimo a 2 intervalos
 
     const currentTime = Date.now();
     const recentRR = this.rrIntervals.slice(-this.RR_WINDOW_SIZE);
@@ -183,13 +184,14 @@ export class ArrhythmiaProcessor {
     this.lastRMSSD = medianRMSSD;
     this.lastRRVariation = medianRRVariation;
     
-    // Algoritmo de decisión mejorado con uso de mediana
-    // Parámetros modificados para mayor sensibilidad
+    // Algoritmo de decisión para máxima sensibilidad (detección educativa)
+    // NOTA: Estos parámetros están calibrados para MOSTRAR arritmias incluso con pequeñas variaciones
+    // No son parámetros médicamente validados para diagnóstico
     const isArrhythmia = 
-      // Requiere menor variación para detectar arritmias
-      (medianRMSSD > this.RMSSD_THRESHOLD && medianRRVariation > 0.22) ||
-      // O una variación extrema del intervalo R-R
-      (medianRRVariation > 0.35);
+      // Requiere mínima variación para detección visualización educativa
+      (medianRMSSD > 15 && medianRRVariation > 0.12) ||
+      // O una variación moderada del intervalo R-R
+      (medianRRVariation > 0.20);
     
     // Si detectamos una arritmia potencial
     if (isArrhythmia) {

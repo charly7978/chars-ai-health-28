@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -21,10 +22,10 @@ export const useVitalSignsProcessor = () => {
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   
-  // Advanced configuration based on clinical guidelines
-  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 500; // Reducido a 500ms para aumentar sensibilidad aún más
-  const MAX_ARRHYTHMIAS_PER_SESSION = 30; // Aumentado para permitir más detecciones
-  const SIGNAL_QUALITY_THRESHOLD = 0.40; // Reducido aún más para permitir detección con menor calidad
+  // Advanced configuration based on clinical guidelines - configuración más sensible
+  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 300; // Reducido a 300ms para aumentar sensibilidad aún más
+  const MAX_ARRHYTHMIAS_PER_SESSION = 50; // Aumentado para permitir más detecciones
+  const SIGNAL_QUALITY_THRESHOLD = 0.35; // Reducido aún más para permitir detección con menor calidad
   
   useEffect(() => {
     console.log("useVitalSignsProcessor: Hook inicializado", {
@@ -159,20 +160,20 @@ export const useVitalSignsProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Multi-parametric arrhythmia detection algorithm - Parámetros más sensibles aún
-      if ((rmssd > 30 && rrVariation > 0.15) || // Mucho menos restrictivo 
-          (rrSD > 25 && rrVariation > 0.12) ||  // Mucho menos restrictivo
-          (lastRR > 1.2 * avgRR) ||             // Mucho menos restrictivo
-          (lastRR < 0.8 * avgRR)) {             // Mucho menos restrictivo
+      // Multi-parametric arrhythmia detection algorithm - Parámetros extremadamente sensibles
+      if ((rmssd > 20 && rrVariation > 0.10) || // Extremadamente sensible
+          (rrSD > 15 && rrVariation > 0.08) ||  // Extremadamente sensible
+          (lastRR > 1.15 * avgRR) ||            // Extremadamente sensible
+          (lastRR < 0.85 * avgRR)) {            // Extremadamente sensible
           
         console.log("useVitalSignsProcessor: Posible arritmia detectada", {
           rmssd,
           rrVariation,
           rrSD,
-          condición1: rmssd > 30 && rrVariation > 0.15,
-          condición2: rrSD > 25 && rrVariation > 0.12,
-          condición3: lastRR > 1.2 * avgRR,
-          condición4: lastRR < 0.8 * avgRR,
+          condición1: rmssd > 20 && rrVariation > 0.10,
+          condición2: rrSD > 15 && rrVariation > 0.08,
+          condición3: lastRR > 1.15 * avgRR,
+          condición4: lastRR < 0.85 * avgRR,
           timestamp: new Date().toISOString()
         });
         
