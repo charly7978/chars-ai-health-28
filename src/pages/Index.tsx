@@ -166,7 +166,7 @@ const Index = () => {
             hemoglobin: Math.max(0, progressPercent - 25)
           }
         });
-        
+
         if (step === 1) {
           setCalibrationMessage("Calibrando sensores y ajustando parámetros");
           setVitalSigns(prev => ({
