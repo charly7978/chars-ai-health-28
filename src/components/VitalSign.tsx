@@ -68,10 +68,13 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const numValue = Number(value);
       if (numValue === 0) return { text: "--", color: "text-white", status: "" };
       
-      if (numValue < 50) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Severa" };
+      // Expanded glucose ranges
+      if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
+      if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
-      if (numValue > 300) return { text: String(value), color: "text-red-500", status: "Hiperglucemia Crítica" };
-      if (numValue > 200) return { text: String(value), color: "text-orange-500", status: "Hiperglucemia Severa" };
+      if (numValue > 400) return { text: String(value), color: "text-red-500", status: "Hiperglucemia Crítica" };
+      if (numValue > 300) return { text: String(value), color: "text-red-400", status: "Hiperglucemia Grave" };
+      if (numValue > 200) return { text: String(value), color: "text-orange-500", status: "Hiperglucemia Moderada" };
       if (numValue > 140) return { text: String(value), color: "text-yellow-500", status: "Hiperglucemia Leve" };
       return { text: String(value), color: "text-green-500", status: "Normal" };
     }
