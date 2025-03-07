@@ -159,111 +159,71 @@ const Index = () => {
     
     // Actualizar el progreso de calibración visualmente
     let step = 0;
-    const totalSteps = 5; // Reducido a 5 pasos (de 10)
+    const totalSteps = 3; // Reducido a 3 pasos para mayor velocidad
     const calibrationInterval = setInterval(() => {
       step += 1;
       
-      // Actualizar progreso visual (5 pasos en total)
+      // Actualizar progreso visual (3 pasos en total)
       if (step <= totalSteps) {
-        const progressPercent = step * (100/totalSteps); // 0-100%
+        const progressPercent = (step / totalSteps) * 100; // 0-100%
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        // Actualizar cada valor individualmente para asegurar que se renderice
         setCalibrationProgress({
           isCalibrating: true,
           progress: {
             heartRate: progressPercent,
-            spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 15),
-            arrhythmia: Math.max(0, progressPercent - 10),
+            spo2: Math.max(0, progressPercent - 5),
+            pressure: Math.max(0, progressPercent - 10),
+            arrhythmia: Math.max(0, progressPercent - 5),
             glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 20),
-            hemoglobin: Math.max(0, progressPercent - 25)
+            lipids: Math.max(0, progressPercent - 10),
+            hemoglobin: Math.max(0, progressPercent - 15)
           }
         });
         
-        // Actualizar mensaje para mostrar claramente que está calibrando
         if (step === 1) {
           setCalibrationMessage("Calibrando sensores y ajustando parámetros");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "CALIBRANDO SENSORES|0"
-          }));
-        } else if (step === 3) {
+        } else if (step === 2) {
           setCalibrationMessage("Ajustando algoritmos para mayor precisión");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "AJUSTANDO PARÁMETROS|0"
-          }));
         }
       } else {
-        // Al finalizar, detener el intervalo - Completar después de 5 pasos
-        console.log("Finalizando calibración automática");
+        // Al finalizar, detener el intervalo
         clearInterval(calibrationInterval);
         
-        // Completar calibración
         if (isCalibrating) {
-          console.log("Completando calibración");
           setCalibrationMessage("Calibración completada con éxito");
           forceCalibrationCompletion();
           setIsCalibrating(false);
-          
-          // Establecer calibrationProgress a undefined para que no muestre más el progreso
           setCalibrationProgress(undefined);
           
           // Actualizar mensaje para mostrar que la calibración se completó
           setVitalSigns(prev => ({
             ...prev,
-            arrhythmiaStatus: "CALIBRACIÓN COMPLETA|0"
+            arrhythmiaStatus: "SIN ARRITMIAS|0"
           }));
           
-          // Opcional: vibración si está disponible
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100]);
           }
-          
-          // Después de un breve retraso, reestablecer el estado normal
-          setTimeout(() => {
-            if (!isCalibrating) {
-              setCalibrationMessage("");
-              setVitalSigns(prev => ({
-                ...prev,
-                arrhythmiaStatus: "SIN ARRITMIAS|0"
-              }));
-            }
-          }, 1500);
         }
       }
-    }, 600); // Cada paso dura 600ms (3 segundos en total)
+    }, 800); // Cada paso dura 800ms (2.4 segundos en total)
     
-    // Temporizador de seguridad más corto
+    // Temporizador de seguridad más corto (3 segundos)
     setTimeout(() => {
       if (isCalibrating) {
-        console.log("Forzando finalización de calibración por tiempo límite");
         clearInterval(calibrationInterval);
         forceCalibrationCompletion();
         setIsCalibrating(false);
-        setCalibrationMessage("Finalización de calibración por tiempo límite");
-        
-        // Asegurar que se limpie el estado de calibración
         setCalibrationProgress(undefined);
+        setCalibrationMessage("");
         
-        // Marcar explícitamente que la calibración ha finalizado
         setVitalSigns(prev => ({
           ...prev,
-          arrhythmiaStatus: "CALIBRACIÓN FINALIZADA|0"
+          arrhythmiaStatus: "SIN ARRITMIAS|0"
         }));
-        
-        // Después de un breve retraso, reestablecer el estado normal
-        setTimeout(() => {
-          setCalibrationMessage("");
-          setVitalSigns(prev => ({
-            ...prev,
-            arrhythmiaStatus: "SIN ARRITMIAS|0"
-          }));
-        }, 1500);
       }
-    }, 5000); // 5 segundos como máximo (reducido de 10)
+    }, 3000);
   };
 
   const finalizeMeasurement = () => {
