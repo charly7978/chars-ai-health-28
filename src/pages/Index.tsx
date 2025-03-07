@@ -410,12 +410,22 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
+        console.log("Vital signs processed: ", {
+          arrhythmiaStatus: vitals.arrhythmiaStatus,
+          timestamp: new Date().toISOString()
+        });
+        
         setVitalSigns(vitals);
         
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
+        // Asegurarnos de actualizar el contador de arritmias basado en el estado
+        if (vitals.arrhythmiaStatus) {
+          const parts = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(parts[1] || "0");
+          
+          // Si hay datos de la última arritmia, actualizarlos
+          if (vitals.lastArrhythmiaData) {
+            setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          }
         }
       }
       
@@ -494,9 +504,8 @@ const Index = () => {
                 highlighted={showResults}
               />
               <VitalSign 
-                label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                unit="mg/dL"
+                label="ARRITMIAS"
+                value={vitalSigns.arrhythmiaStatus || "--"}
                 highlighted={showResults}
               />
             </div>

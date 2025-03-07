@@ -22,9 +22,9 @@ export const useVitalSignsProcessor = () => {
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   
   // Advanced configuration based on clinical guidelines
-  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 800; // Reducido a 800ms para aumentar sensibilidad
-  const MAX_ARRHYTHMIAS_PER_SESSION = 20; // Reasonable maximum for 30 seconds
-  const SIGNAL_QUALITY_THRESHOLD = 0.50; // Reducido para permitir detección con menor calidad
+  const MIN_TIME_BETWEEN_ARRHYTHMIAS = 500; // Reducido a 500ms para aumentar sensibilidad aún más
+  const MAX_ARRHYTHMIAS_PER_SESSION = 30; // Aumentado para permitir más detecciones
+  const SIGNAL_QUALITY_THRESHOLD = 0.40; // Reducido aún más para permitir detección con menor calidad
   
   useEffect(() => {
     console.log("useVitalSignsProcessor: Hook inicializado", {
@@ -125,7 +125,7 @@ export const useVitalSignsProcessor = () => {
     }
     
     // Enhanced RR interval analysis (more robust than previous)
-    if (rrData?.intervals && rrData.intervals.length >= 3) {
+    if (rrData?.intervals && rrData.intervals.length >= 2) { // Reducido para detectar con menos intervalos
       const lastThreeIntervals = rrData.intervals.slice(-3);
       const avgRR = lastThreeIntervals.reduce((a, b) => a + b, 0) / lastThreeIntervals.length;
       
@@ -134,7 +134,7 @@ export const useVitalSignsProcessor = () => {
       for (let i = 1; i < lastThreeIntervals.length; i++) {
         rmssd += Math.pow(lastThreeIntervals[i] - lastThreeIntervals[i-1], 2);
       }
-      rmssd = Math.sqrt(rmssd / (lastThreeIntervals.length - 1));
+      rmssd = Math.sqrt(rmssd / (lastThreeIntervals.length - 1) || 1); // Evitar división por cero
       
       // Enhanced arrhythmia detection criteria with SD metrics
       const lastRR = lastThreeIntervals[lastThreeIntervals.length - 1];
@@ -159,20 +159,20 @@ export const useVitalSignsProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Multi-parametric arrhythmia detection algorithm - Parámetros más sensibles
-      if ((rmssd > 40 && rrVariation > 0.18) || // Menos restrictivo 
-          (rrSD > 30 && rrVariation > 0.15) ||  // Menos restrictivo
-          (lastRR > 1.3 * avgRR) ||             // Menos restrictivo
-          (lastRR < 0.7 * avgRR)) {             // Menos restrictivo
+      // Multi-parametric arrhythmia detection algorithm - Parámetros más sensibles aún
+      if ((rmssd > 30 && rrVariation > 0.15) || // Mucho menos restrictivo 
+          (rrSD > 25 && rrVariation > 0.12) ||  // Mucho menos restrictivo
+          (lastRR > 1.2 * avgRR) ||             // Mucho menos restrictivo
+          (lastRR < 0.8 * avgRR)) {             // Mucho menos restrictivo
           
         console.log("useVitalSignsProcessor: Posible arritmia detectada", {
           rmssd,
           rrVariation,
           rrSD,
-          condición1: rmssd > 40 && rrVariation > 0.18,
-          condición2: rrSD > 30 && rrVariation > 0.15,
-          condición3: lastRR > 1.3 * avgRR,
-          condición4: lastRR < 0.7 * avgRR,
+          condición1: rmssd > 30 && rrVariation > 0.15,
+          condición2: rrSD > 25 && rrVariation > 0.12,
+          condición3: lastRR > 1.2 * avgRR,
+          condición4: lastRR < 0.8 * avgRR,
           timestamp: new Date().toISOString()
         });
         
@@ -217,7 +217,7 @@ export const useVitalSignsProcessor = () => {
       }
     }
     
-    // If we previously detected an arrhythmia, maintain that state
+    // Si anteriormente se detectó una arritmia, mantener ese estado
     if (hasDetectedArrhythmia.current) {
       return {
         ...result,
