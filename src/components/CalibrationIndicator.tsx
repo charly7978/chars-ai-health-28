@@ -28,14 +28,14 @@ const CalibrationIndicator: React.FC<CalibrationIndicatorProps> = ({
   );
 
   return (
-    <div className="absolute inset-x-0 top-[15%] px-4 z-50">
-      <div className="bg-[#2C2A2B]/90 backdrop-blur-sm rounded-lg p-4 shadow-lg">
-        <div className="flex flex-col gap-2">
+    <div className="absolute inset-x-0 bottom-[30%] px-4 z-50">
+      <div className="px-4 py-2">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[#D4C6A3]/80 text-sm font-medium">{message}</span>
-            <span className="text-[#D4C6A3] text-sm font-medium">{avgProgress}%</span>
+            <span className="text-[#D4C6A3] text-xs font-medium">{message}</span>
+            <span className="text-[#D4C6A3] text-xs font-medium">{avgProgress}%</span>
           </div>
-          <Progress value={avgProgress} className="h-2" />
+          <Progress value={avgProgress} className="h-1.5 bg-[#2C2A2B]/40" />
         </div>
       </div>
     </div>

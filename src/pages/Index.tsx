@@ -185,14 +185,14 @@ const Index = () => {
             lastArrhythmiaData: null
           }));
         } else if (step === totalSteps) {
-          finishCalibration(calibrationInterval);
+          finishCalibration(calibrationInterval as unknown as number);
         }
       }
     }, stepDuration);
     
     setTimeout(() => {
       if (isCalibrating) {
-        finishCalibration(calibrationInterval);
+        finishCalibration(calibrationInterval as unknown as number);
       }
     }, (totalSteps * stepDuration) + 500);
   };
