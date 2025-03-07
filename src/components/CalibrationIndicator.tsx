@@ -28,7 +28,7 @@ const CalibrationIndicator: React.FC<CalibrationIndicatorProps> = ({
   );
 
   return (
-    <div className="absolute inset-x-0 bottom-[30%] px-4 z-50">
+    <div className="absolute inset-x-0 top-[15%] px-4 z-50">
       <div className="px-4 py-2">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
