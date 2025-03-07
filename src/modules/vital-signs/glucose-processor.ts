@@ -1,4 +1,3 @@
-
 /**
  * Advanced non-invasive glucose estimation based on PPG signal analysis
  * Implementation based on research papers from MIT, Stanford and University of Washington
