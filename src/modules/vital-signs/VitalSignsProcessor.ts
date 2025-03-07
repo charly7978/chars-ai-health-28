@@ -98,6 +98,12 @@ export class VitalSignsProcessor {
     this.calibrationSamples = 0;
     this.signalQualityBuffer = [];
     this.resetCalibrationBuffers();
+    
+    this.spo2Processor.startCalibration();
+    this.bpProcessor.startCalibration();
+    this.arrhythmiaProcessor.startCalibration();
+    this.glucoseProcessor.startCalibration();
+    this.lipidProcessor.startCalibration();
   }
 
   private resetCalibrationBuffers(): void {
@@ -170,7 +176,7 @@ export class VitalSignsProcessor {
     const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     const ppgValues = this.signalProcessor.getPPGValues();
     
-    const arrhythmiaResult = this.arrhythmiaProcessor.processHeartbeat(filtered, rrData?.intervals || []);
+    const arrhythmiaResult = this.arrhythmiaProcessor.processSignal(filtered, rrData?.intervals || []);
     
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues);
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues);
@@ -349,5 +355,19 @@ export class VitalSignsProcessor {
   public fullReset(): void {
     this.reset();
     this.lastValidResults = null;
+  }
+
+  public isCurrentlyCalibrating(): boolean {
+    return this.isCalibrating;
+  }
+
+  public getCalibrationProgress(): any {
+    return this.calibrationProgress;
+  }
+
+  private calculateHemoglobin(values: number[]): number {
+    if (values.length < 30) return 0;
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    return Math.max(10, Math.min(18, mean * 0.05 + 12));
   }
 }

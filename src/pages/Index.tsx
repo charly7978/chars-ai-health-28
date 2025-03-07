@@ -118,8 +118,7 @@ const Index = () => {
     
     startCalibration();
     
-    setVitalSigns(prev => ({
-      ...prev,
+    const initialCalibrationState: VitalSignsResult = {
       spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "CALIBRANDO...|0",
@@ -142,7 +141,9 @@ const Index = () => {
           hemoglobin: 0
         }
       }
-    }));
+    };
+    
+    setVitalSigns(initialCalibrationState);
   };
 
   const finishCalibration = (intervalId: number) => {
