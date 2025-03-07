@@ -383,12 +383,12 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div className="fixed inset-0 flex flex-col" 
+    <div className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
-        height: 'calc(100vh + env(safe-area-inset-bottom))',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        background: 'linear-gradient(to bottom, #F8FAFC 0%, #F8FAFC 50%, #F8FAFC 100%)'
+        height: '100vh',
+        padding: 0,
+        margin: 0,
+        overflow: 'hidden'
       }}>
       <div className="flex-1 relative">
         <div className="absolute inset-0">

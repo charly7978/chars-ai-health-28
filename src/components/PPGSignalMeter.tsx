@@ -144,7 +144,7 @@ const PPGSignalMeter = ({
   }, [renderFrame]);
 
   return (
-    <div className="w-full h-full flex flex-col bg-transparent">
+    <div className="w-full h-full flex flex-col bg-black">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
