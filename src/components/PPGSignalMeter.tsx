@@ -57,18 +57,6 @@ const PPGSignalMeter = ({
   const MAX_PEAKS_TO_DISPLAY = 25;
 
   useEffect(() => {
-    console.log("[PPG_ENTRADA]", {
-      timestamp: Date.now(),
-      rawValue: value,
-      quality,
-      isFingerDetected,
-      hasBuffer: dataBufferRef.current?.getPoints().length || 0,
-      baseline: baselineRef.current,
-      lastValue: lastValueRef.current,
-      arrhythmiaStatus,
-      preserveResults
-    });
-
     if (!dataBufferRef.current) {
       dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
     }
@@ -81,7 +69,7 @@ const PPGSignalMeter = ({
       baselineRef.current = null;
       lastValueRef.current = null;
     }
-  }, [preserveResults, isFingerDetected, value, quality]);
+  }, [preserveResults, isFingerDetected]);
 
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
@@ -248,25 +236,15 @@ const PPGSignalMeter = ({
   }, []);
 
   const renderSignal = useCallback(() => {
-    const now = Date.now();
-    const currentTime = performance.now();
-    const deltaTime = currentTime - lastRenderTimeRef.current;
-
-    console.log("[PPG_RENDER]", {
-      timestamp: now,
-      frameTime: deltaTime,
-      bufferSize: dataBufferRef.current?.getPoints().length || 0,
-      currentValue: value,
-      isProcessing: !!dataBufferRef.current,
-      quality
-    });
-
     if (!canvasRef.current || !dataBufferRef.current) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
 
-    if (!IMMEDIATE_RENDERING && deltaTime < FRAME_TIME) {
+    const currentTime = performance.now();
+    const timeSinceLastRender = currentTime - lastRenderTimeRef.current;
+
+    if (!IMMEDIATE_RENDERING && timeSinceLastRender < FRAME_TIME) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
@@ -278,6 +256,8 @@ const PPGSignalMeter = ({
       return;
     }
 
+    const now = Date.now();
+    
     // Limpiar el canvas completamente
     ctx.fillStyle = '#F8FAFC';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
