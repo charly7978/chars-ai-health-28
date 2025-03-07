@@ -1,6 +1,5 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle } from 'lucide-react';
+import { Fingerprint } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -148,7 +147,6 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Solo mostrar alertas de arritmia
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
@@ -164,8 +162,6 @@ const PPGSignalMeter = ({
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         
-        // Mostrar el número exacto de arritmias detectadas
-        // Esto muestra el conteo preciso desde el arrhythmiaStatus
         ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
       }
     }
@@ -259,7 +255,6 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
-    // Limpiar el canvas completamente
     ctx.fillStyle = '#F8FAFC';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -303,7 +298,6 @@ const PPGSignalMeter = ({
     detectPeaks(points, now);
 
     if (points.length > 1) {
-      // Dibujar la señal PPG
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
@@ -351,24 +345,20 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Mostrar estado de arritmia y contador
       if (arrhythmiaStatus) {
         const [status, count] = arrhythmiaStatus.split('|');
         
         if (status === "LATIDO_NORMAL") {
-          // Mensaje de latido normal
           ctx.fillStyle = '#0EA5E9';
           ctx.font = 'bold 20px Inter';
           ctx.textAlign = 'center';
           ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
         } else if (status === "ARRITMIA_DETECTADA") {
-          // Alerta de arritmia
           ctx.fillStyle = '#DC2626';
           ctx.font = 'bold 20px Inter';
           ctx.textAlign = 'center';
           ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
           
-          // Contador de arritmias
           if (parseInt(count) > 0) {
             ctx.font = 'bold 16px Inter';
             ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
@@ -376,41 +366,33 @@ const PPGSignalMeter = ({
         }
       }
 
-      // Dibujar puntos y valores
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
-          // Dibujar círculo del pico
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
-            // Círculo exterior para arritmias
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia con borde rojo
             ctx.font = 'bold 14px Inter';
             ctx.textAlign = 'center';
-            
-            // Dibujar el contorno rojo de la etiqueta
             ctx.strokeStyle = '#DC2626';
             ctx.lineWidth = 1;
             ctx.strokeText('ARRITMIA', x, y - 25);
             
-            // Rellenar con amarillo
             ctx.fillStyle = '#F59E0B';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
           
-          // Valor del pico con texto negro
           const value = Math.abs(peak.value / verticalScale).toFixed(2);
           ctx.font = 'bold 14px Inter';
           ctx.fillStyle = '#000000';
@@ -440,8 +422,8 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-transparent">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-3">
+    <div className="fixed inset-0">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="w-[180px]">
