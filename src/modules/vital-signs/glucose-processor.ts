@@ -11,6 +11,7 @@ export class GlucoseProcessor {
   private readonly PERFUSION_INDEX_THRESHOLD = 0.05; // Umbral mínimo para tener señal suficiente
   private readonly PPG_WINDOW_SIZE = 200; // Ventana de análisis para características
   private readonly MIN_QUALITY_THRESHOLD = 0.5; // Calidad mínima para intentar medición
+  private readonly MEDIAN_BUFFER_SIZE = 7; // Tamaño del buffer para mediana final
   
   // Estado del procesador
   private lastCalculation: number = 0;
@@ -19,6 +20,7 @@ export class GlucoseProcessor {
   private lastMeasurementTime: number = 0;
   private qualityHistory: number[] = [];
   private featureHistory: any[] = [];
+  private medianBuffer: number[] = []; // Buffer para filtro de mediana
   
   // Buffer para análisis de señal
   private ppgBuffer: number[] = [];
@@ -85,7 +87,13 @@ export class GlucoseProcessor {
     this.lastCalculation = glucoseEstimate;
     this.lastMeasurementTime = Date.now();
     
-    return Math.round(glucoseEstimate);
+    // Añadir el valor al buffer de mediana para estabilizar la lectura
+    this.addToMedianBuffer(Math.round(glucoseEstimate));
+    
+    // Devolver la mediana para mayor estabilidad en los resultados
+    const medianValue = this.calculateMedian();
+    
+    return medianValue;
   }
   
   /**
@@ -378,6 +386,36 @@ export class GlucoseProcessor {
   }
   
   /**
+   * Añade un valor al buffer de mediana y mantiene el tamaño limitado
+   */
+  private addToMedianBuffer(value: number): void {
+    if (value <= 0) return; // No añadir valores inválidos
+    
+    this.medianBuffer.push(value);
+    if (this.medianBuffer.length > this.MEDIAN_BUFFER_SIZE) {
+      this.medianBuffer.shift();
+    }
+  }
+  
+  /**
+   * Calcula la mediana de los valores en el buffer
+   */
+  private calculateMedian(): number {
+    if (this.medianBuffer.length === 0) return 0;
+    
+    // Crear copia ordenada del buffer
+    const sorted = [...this.medianBuffer].sort((a, b) => a - b);
+    
+    // Calcular mediana
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    } else {
+      return sorted[mid];
+    }
+  }
+  
+  /**
    * Encuentra picos en la señal PPG
    */
   private findPeaks(signal: number[]): number[] {
@@ -492,6 +530,7 @@ export class GlucoseProcessor {
     this.qualityHistory = [];
     this.featureHistory = [];
     this.ppgBuffer = [];
+    this.medianBuffer = [];
   }
   
   /**

@@ -11,6 +11,7 @@ export class LipidProcessor {
   private readonly PERFUSION_INDEX_THRESHOLD = 0.05; // Umbral mínimo para análisis
   private readonly PPG_WINDOW_SIZE = 240; // 8 segundos a 30 fps
   private readonly MIN_QUALITY_THRESHOLD = 0.5; // Calidad mínima para medición
+  private readonly MEDIAN_BUFFER_SIZE = 7; // Tamaño del buffer para mediana final
   
   // Rangos fisiológicos
   private readonly MIN_CHOLESTEROL = 130; // Mínimo fisiológico (mg/dL)
@@ -26,6 +27,10 @@ export class LipidProcessor {
   private lastMeasurementTime: number = 0;
   private qualityHistory: number[] = [];
   private featureHistory: any[] = [];
+  
+  // Buffers para mediana final
+  private cholesterolMedianBuffer: number[] = [];
+  private triglyceridesMedianBuffer: number[] = [];
   
   // Buffer para análisis de señal
   private ppgBuffer: number[] = [];
@@ -103,9 +108,17 @@ export class LipidProcessor {
     this.lastTriglyceridesCalculation = triglyceridesEstimate;
     this.lastMeasurementTime = Date.now();
     
+    // Añadir a los buffers de mediana para estabilizar la lectura
+    this.addToMedianBuffer(this.cholesterolMedianBuffer, Math.round(cholesterolEstimate));
+    this.addToMedianBuffer(this.triglyceridesMedianBuffer, Math.round(triglyceridesEstimate));
+    
+    // Calcular medianas para resultados finales más estables
+    const medianCholesterol = this.calculateMedian(this.cholesterolMedianBuffer);
+    const medianTriglycerides = this.calculateMedian(this.triglyceridesMedianBuffer);
+    
     return {
-      totalCholesterol: Math.round(cholesterolEstimate),
-      triglycerides: Math.round(triglyceridesEstimate)
+      totalCholesterol: medianCholesterol,
+      triglycerides: medianTriglycerides
     };
   }
   
@@ -167,6 +180,36 @@ export class LipidProcessor {
     if (signalRange === 0) return 0.5;
     
     return highFreqSum / ((values.length - 2) * signalRange);
+  }
+  
+  /**
+   * Añade un valor al buffer de mediana y mantiene el tamaño limitado
+   */
+  private addToMedianBuffer(buffer: number[], value: number): void {
+    if (value <= 0) return; // No añadir valores inválidos
+    
+    buffer.push(value);
+    if (buffer.length > this.MEDIAN_BUFFER_SIZE) {
+      buffer.shift();
+    }
+  }
+  
+  /**
+   * Calcula la mediana de los valores en el buffer
+   */
+  private calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    
+    // Crear copia ordenada del buffer
+    const sorted = [...values].sort((a, b) => a - b);
+    
+    // Calcular mediana
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    } else {
+      return sorted[mid];
+    }
   }
   
   /**
@@ -580,6 +623,8 @@ export class LipidProcessor {
     this.qualityHistory = [];
     this.featureHistory = [];
     this.ppgBuffer = [];
+    this.cholesterolMedianBuffer = [];
+    this.triglyceridesMedianBuffer = [];
   }
   
   /**
