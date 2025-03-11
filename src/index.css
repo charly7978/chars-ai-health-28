@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -101,8 +102,8 @@
 .background-grid {
   background-size: 20px 20px;
   background-image:
-    linear-gradient(to right, rgba(226, 209, 181, 0.7) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(226, 209, 181, 0.7) 1px, transparent 1px);
+    linear-gradient(to right, rgba(159, 142, 106, 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(159, 142, 106, 0.5) 1px, transparent 1px);
 }
 
 .start-button {
