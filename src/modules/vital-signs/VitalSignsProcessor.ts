@@ -83,7 +83,6 @@ export class VitalSignsProcessor {
     triglycerides: [] as number[]
   };
   
-  // Added separate kalmanState property definition
   private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
@@ -415,7 +414,6 @@ export class VitalSignsProcessor {
     
     // Aplicar el procesamiento final de la presión arterial (nuevo)
     const finalBP = this.bpProcessor.completeMeasurement();
-    // Fixed this line by removing the trailing backslash
     const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
     
     if (this.lastValidResults) {
