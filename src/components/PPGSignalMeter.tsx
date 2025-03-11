@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle } from 'lucide-react';
+import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -16,6 +16,7 @@ interface PPGSignalMeterProps {
     rrVariation: number;
   } | null;
   preserveResults?: boolean;
+  elapsedTime?: number;
 }
 
 const PPGSignalMeter = ({ 
@@ -26,7 +27,8 @@ const PPGSignalMeter = ({
   onReset,
   arrhythmiaStatus,
   rawArrhythmiaData,
-  preserveResults = false
+  preserveResults = false,
+  elapsedTime = 0
 }: PPGSignalMeterProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataBufferRef = useRef<CircularBuffer | null>(null);
@@ -38,10 +40,11 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
+  const isMonitoring = elapsedTime > 0;
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 400;
+  const CANVAS_HEIGHT = 480;
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
@@ -93,8 +96,8 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#f1f5f9');
-    gradient.addColorStop(1, '#e2e8f0');
+    gradient.addColorStop(0, '#FEF7CD');
+    gradient.addColorStop(1, '#FDE1D3');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -148,26 +151,16 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Solo mostrar alertas de arritmia
     if (arrhythmiaStatus) {
-      const [status, count] = arrhythmiaStatus.split('|');
+      const [status, _] = arrhythmiaStatus.split('|');
       
-      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
+      if (status.includes("ARRITMIA") && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
-      else if (status.includes("ARRITMIA") && Number(count) > 1) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 16px Inter';
-        ctx.textAlign = 'left';
-        
-        // Mostrar el número exacto de arritmias detectadas
-        // Esto muestra el conteo preciso desde el arrhythmiaStatus
-        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 35);
-      }
     }
     
     ctx.stroke();
@@ -259,13 +252,16 @@ const PPGSignalMeter = ({
 
     const now = Date.now();
     
-    // Limpiar el canvas completamente
-    ctx.fillStyle = '#F8FAFC';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
     drawGrid(ctx);
     
-    if (preserveResults && !isFingerDetected) {
+    if ((preserveResults && !isFingerDetected) || !isFingerDetected) {
+      if (!isFingerDetected) {
+        ctx.fillStyle = '#888888';
+        ctx.font = 'bold 24px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('COLOQUE SU DEDO EN LA CÁMARA', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      }
+      
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
@@ -303,7 +299,6 @@ const PPGSignalMeter = ({
     detectPeaks(points, now);
 
     if (points.length > 1) {
-      // Dibujar la señal PPG
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
@@ -351,71 +346,33 @@ const PPGSignalMeter = ({
         ctx.stroke();
       }
 
-      // Mostrar estado de arritmia y contador
-      if (arrhythmiaStatus) {
-        const [status, count] = arrhythmiaStatus.split('|');
-        
-        if (status === "LATIDO_NORMAL") {
-          // Mensaje de latido normal
-          ctx.fillStyle = '#0EA5E9';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("LATIDO NORMAL", canvas.width / 2, 35);
-        } else if (status === "ARRITMIA_DETECTADA") {
-          // Alerta de arritmia
-          ctx.fillStyle = '#DC2626';
-          ctx.font = 'bold 20px Inter';
-          ctx.textAlign = 'center';
-          ctx.fillText("ARRITMIA DETECTADA", canvas.width / 2, 35);
-          
-          // Contador de arritmias
-          if (parseInt(count) > 0) {
-            ctx.font = 'bold 16px Inter';
-            ctx.fillText(`Arritmias detectadas: ${count}`, canvas.width / 2, 60);
-          }
-        }
-      }
-
-      // Dibujar puntos y valores
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
         const y = canvas.height / 2 - peak.value;
         
         if (x >= 0 && x <= canvas.width) {
-          // Dibujar círculo del pico
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
-            // Círculo exterior para arritmias
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
             ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Etiqueta de arritmia con borde rojo
-            ctx.font = 'bold 14px Inter';
+            ctx.font = 'bold 12px Inter';
+            ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
-            
-            // Dibujar el contorno rojo de la etiqueta
-            ctx.strokeStyle = '#DC2626';
-            ctx.lineWidth = 1;
-            ctx.strokeText('ARRITMIA', x, y - 25);
-            
-            // Rellenar con amarillo
-            ctx.fillStyle = '#F59E0B';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
-          
-          // Valor del pico con texto negro
-          const value = Math.abs(peak.value / verticalScale).toFixed(2);
-          ctx.font = 'bold 14px Inter';
+
+          ctx.font = 'bold 12px Inter';
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
-          ctx.fillText(value, x, y - 15);
+          ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
       });
     }
@@ -440,21 +397,36 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-transparent">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-3">
-        <div className="flex items-center gap-2">
+    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
+        <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
-          <div className="w-[180px]">
-            <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
-              <div
-                className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
-                style={{ width: `${isFingerDetected ? quality : 0}%` }}
-              />
+          <div className="ml-13 w-[180px] mt-1">
+            <div className="flex items-center space-x-1.5">
+              <Activity size={16} className="text-slate-600" />
+              <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                <div 
+                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
+                  style={{ 
+                    width: `${isFingerDetected ? quality : 0}%`,
+                    boxShadow: 'inset 0 0 6px rgba(255, 255, 255, 0.6)'
+                  }}
+                />
+              </div>
+              <span className="text-[10px] font-medium text-slate-600 w-12 text-right">
+                {isFingerDetected ? `${quality}%` : '--%'}
+              </span>
             </div>
-            <span className="text-[8px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
-                  style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
-              {getQualityText(quality)}
-            </span>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-[9px] font-medium text-slate-600">
+                {getQualityText(quality)}
+              </span>
+              {quality <= 50 && isFingerDetected && (
+                <span className="text-[8px] font-medium text-red-500 animate-pulse">
+                  Reposicione su dedo
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -478,22 +450,28 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(45vh)] mt-14"
+        className="w-full h-[calc(55vh)] mt-0"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
           onClick={onStartMeasurement}
-          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
+          className="bg-gradient-to-b from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transition-colors duration-200 shadow-md flex items-center justify-center"
         >
-          <span className="text-base font-semibold">
-            INICIAR/DETENER
-          </span>
+          <div className="flex items-center justify-center gap-2">
+            {isMonitoring ? (
+              <>
+                <span className="text-base font-semibold">{30 - elapsedTime}s</span>
+              </>
+            ) : (
+              <span className="text-base font-semibold">INICIAR</span>
+            )}
+          </div>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+          className="bg-gradient-to-b from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800 transition-colors duration-200 shadow-md"
         >
           <span className="text-base font-semibold">
             RESETEAR

@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -18,12 +19,19 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        share: "bg-blue-600 text-white hover:bg-blue-700 shadow-md", // Variante para el botón de compartir
+        start: "bg-blue-600 text-white hover:bg-blue-800 shadow-md", // Variante para el botón de iniciar (azul más intenso)
+        reset: "bg-red-600 text-white hover:bg-red-800 shadow-md", // Variante para el botón de reset (rojo más intenso)
+        monitoring: "bg-gradient-to-b from-blue-600 to-blue-800 text-white hover:from-blue-700 hover:to-blue-900 shadow-md flex items-center justify-center", // Nueva variante con gradiente para monitoreo
+        danger: "bg-gradient-to-b from-red-600 to-red-800 text-white hover:from-red-700 hover:to-red-900 shadow-md", // Nueva variante con gradiente para botones peligrosos
       },
       size: {
         default: "h-10 px-4 py-2",
         sm: "h-9 rounded-md px-3",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
+        share: "h-8 w-8 rounded-full p-1", // Tamaño para el botón de compartir
+        full: "h-full w-full text-xl font-bold", // Tamaño completo para botones de monitoreo
       },
     },
     defaultVariants: {

@@ -29,36 +29,38 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      console.log("useSignalProcessor: Señal recibida detallada:", {
-        timestamp: signal.timestamp,
-        formattedTime: new Date(signal.timestamp).toISOString(),
-        quality: signal.quality,
-        rawValue: signal.rawValue,
-        filteredValue: signal.filteredValue,
-        fingerDetected: signal.fingerDetected,
-        roi: signal.roi,
-        processingTime: Date.now() - signal.timestamp
-      });
+      // Cambios para reducir drásticamente los falsos positivos
+      // pero mantener fácil detección del dedo real
       
-      setLastSignal(signal);
+      // Evaluar mejor la señal para asegurar que realmente es un dedo
+      const isStrongStableSignal = signal.rawValue > 50 && signal.quality > 25;
+      
+      // Un dedo real de contacto completo tiene alto contraste y alta calidad
+      // Menos estricto en la calidad para dedos reales, pero más estricto en la confirmación
+      // de la detección para evitar falsos positivos
+      const enhancedFingerDetected = signal.fingerDetected && isStrongStableSignal;
+      
+      // Crear versión validada de la señal
+      const validatedSignal = {
+        ...signal,
+        fingerDetected: enhancedFingerDetected
+      };
+      
+      setLastSignal(validatedSignal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      // Actualizar estadísticas
-      setSignalStats(prev => {
-        const newStats = {
-          minValue: Math.min(prev.minValue, signal.filteredValue),
-          maxValue: Math.max(prev.maxValue, signal.filteredValue),
-          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
-          totalValues: prev.totalValues + 1
-        };
-        
-        if (prev.totalValues % 50 === 0) {
-          console.log("useSignalProcessor: Estadísticas de señal:", newStats);
-        }
-        
-        return newStats;
-      });
+      if ((framesProcessed + 1) % 50 === 0 && enhancedFingerDetected) {
+        setSignalStats(prev => {
+          const newStats = {
+            minValue: Math.min(prev.minValue, signal.filteredValue),
+            maxValue: Math.max(prev.maxValue, signal.filteredValue),
+            avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+            totalValues: prev.totalValues + 1
+          };
+          return newStats;
+        });
+      }
     };
 
     processor.onError = (error: ProcessingError) => {
