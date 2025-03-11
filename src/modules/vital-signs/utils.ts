@@ -1,3 +1,4 @@
+
 /**
  * Calculates the AC component (peak-to-peak amplitude) of a signal
  */
@@ -60,15 +61,15 @@ export function findPeaksAndValleys(values: number[]) {
  */
 export function calculateAmplitude(
   values: number[],
-  peakIndices: number[],
-  valleyIndices: number[]
+  peaks: number[],
+  valleys: number[]
 ): number {
-  if (peakIndices.length === 0 || valleyIndices.length === 0) return 0;
+  if (peaks.length === 0 || valleys.length === 0) return 0;
 
   const amps: number[] = [];
-  const len = Math.min(peakIndices.length, valleyIndices.length);
+  const len = Math.min(peaks.length, valleys.length);
   for (let i = 0; i < len; i++) {
-    const amp = values[peakIndices[i]] - values[valleyIndices[i]];
+    const amp = values[peaks[i]] - values[valleys[i]];
     if (amp > 0) {
       amps.push(amp);
     }
@@ -77,39 +78,4 @@ export function calculateAmplitude(
 
   const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
   return mean;
-}
-
-/**
- * Calculate the area under the curve between start and end indices
- * Useful for analyzing PPG waveform shape characteristics
- */
-export function calculateAreaUnderCurve(values: number[], startIndex: number, endIndex: number): number {
-  if (startIndex >= endIndex || startIndex < 0 || endIndex >= values.length) {
-    return 0;
-  }
-  
-  let area = 0;
-  const baseline = values[startIndex]; // Use the starting point as baseline
-  
-  for (let i = startIndex; i < endIndex; i++) {
-    // Calculate area relative to baseline
-    area += values[i] - baseline;
-  }
-  
-  return area;
-}
-
-/**
- * Calculate the slope of a segment in the signal
- * Used for analyzing systolic rise and diastolic fall characteristics
- */
-export function calculateSlope(values: number[], startIndex: number, endIndex: number): number {
-  if (startIndex >= endIndex || startIndex < 0 || endIndex >= values.length) {
-    return 0;
-  }
-  
-  const xDiff = endIndex - startIndex;
-  const yDiff = values[endIndex] - values[startIndex];
-  
-  return yDiff / xDiff;
 }

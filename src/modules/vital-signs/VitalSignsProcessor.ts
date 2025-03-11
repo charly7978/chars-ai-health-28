@@ -286,24 +286,30 @@ export class VitalSignsProcessor {
     // Añadir valores recién calculados a los buffers de mediana
     // (excepto glucosa que ahora tiene su propio buffer interno)
     this.addToMedianBuffer(this.spo2Buffer, spo2);
-    this.addToMedianBuffer(this.hemoglobinBuffer, hemoglobin);
+    this.addToMedianBuffer(this.systolicBuffer, bp.systolic);
+    this.addToMedianBuffer(this.diastolicBuffer, bp.diastolic);
     // Ya no procesamos el buffer de glucosa aquí, el procesador maneja su propio buffer
     this.addToMedianBuffer(this.cholesterolBuffer, lipids.totalCholesterol);
     this.addToMedianBuffer(this.triglyceridesBuffer, lipids.triglycerides);
+    this.addToMedianBuffer(this.hemoglobinBuffer, hemoglobin);
     
-    // Calcular medianas para resultados estables (excepto glucosa y presión arterial)
+    // Calcular medianas para resultados estables (excepto glucosa)
     const medianSpo2 = this.calculateMedian(this.spo2Buffer);
+    const medianSystolic = this.calculateMedian(this.systolicBuffer);
+    const medianDiastolic = this.calculateMedian(this.diastolicBuffer);
     const medianCholesterol = this.calculateMedian(this.cholesterolBuffer);
     const medianTriglycerides = this.calculateMedian(this.triglyceridesBuffer);
     const medianHemoglobin = this.calculateMedian(this.hemoglobinBuffer);
     
     // Construir el resultado con valores medianos
+    const medianPressure = `${Math.round(medianSystolic)}/${Math.round(medianDiastolic)}`;
+    
     const result: VitalSignsResult = {
       spo2: Math.round(medianSpo2),
-      pressure: pressure, // Ya viene procesado con su propia mediana del procesador de presión
+      pressure: medianPressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
       lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
-      glucose: glucose, // Ya viene procesado con su propia mediana del procesador de glucosa
+      glucose: glucose, // Ahora usamos el valor directo del procesador de glucosa
       lipids: {
         totalCholesterol: Math.round(medianCholesterol),
         triglycerides: Math.round(medianTriglycerides)
@@ -320,17 +326,17 @@ export class VitalSignsProcessor {
     }
     
     // Guardar resultados válidos
-    if (medianSpo2 > 0 && bp.systolic > 0 && bp.diastolic > 0 && 
+    if (medianSpo2 > 0 && medianSystolic > 0 && medianDiastolic > 0 && 
         glucose > 0 && medianCholesterol > 0) {
       this.lastValidResults = { ...result };
       
       // Logging opcional para debug
       console.log("VitalSignsProcessor: Nuevos resultados:", {
-        spo2: { mediana: medianSpo2 },
-        sistólica: { valor: bp.systolic },
-        diastólica: { valor: bp.diastolic },
+        spo2: { actual: spo2, mediana: medianSpo2 },
+        sistólica: { actual: bp.systolic, mediana: medianSystolic },
+        diastólica: { actual: bp.diastolic, mediana: medianDiastolic },
         glucosa: { valor: glucose },
-        colesterol: { mediana: medianCholesterol }
+        colesterol: { actual: lipids.totalCholesterol, mediana: medianCholesterol }
       });
     }
     
@@ -339,31 +345,25 @@ export class VitalSignsProcessor {
 
   /**
    * Completa la medición y aplica el procesamiento estadístico final
-   * a la glucosa y presión arterial, devolviendo los resultados finales.
+   * a la glucosa, devolviendo los resultados finales.
    */
   public completeMeasurement(): VitalSignsResult | null {
-    console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final");
+    console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final a glucosa");
     
     // Aplica el procesamiento final de la glucosa
     const finalGlucose = this.glucoseProcessor.completeMeasurement();
     
-    // Aplica el procesamiento final de la presión arterial
-    const finalBp = this.bpProcessor.completeMeasurement();
-    const finalPressure = `${finalBp.systolic}/${finalBp.diastolic}`;
-    
     if (this.lastValidResults) {
-      // Actualizamos el resultado final con los valores finales procesados
+      // Actualizamos el resultado final con el valor final de glucosa
       const updatedResults: VitalSignsResult = {
         ...this.lastValidResults,
-        glucose: finalGlucose,
-        pressure: finalPressure
+        glucose: finalGlucose
       };
       
       this.lastValidResults = updatedResults;
       
       console.log("VitalSignsProcessor: Medición completada con éxito", {
         glucosaFinal: finalGlucose,
-        presiónFinal: finalPressure,
         timestamp: new Date().toISOString()
       });
       
@@ -461,3 +461,4 @@ export class VitalSignsProcessor {
     this.lastValidResults = null;
   }
 }
+
