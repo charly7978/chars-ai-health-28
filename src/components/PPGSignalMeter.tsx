@@ -387,28 +387,26 @@ const PPGSignalMeter = ({
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-5">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-6">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
-          <div className="ml-10 w-[180px]">
-            <div className="flex items-center space-x-1">
+          <div className="ml-10 w-[180px] mt-1">
+            <div className="flex items-center space-x-1.5">
               <Activity size={16} className="text-slate-600" />
-              <div className="relative w-full h-3 bg-slate-200 rounded-sm overflow-hidden">
+              <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
                 <div 
-                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-sm`}
+                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
                   style={{ 
                     width: `${isFingerDetected ? quality : 0}%`,
-                    backgroundColor: quality > 75 ? '#10b981' : quality > 50 ? '#f59e0b' : '#ef4444',
-                    boxShadow: 'inset 0 0 4px rgba(255, 255, 255, 0.5)'
+                    boxShadow: 'inset 0 0 6px rgba(255, 255, 255, 0.6)'
                   }}
                 />
-                <div className="absolute inset-0 border border-slate-300 rounded-sm pointer-events-none" />
               </div>
               <span className="text-[10px] font-medium text-slate-600 w-12 text-right">
                 {isFingerDetected ? `${quality}%` : '--%'}
               </span>
             </div>
-            <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center justify-between mt-0.5">
               <span className="text-[9px] font-medium text-slate-600">
                 {getQualityText(quality)}
               </span>
