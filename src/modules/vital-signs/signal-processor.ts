@@ -14,28 +14,39 @@ export class SignalProcessor {
   private readonly BASELINE_FACTOR = 0.92;
   private baselineValue: number = 0;
 
-  // Stricter finger detection parameters
-  private readonly MIN_RED_THRESHOLD = 80;      // Increased from 60 for stronger signal requirement
-  private readonly MAX_RED_THRESHOLD = 220;     // Reduced from 230 to avoid saturation
-  private readonly RED_DOMINANCE_RATIO = 1.6;   // Increased from 1.35 for clearer red channel isolation
-  private readonly MIN_SIGNAL_AMPLITUDE = 6;    // Increased from 4 for better variation
-  private readonly MIN_VALID_PIXELS = 150;      // Increased from 100 to require more consistent coverage
-  private readonly ROI_SCALE = 0.18;            // Smaller ROI (from 0.20) for more focused detection
+  // Parámetros más permisivos para la detección de dedos, pero estrictos contra falsos positivos
+  private readonly MIN_RED_THRESHOLD = 50;      // Reducido para detección más fácil
+  private readonly MAX_RED_THRESHOLD = 220;     // Mantener límite superior para evitar saturación
+  private readonly RED_DOMINANCE_RATIO = 1.3;   // Reducido para facilitar detección
+  private readonly MIN_SIGNAL_AMPLITUDE = 4;    // Reducido para facilitar detección
+  private readonly MIN_VALID_PIXELS = 100;      // Reducido para facilitar detección
+  private readonly ROI_SCALE = 0.35;            // ROI más grande para capturar más del dedo
   private readonly SIGNAL_MEMORY = 5;
-  private readonly HYSTERESIS = 15;             // Increased from 12 for better stability
+  private readonly HYSTERESIS = 10;             // Reducido para más responsividad
+  
+  // Parámetros anti-falsos positivos
+  private readonly MIN_RED_COVERAGE = 0.2;      // Mínimo porcentaje ROI que debe ser rojo
+  private readonly MIN_FINGER_CONTRAST = 10;    // Contraste mínimo para un dedo real
+  private readonly MIN_RED_PERSISTENCE = 3;     // Mínimo frames consistentes con señal fuerte
 
   // Enhanced signal quality and stability parameters
-  private readonly STABILITY_THRESHOLD = 0.80;  // Increased from 0.75
-  private readonly MIN_PERFUSION_INDEX = 0.12;  // Increased from 0.08
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 12; // Reduced from 15
+  private readonly STABILITY_THRESHOLD = 0.7;   // Reducido para ser más permisivo
+  private readonly MIN_PERFUSION_INDEX = 0.08;  // Reducido para ser más permisivo
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 15; // Incrementado para ser más permisivo
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
-  private readonly MIN_CONSECUTIVE_FRAMES = 6;  // Increased from 4
+  private readonly MIN_CONSECUTIVE_FRAMES = 3;  // Reducido para detección más rápida
   private lastStableValue: number = 0;
   private stableSignalCount: number = 0;
-  private readonly MIN_STABLE_SIGNAL_COUNT = 12; // Increased from 10
+  private readonly MIN_STABLE_SIGNAL_COUNT = 8; // Reducido para ser más permisivo
   private signalBuffer: number[] = [];
   private readonly SIGNAL_BUFFER_SIZE = 30;
+  
+  // Anti-falsos positivos cuando se quita el dedo
+  private emptyFrameCount: number = 0;
+  private readonly MAX_EMPTY_FRAMES = 3;
+  private lastRedValue: number = 0;
+  private redPersistenceCounter: number = 0;
 
   /**
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
@@ -75,7 +86,7 @@ export class SignalProcessor {
   }
 
   /**
-   * Extracts red channel with improved finger detection and stability checks
+   * Extracts red channel with improved finger detection and strong false positive rejection
    */
   private extractRedChannel(imageData: ImageData): number {
     if (!imageData || !imageData.data || imageData.data.length === 0) {
@@ -88,8 +99,9 @@ export class SignalProcessor {
     let greenSum = 0;
     let blueSum = 0;
     let pixelCount = 0;
+    let totalPixels = 0;
     
-    // Calculate ROI dimensions with stricter center focus
+    // Calculate ROI dimensions with larger center focus
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
     const roiSize = Math.min(imageData.width, imageData.height) * this.ROI_SCALE;
@@ -102,17 +114,26 @@ export class SignalProcessor {
     let maxRed = 0;
     let minRed = 255;
     let validRegionCount = 0;
+    let edgePixelCount = 0;
     
-    // Process ROI pixels with enhanced validation
-    for (let y = startY; y < endY; y++) {
-      for (let x = startX; x < endX; x++) {
+    // Analizar primero el centro de la ROI (más importante para la detección)
+    const innerStartX = Math.max(0, Math.floor(centerX - roiSize / 4));
+    const innerEndX = Math.min(imageData.width, Math.floor(centerX + roiSize / 4));
+    const innerStartY = Math.max(0, Math.floor(centerY - roiSize / 4));
+    const innerEndY = Math.min(imageData.height, Math.floor(centerY + roiSize / 4));
+    
+    // Primero procesar el área central para verificar si hay un dedo
+    for (let y = innerStartY; y < innerEndY; y++) {
+      for (let x = innerStartX; x < innerEndX; x++) {
         const i = (y * imageData.width + x) * 4;
         if (i >= 0 && i < data.length - 3) {
+          totalPixels++;
+          
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Stricter red channel validation
+          // Criterio más permisivo para la dominancia del rojo
           if (r > g * this.RED_DOMINANCE_RATIO && 
               r > b * this.RED_DOMINANCE_RATIO && 
               r >= this.MIN_RED_THRESHOLD && 
@@ -126,7 +147,7 @@ export class SignalProcessor {
             maxRed = Math.max(maxRed, r);
             minRed = Math.min(minRed, r);
             
-            // Enhanced regional validation
+            // Validación regional mejorada
             if (Math.abs(r - this.lastStableValue) < this.HYSTERESIS) {
               validRegionCount++;
             }
@@ -135,19 +156,75 @@ export class SignalProcessor {
       }
     }
     
-    // ROI area calculation for coverage check
-    const roiArea = (endX - startX) * (endY - startY);
+    // Si el centro de la ROI no tiene suficientes píxeles rojos, procesar el resto
+    const centerCoverage = pixelCount / Math.max(1, totalPixels);
+    if (centerCoverage < this.MIN_RED_COVERAGE) {
+      // Procesar el resto de la ROI
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          // Saltar el centro que ya procesamos
+          if (x >= innerStartX && x < innerEndX && y >= innerStartY && y < innerEndY) {
+            continue;
+          }
+          
+          const i = (y * imageData.width + x) * 4;
+          if (i >= 0 && i < data.length - 3) {
+            totalPixels++;
+            
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            
+            // Criterio más permisivo para la dominancia del rojo
+            if (r > g * this.RED_DOMINANCE_RATIO && 
+                r > b * this.RED_DOMINANCE_RATIO && 
+                r >= this.MIN_RED_THRESHOLD && 
+                r <= this.MAX_RED_THRESHOLD) {
+              
+              redSum += r;
+              greenSum += g;
+              blueSum += b;
+              pixelCount++;
+              
+              maxRed = Math.max(maxRed, r);
+              minRed = Math.min(minRed, r);
+              
+              // Validación regional mejorada
+              if (Math.abs(r - this.lastStableValue) < this.HYSTERESIS) {
+                validRegionCount++;
+              }
+            }
+            
+            // Detectar bordes (útil para rechazar falsos positivos)
+            if (x === startX || x === endX - 1 || y === startY || y === endY - 1) {
+              const isEdgeRed = r > g * 1.2 && r > b * 1.2 && r > 40;
+              if (isEdgeRed) {
+                edgePixelCount++;
+              }
+            }
+          }
+        }
+      }
+    }
     
-    // Enhanced validation with coverage requirement
-    if (pixelCount < this.MIN_VALID_PIXELS || pixelCount / roiArea < 0.35) {
+    // Área total de la ROI
+    const roiArea = (endX - startX) * (endY - startY);
+    const redCoverage = pixelCount / roiArea;
+    
+    // Validación con cobertura requerida
+    if (pixelCount < this.MIN_VALID_PIXELS || redCoverage < this.MIN_RED_COVERAGE) {
+      // Resetear contadores cuando no hay suficiente cobertura roja
+      this.emptyFrameCount++;
+      this.redPersistenceCounter = 0;
       this.consecutiveValidFrames = 0;
       this.stableSignalCount = 0;
       return 0;
     }
     
-    // Also check for contrast - an essential feature of a real finger
-    if ((maxRed - minRed) < 20) {
+    // También verificar contraste - característica esencial de un dedo real
+    if ((maxRed - minRed) < this.MIN_FINGER_CONTRAST) {
       this.consecutiveValidFrames = 0;
+      this.redPersistenceCounter = 0;
       return 0;
     }
     
@@ -157,42 +234,74 @@ export class SignalProcessor {
     const avgGreen = greenSum / pixelCount;
     const avgBlue = blueSum / pixelCount;
     
-    // Enhanced signal validation with stability checks
+    // Detectar falsos positivos basados en el patrón de los bordes
+    // Los objetos que no son dedos suelen tener bordes más definidos
+    const edgeRatio = edgePixelCount / Math.max(1, (endX - startX) * 2 + (endY - startY) * 2);
+    const hasStrongEdges = edgeRatio > 0.4 && edgePixelCount > 15;
+    
+    // Validar cambios abruptos de valor que indican falsos positivos
+    const hasAbruptChange = this.lastRedValue > 0 && 
+                          Math.abs(avgRed - this.lastRedValue) / this.lastRedValue > 0.5;
+    
+    // Detección de falsos positivos mejorada
+    if (hasStrongEdges || hasAbruptChange) {
+      this.redPersistenceCounter = 0;
+      this.emptyFrameCount = 0;
+      return 0;
+    }
+    
+    // Validación de señal con criterios más permisivos
     const isValidSignal = 
       avgRed >= this.MIN_RED_THRESHOLD &&
       avgRed <= this.MAX_RED_THRESHOLD &&
       signalAmplitude >= this.MIN_SIGNAL_AMPLITUDE &&
-      avgRed > (avgGreen * this.RED_DOMINANCE_RATIO) &&
-      avgRed > (avgBlue * this.RED_DOMINANCE_RATIO) &&
-      validRegionCount >= (pixelCount * 0.45); // Increased from 0.4 to 0.45 - stricter consistency requirement
-
-    // Buffer management for signal stability analysis
+      avgRed > (avgGreen * this.RED_DOMINANCE_RATIO * 0.9) && // Más permisivo
+      avgRed > (avgBlue * this.RED_DOMINANCE_RATIO * 0.9) &&  // Más permisivo
+      validRegionCount >= (pixelCount * 0.35); // Reducido para ser más permisivo
+    
+    // Buffer para análisis de estabilidad de señal
     this.signalBuffer.push(avgRed);
     if (this.signalBuffer.length > this.SIGNAL_BUFFER_SIZE) {
       this.signalBuffer.shift();
     }
-
-    // Calculate signal stability
-    const isStableSignal = this.signalBuffer.length >= 5 && this.calculateSignalStability();
-
-    if (isValidSignal && isStableSignal) {
-      this.consecutiveValidFrames++;
-      this.lastValidDetectionTime = currentTime;
-      this.stableSignalCount++;
+    
+    // Calcular estabilidad de la señal
+    const isStableSignal = this.signalBuffer.length >= 4 && this.calculateSignalStability();
+    
+    // Actualizar el valor rojo previo para comparaciones futuras
+    this.lastRedValue = avgRed;
+    
+    if (isValidSignal) {
+      // Incrementar contador de persistencia para valores rojos válidos
+      this.redPersistenceCounter++;
+      this.emptyFrameCount = 0;
       
-      // Only return signal after consistent stable detection
-      if (this.consecutiveValidFrames >= this.MIN_CONSECUTIVE_FRAMES && 
-          this.stableSignalCount >= this.MIN_STABLE_SIGNAL_COUNT) {
-        this.lastStableValue = avgRed;
-        return avgRed;
+      // Sólo considerar la señal válida después de persistencia continua
+      if (this.redPersistenceCounter >= this.MIN_RED_PERSISTENCE) {
+        if (isStableSignal) {
+          this.consecutiveValidFrames++;
+          this.lastValidDetectionTime = currentTime;
+          this.stableSignalCount++;
+          
+          // Sólo retornar señal después de detección estable consistente
+          if (this.consecutiveValidFrames >= this.MIN_CONSECUTIVE_FRAMES && 
+              this.stableSignalCount >= this.MIN_STABLE_SIGNAL_COUNT) {
+            this.lastStableValue = avgRed;
+            return avgRed;
+          }
+        }
       }
     } else {
-      // Reset stability counter but maintain brief signal memory
-      if (currentTime - this.lastValidDetectionTime < 400) { // Reduced from 500 to 400ms
+      // Resetear contadores de persistencia
+      this.redPersistenceCounter = 0;
+      
+      // Mantener brevemente la memoria de señal
+      if (currentTime - this.lastValidDetectionTime < 400) {
         return this.lastStableValue;
       }
-      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 2); // Faster decrease - from 1 to 2
-      this.stableSignalCount = Math.max(0, this.stableSignalCount - 2); // Faster stability loss
+      
+      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 1);
+      this.stableSignalCount = Math.max(0, this.stableSignalCount - 1);
     }
     
     return 0;
@@ -254,6 +363,14 @@ export class SignalProcessor {
   public reset(): void {
     this.ppgValues = [];
     this.baselineValue = 0;
+    this.emptyFrameCount = 0;
+    this.redPersistenceCounter = 0;
+    this.lastRedValue = 0;
+    this.consecutiveValidFrames = 0;
+    this.stableSignalCount = 0;
+    this.lastStableValue = 0;
+    this.lastValidDetectionTime = 0;
+    this.signalBuffer = [];
   }
 
   public getPPGValues(): number[] {
@@ -261,13 +378,13 @@ export class SignalProcessor {
   }
 
   /**
-   * Enhanced signal stability calculation
+   * Enhanced signal stability calculation with reduced threshold
    */
   private calculateSignalStability(): boolean {
-    if (this.signalBuffer.length < 5) return false;
+    if (this.signalBuffer.length < 4) return false; // Reducido de 5 a 4
     
     // Calculate moving statistics
-    const recentValues = this.signalBuffer.slice(-5);
+    const recentValues = this.signalBuffer.slice(-4); // Reducido de 5 a 4
     const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
     
     // Calculate variance
@@ -281,8 +398,8 @@ export class SignalProcessor {
       Math.abs(val - recentValues[i])
     ));
     
-    // Combined stability check with stricter criteria
-    return variance < (mean * 0.08) && // Reduced from 0.1 to 0.08 - require more consistency
+    // Combined stability check with criterios más permisivos
+    return variance < (mean * 0.1) && // Incrementado de 0.08 a 0.1 - más permisivo
            maxVariation < this.MAX_FRAME_TO_FRAME_VARIATION;
   }
 }

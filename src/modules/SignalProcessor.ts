@@ -1,3 +1,4 @@
+
 import { ProcessedSignal, ProcessingError, SignalProcessor } from '../types/signal';
 
 class KalmanFilter {
@@ -27,12 +28,17 @@ export class PPGSignalProcessor implements SignalProcessor {
   private lastValues: number[] = [];
   private readonly DEFAULT_CONFIG = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 60,     // Increased from 40 to 60 for more strict detection
+    MIN_RED_THRESHOLD: 50,     // Reducido de 60 a 50 para más fácil detección
     MAX_RED_THRESHOLD: 250,
-    STABILITY_WINDOW: 8,       // Increased from 6 to 8 for better stability
-    MIN_STABILITY_COUNT: 6,    // Increased from 4 to 6 for more strict stability detection
+    STABILITY_WINDOW: 6,       // Reducido de 8 a 6 para facilitar la detección
+    MIN_STABILITY_COUNT: 4,    // Reducido de 6 a 4 para facilitar la detección
     HYSTERESIS: 5,
-    MIN_CONSECUTIVE_DETECTIONS: 5  // Increased from 3 to 5 for more strict detection sequence
+    MIN_CONSECUTIVE_DETECTIONS: 3,  // Reducido de 5 a 3 para detección más rápida
+    // Parámetros específicos para descartar falsos positivos cuando no hay dedo
+    FINGER_REMOVAL_THRESHOLD: 40,  // Umbral fuerte para considerar que no hay dedo
+    MIN_RED_COVERAGE: 0.25,     // Al menos 25% del ROI debe ser rojo
+    MIN_FINGER_CONTRAST: 12,    // Contraste mínimo para un dedo real
+    MAX_EMPTY_FRAME_TIME: 150  // Tiempo máximo en ms para considerar falso positivo
   };
 
   private currentConfig: typeof this.DEFAULT_CONFIG;
@@ -41,7 +47,10 @@ export class PPGSignalProcessor implements SignalProcessor {
   private consecutiveDetections: number = 0;
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
-  private readonly DETECTION_TIMEOUT = 300; // Reduced from 500ms to 300ms for quicker timeout
+  private lastEmptyFrameTime: number = 0;
+  private readonly DETECTION_TIMEOUT = 250; // ms para resetear detección
+  private emptyFrameCount: number = 0;
+  private lastRedValueWhenDetected: number = 0;
 
   constructor(
     public onSignalReady?: (signal: ProcessedSignal) => void,
@@ -60,6 +69,9 @@ export class PPGSignalProcessor implements SignalProcessor {
       this.consecutiveDetections = 0;
       this.isCurrentlyDetected = false;
       this.lastDetectionTime = 0;
+      this.lastEmptyFrameTime = 0;
+      this.emptyFrameCount = 0;
+      this.lastRedValueWhenDetected = 0;
       this.kalmanFilter.reset();
       console.log("PPGSignalProcessor: Inicializado");
     } catch (error) {
@@ -106,7 +118,67 @@ export class PPGSignalProcessor implements SignalProcessor {
 
     try {
       // Extraer y procesar el canal rojo (el más importante para PPG)
-      const redValue = this.extractRedChannel(imageData);
+      const { redValue, emptyROI, hasStrongTextureOrEdge } = this.extractRedChannel(imageData);
+      
+      // Lógica específica para manejar frames vacíos (sin dedo)
+      if (emptyROI || redValue <= 0) {
+        const now = Date.now();
+        this.emptyFrameCount++;
+        this.lastEmptyFrameTime = now;
+        
+        // Si tenemos múltiples frames vacíos consecutivos, reseteamos la detección
+        if (this.emptyFrameCount >= 3) {
+          if (this.isCurrentlyDetected) {
+            // Resetear estado de detección después de frames vacíos consistentes
+            this.isCurrentlyDetected = false;
+            this.consecutiveDetections = 0;
+            this.stableFrameCount = 0;
+          }
+          
+          // Reportar explícitamente como no detectado
+          if (this.onSignalReady) {
+            this.onSignalReady({
+              timestamp: now,
+              rawValue: 0,
+              filteredValue: 0,
+              quality: 0, 
+              fingerDetected: false,
+              roi: this.detectROI(0),
+              perfusionIndex: 0
+            });
+          }
+          return;
+        }
+      } else {
+        // Reset contador de frames vacíos cuando encontramos señal
+        this.emptyFrameCount = 0;
+      }
+      
+      // Si detectamos bordes fuertes o texturas que no son un dedo, rechazar
+      if (hasStrongTextureOrEdge && redValue < 100) {
+        if (this.isCurrentlyDetected) {
+          // Mantener brevemente la detección para evitar parpadeos
+          const timeSinceLastDetection = Date.now() - this.lastDetectionTime;
+          if (timeSinceLastDetection > 300) {
+            this.isCurrentlyDetected = false;
+            this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 2);
+          }
+        }
+        
+        // Enviar estado de no detección
+        if (this.onSignalReady) {
+          this.onSignalReady({
+            timestamp: Date.now(),
+            rawValue: redValue,
+            filteredValue: 0,
+            quality: 0,
+            fingerDetected: false,
+            roi: this.detectROI(redValue),
+            perfusionIndex: 0
+          });
+        }
+        return;
+      }
       
       // Aplicar filtro Kalman para suavizar la señal y reducir el ruido
       const filtered = this.kalmanFilter.filter(redValue);
@@ -114,7 +186,12 @@ export class PPGSignalProcessor implements SignalProcessor {
       // Análisis avanzado de la señal para determinar la presencia del dedo y calidad
       const { isFingerDetected, quality } = this.analyzeSignal(filtered, redValue);
       
-      // Calcular coordenadas del ROI (región de interés)
+      // Si estamos detectando un dedo, recordar el valor para comparación
+      if (isFingerDetected) {
+        this.lastRedValueWhenDetected = redValue;
+      }
+      
+      // Coordenadas del ROI (región de interés)
       const roi = this.detectROI(redValue);
       
       // Métricas adicionales para debugging y análisis
@@ -131,6 +208,11 @@ export class PPGSignalProcessor implements SignalProcessor {
         roi: roi,
         perfusionIndex: perfusionIndex
       };
+      
+      // Log detallado para depuración
+      if (isFingerDetected !== this.isCurrentlyDetected) {
+        console.log(`Cambio en detección: ${isFingerDetected ? 'DETECTADO' : 'NO DETECTADO'} - Valor: ${redValue.toFixed(1)}, Calidad: ${quality}`);
+      }
       
       // Enviar feedback sobre el uso de la linterna cuando es necesario
       if (isFingerDetected && quality < 40 && redValue < 120 && this.onError) {
@@ -165,7 +247,11 @@ export class PPGSignalProcessor implements SignalProcessor {
     }
   }
 
-  private extractRedChannel(imageData: ImageData): number {
+  private extractRedChannel(imageData: ImageData): {
+    redValue: number;
+    emptyROI: boolean;
+    hasStrongTextureOrEdge: boolean;
+  } {
     const data = imageData.data;
     let redSum = 0;
     let greenSum = 0;
@@ -173,127 +259,148 @@ export class PPGSignalProcessor implements SignalProcessor {
     let pixelCount = 0;
     let maxRed = 0;
     let minRed = 255;
+    let edgeCount = 0;
+    let textureVarianceSum = 0;
     
-    // ROI (Region of Interest) central
-    // Usar un área más pequeña y centrada para mejor precisión
+    // ROI más grande y centrada para mejor detección de dedo
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
-    const roiSize = Math.min(imageData.width, imageData.height) * 0.25; // Reduced from 0.3 to 0.25 - stricter center focus
+    const roiSize = Math.min(imageData.width, imageData.height) * 0.35; // Incrementado de 0.25 a 0.35
     
     const startX = Math.max(0, Math.floor(centerX - roiSize / 2));
     const endX = Math.min(imageData.width, Math.floor(centerX + roiSize / 2));
     const startY = Math.max(0, Math.floor(centerY - roiSize / 2));
     const endY = Math.min(imageData.height, Math.floor(centerY + roiSize / 2));
     
-    // Matriz para acumular valores por regiones y detectar la mejor área
-    const regionSize = 10; // Dividir el ROI en regiones de 10x10 píxeles
-    const regions = [];
-    
+    // Matrices temporales para análisis de textura
+    const redMatrix: number[][] = [];
     for (let y = startY; y < endY; y++) {
+      redMatrix[y] = [];
       for (let x = startX; x < endX; x++) {
         const i = (y * imageData.width + x) * 4;
-        const r = data[i];     // Canal rojo
-        const g = data[i+1];   // Canal verde
-        const b = data[i+2];   // Canal azul
-        
-        // Stricter red dominance check - more precise for actual fingers
-        // Requiring much stronger red dominance (1.5 instead of 1.1)
-        if (r > g * 1.5 && r > b * 1.5) {
-          redSum += r;
-          greenSum += g;
-          blueSum += b;
-          pixelCount++;
+        if (i >= 0 && i < data.length - 3) {
+          const r = data[i];
+          const g = data[i+1];
+          const b = data[i+2];
           
-          // Registrar valores máximos y mínimos para calcular contraste
-          maxRed = Math.max(maxRed, r);
-          minRed = Math.min(minRed, r);
-          
-          // Registrar región para análisis avanzado
-          const regionX = Math.floor((x - startX) / regionSize);
-          const regionY = Math.floor((y - startY) / regionSize);
-          const regionKey = `${regionX},${regionY}`;
-          
-          if (!regions[regionKey]) {
-            regions[regionKey] = {
-              redSum: 0,
-              count: 0,
-              x: regionX,
-              y: regionY
-            };
+          // Criterio más permisivo para la dominancia del rojo
+          // Más fácil de detectar dedos reales
+          if (r > g * 1.2 && r > b * 1.2) {
+            redSum += r;
+            greenSum += g;
+            blueSum += b;
+            pixelCount++;
+            
+            redMatrix[y][x] = r;
+            
+            // Registrar valores máximos y mínimos para calcular contraste
+            maxRed = Math.max(maxRed, r);
+            minRed = Math.min(minRed, r);
           }
+        }
+      }
+    }
+    
+    // Análisis de textura y bordes (para descartar objetos que no son dedos)
+    for (let y = startY + 1; y < endY - 1; y++) {
+      for (let x = startX + 1; x < endX - 1; x++) {
+        if (!redMatrix[y] || !redMatrix[y][x]) continue;
+        
+        const current = redMatrix[y][x];
+        const neighbors = [
+          redMatrix[y-1]?.[x] || 0,
+          redMatrix[y+1]?.[x] || 0,
+          redMatrix[y]?.[x-1] || 0,
+          redMatrix[y]?.[x+1] || 0
+        ].filter(Boolean);
+        
+        if (neighbors.length > 0) {
+          // Calcular varianza local (textura)
+          const localVariance = neighbors.reduce((sum, val) => {
+            return sum + Math.pow(val - current, 2);
+          }, 0) / neighbors.length;
           
-          regions[regionKey].redSum += r;
-          regions[regionKey].count++;
+          textureVarianceSum += localVariance;
+          
+          // Detectar bordes fuertes
+          const maxDiff = Math.max(...neighbors.map(n => Math.abs(n - current)));
+          if (maxDiff > 50) {
+            edgeCount++;
+          }
         }
       }
     }
     
-    // Increased threshold for minimum number of red-dominant pixels
-    // This helps avoid false positives from small red objects
-    if (pixelCount < 100) { // Increased from 50 to 100
-      return 0;
-    }
-    
-    // Also require that red pixels represent a significant portion of the ROI
+    // Evaluar criterios
     const roiArea = (endX - startX) * (endY - startY);
+    const averageTexture = pixelCount > 0 ? textureVarianceSum / pixelCount : 0;
+    const edgeRatio = pixelCount > 0 ? edgeCount / pixelCount : 0;
     const redCoverage = pixelCount / roiArea;
-    if (redCoverage < 0.3) { // At least 30% of ROI should be red-dominant
-      return 0;
+    
+    // Detectar si está vacío
+    const emptyROI = pixelCount < 50 || redCoverage < this.currentConfig.MIN_RED_COVERAGE;
+    
+    // Detectar si tiene texturas o bordes fuertes (no característicos de dedos)
+    const hasStrongTextureOrEdge = averageTexture > 400 || edgeRatio > 0.25;
+    
+    // Si el ROI está vacío, retornar 0
+    if (emptyROI) {
+      return { 
+        redValue: 0, 
+        emptyROI: true,
+        hasStrongTextureOrEdge: false 
+      };
     }
     
-    // Ensure there's enough contrast/texture in the image
-    // Low contrast might indicate it's not actually a finger
-    if ((maxRed - minRed) < 20) { // Require good variation in red values
-      return 0; 
+    // Asegurar que hay suficiente contraste (un dedo real tiene buen contraste)
+    if ((maxRed - minRed) < this.currentConfig.MIN_FINGER_CONTRAST) {
+      return { 
+        redValue: 0, 
+        emptyROI: false,
+        hasStrongTextureOrEdge: true 
+      };
     }
     
-    // Find the best region as before
-    let bestRegion = null;
-    let bestAvgRed = 0;
-    
-    for (const key in regions) {
-      const region = regions[key];
-      if (region.count > 15) {  // Increased from 10 to 15 - ensure robust regions
-        const avgRed = region.redSum / region.count;
-        if (avgRed > bestAvgRed) {
-          bestAvgRed = avgRed;
-          bestRegion = region;
-        }
-      }
-    }
-    
-    // If we find a good region, use that value but with stricter threshold
-    if (bestRegion && bestAvgRed > 120) { // Increased from 100 to 120
-      return bestAvgRed;
-    }
-    
-    // Standard calculation with enhanced criteria
     const avgRed = redSum / pixelCount;
     const avgGreen = greenSum / pixelCount;
     const avgBlue = blueSum / pixelCount;
     
-    // More strict metrics for finger detection
-    const isRedDominant = avgRed > (avgGreen * 1.5) && avgRed > (avgBlue * 1.5); // Increased from 1.2 to 1.5
-    const hasGoodContrast = pixelCount > 150 && (maxRed - minRed) > 20; // Increased contrast requirements
-    const isInRange = avgRed > 60 && avgRed < 250; // Narrowed acceptable range
+    // Criterios más permisivos para la detección de dedos
+    const isRedDominant = avgRed > (avgGreen * 1.2) && avgRed > (avgBlue * 1.2);
+    const hasGoodContrast = (maxRed - minRed) > this.currentConfig.MIN_FINGER_CONTRAST;
+    const isInRange = avgRed > this.currentConfig.MIN_RED_THRESHOLD && avgRed < this.currentConfig.MAX_RED_THRESHOLD;
     
-    // Return the processed value or 0 if no finger is detected
-    return (isRedDominant && hasGoodContrast && isInRange) ? avgRed : 0;
+    // Return el valor procesado o 0 si no se detecta un dedo
+    return {
+      redValue: (isRedDominant && hasGoodContrast && isInRange) ? avgRed : 0,
+      emptyROI: false,
+      hasStrongTextureOrEdge: hasStrongTextureOrEdge
+    };
   }
 
   private analyzeSignal(filtered: number, rawValue: number): { isFingerDetected: boolean, quality: number } {
     const currentTime = Date.now();
     const timeSinceLastDetection = currentTime - this.lastDetectionTime;
     
-    // If the input value is 0 (no red dominance detected), definitely no finger
+    // Si el input es 0 (no hay dominancia de rojo), definitivamente no hay dedo
     if (rawValue <= 0) {
       this.consecutiveDetections = 0;
       this.stableFrameCount = 0;
-      this.isCurrentlyDetected = false;
       return { isFingerDetected: false, quality: 0 };
     }
     
-    // Check if the value is within valid range with hysteresis to prevent oscillation
+    // Verificar cambios bruscos de intensidad (podría indicar que se quitó el dedo)
+    if (this.isCurrentlyDetected && this.lastRedValueWhenDetected > 0) {
+      const intensityChange = Math.abs(rawValue - this.lastRedValueWhenDetected) / this.lastRedValueWhenDetected;
+      if (intensityChange > 0.6) { // Cambio de más del 60% indica que se quitó el dedo
+        this.consecutiveDetections = 0;
+        this.stableFrameCount = 0;
+        this.isCurrentlyDetected = false;
+        return { isFingerDetected: false, quality: 0 };
+      }
+    }
+    
+    // Verificar si el valor está dentro del rango válido con histéresis
     const inRange = this.isCurrentlyDetected
       ? rawValue >= (this.currentConfig.MIN_RED_THRESHOLD - this.currentConfig.HYSTERESIS) &&
         rawValue <= (this.currentConfig.MAX_RED_THRESHOLD + this.currentConfig.HYSTERESIS)
@@ -301,20 +408,19 @@ export class PPGSignalProcessor implements SignalProcessor {
         rawValue <= this.currentConfig.MAX_RED_THRESHOLD;
 
     if (!inRange) {
-      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 2); // Faster decrease - from 1 to 2
-      this.stableFrameCount = Math.max(0, this.stableFrameCount - 2); // Faster stability loss
+      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
+      this.stableFrameCount = Math.max(0, this.stableFrameCount - 1);
       
-      // Quicker timeout for detection loss
-      if (timeSinceLastDetection > this.DETECTION_TIMEOUT && this.consecutiveDetections < 2) { // Added threshold check
+      // Timeout de detección más corto para respuesta rápida
+      if (timeSinceLastDetection > this.DETECTION_TIMEOUT) {
         this.isCurrentlyDetected = false;
       }
       
-      // If we still have detection but quality is low, report reduced quality
-      const quality = this.isCurrentlyDetected ? Math.max(5, this.calculateStability() * 40) : 0; // Reduced from 50 to 40
+      const quality = this.isCurrentlyDetected ? Math.max(5, this.calculateStability() * 40) : 0;
       return { isFingerDetected: this.isCurrentlyDetected, quality };
     }
 
-    // Calculate stability temporal de la señal
+    // Calcular estabilidad temporal de la señal
     const stability = this.calculateStability();
     
     // Añadir el valor a nuestro historial para análisis
@@ -324,19 +430,19 @@ export class PPGSignalProcessor implements SignalProcessor {
     }
     
     // Actualizar contadores de estabilidad según la calidad de la señal
-    if (stability > 0.8) {
+    if (stability > 0.7) { // Reducido de 0.8 a 0.7
       // Señal muy estable, incrementamos rápidamente
       this.stableFrameCount = Math.min(
         this.stableFrameCount + 1.5,
         this.currentConfig.MIN_STABILITY_COUNT * 2
       );
-    } else if (stability > 0.6) {
+    } else if (stability > 0.5) { // Reducido de 0.6 a 0.5
       // Señal moderadamente estable
       this.stableFrameCount = Math.min(
         this.stableFrameCount + 1,
         this.currentConfig.MIN_STABILITY_COUNT * 2
       );
-    } else if (stability > 0.4) {
+    } else if (stability > 0.3) { // Reducido de 0.4 a 0.3
       // Señal con estabilidad media, incremento lento
       this.stableFrameCount = Math.min(
         this.stableFrameCount + 0.5,
@@ -347,7 +453,7 @@ export class PPGSignalProcessor implements SignalProcessor {
       this.stableFrameCount = Math.max(0, this.stableFrameCount - 0.5);
     }
 
-    // Update detection state with stricter conditions
+    // Actualizar estado de detección con condiciones más permisivas
     const isStableNow = this.stableFrameCount >= this.currentConfig.MIN_STABILITY_COUNT;
 
     if (isStableNow) {
@@ -358,10 +464,10 @@ export class PPGSignalProcessor implements SignalProcessor {
         this.lastStableValue = filtered;
       }
     } else {
-      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
+      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 0.5); // Reducido para ser más permisivo
     }
 
-    // Calculate signal quality with adjusted weights
+    // Calcular calidad de la señal con pesos ajustados
     const stabilityScore = Math.min(1, this.stableFrameCount / (this.currentConfig.MIN_STABILITY_COUNT * 2));
     
     // Intensity score - evaluate if it's in an optimal range (not too low or saturated)
@@ -378,20 +484,19 @@ export class PPGSignalProcessor implements SignalProcessor {
       }
       
       const avgVariation = variations.reduce((sum, val) => sum + val, 0) / variations.length;
-      // La variación óptima para PPG está entre 0.5 y 4 unidades
-      variabilityScore = avgVariation > 0.5 && avgVariation < 4 ? 1 : 
-                         avgVariation < 0.2 ? 0 : 
-                         avgVariation > 10 ? 0 : 
+      // La variación óptima para PPG está entre 0.5 y 5 unidades - más permisivo
+      variabilityScore = avgVariation > 0.3 && avgVariation < 5 ? 1 : 
+                         avgVariation < 0.1 ? 0 : 
+                         avgVariation > 12 ? 0 : 
                          0.5;
     }
     
-    // Combine scores with adjusted weights - emphasize stability more
-    const qualityRaw = stabilityScore * 0.6 + intensityScore * 0.3 + (this.lastValues.length >= 5 ? 0.1 : 0);
+    // Combine scores con pesos ajustados
+    const qualityRaw = stabilityScore * 0.6 + intensityScore * 0.3 + (this.lastValues.length >= 5 ? variabilityScore * 0.1 : 0);
     
-    // Scale to 0-100 and round
+    // Escalar a 0-100 y redondear
     const quality = Math.round(qualityRaw * 100);
     
-    // Apply threshold - only report quality if finger detection is confirmed
     return {
       isFingerDetected: this.isCurrentlyDetected,
       quality: this.isCurrentlyDetected ? quality : 0

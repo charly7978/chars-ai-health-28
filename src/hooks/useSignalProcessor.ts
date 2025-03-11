@@ -29,14 +29,14 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Increased quality threshold to be more strict about what counts as a finger detection
-      const qualityThreshold = 35; // Increased from 20 to 35 for stricter detection
+      // Más permisivo con la detección de dedos pero más estricto con falsos positivos
+      const qualityThreshold = 20; // Reducido de 35 a 20 para facilitar la detección
       
-      // Enhanced validation criteria
-      const hasStrongSignal = signal.rawValue > 80; // Ensure we have a strong red channel value
+      // Validación más balanceada: más fácil detectar dedos, mejor rechazo de falsos positivos
+      const hasMinimumSignal = signal.rawValue > 50; // Reducido de 80 a 50 para una detección más permisiva
       const enhancedFingerDetected = signal.fingerDetected && 
                                     signal.quality >= qualityThreshold &&
-                                    hasStrongSignal;
+                                    hasMinimumSignal;
       
       const validatedSignal = {
         ...signal,
