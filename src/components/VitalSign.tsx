@@ -26,47 +26,47 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (!value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
-        color: "text-white",
+        color: "text-white animate-pulse-white",
         status: ""
       };
     }
     
     if (isHeartRateDisplay) {
       const numValue = Number(value);
-      if (numValue === 0) return { text: "--", color: "text-white", status: "" };
+      if (numValue === 0) return { text: "--", color: "text-white animate-pulse-white", status: "" };
       
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Bradicardia Severa" };
       if (numValue < 50) return { text: String(value), color: "text-orange-500", status: "Bradicardia Leve" };
       if (numValue > 150) return { text: String(value), color: "text-red-500", status: "Taquicardia Severa" };
       if (numValue > 120) return { text: String(value), color: "text-orange-500", status: "Taquicardia Leve" };
-      return { text: String(value), color: "text-green-500", status: "Normal" };
+      return { text: String(value), color: "text-white animate-pulse-white", status: "Normal" };
     }
 
     if (isSpO2Display) {
       const numValue = Number(value);
-      if (numValue === 0) return { text: "--", color: "text-white", status: "" };
+      if (numValue === 0) return { text: "--", color: "text-white animate-pulse-white", status: "" };
       
       if (numValue < 80) return { text: String(value), color: "text-red-500", status: "Hipoxia Crítica" };
       if (numValue < 85) return { text: String(value), color: "text-red-400", status: "Hipoxia Severa" };
       if (numValue < 90) return { text: String(value), color: "text-orange-500", status: "Hipoxia Moderada" };
       if (numValue < 95) return { text: String(value), color: "text-yellow-500", status: "Hipoxia Leve" };
-      return { text: String(value), color: "text-green-500", status: "Normal" };
+      return { text: String(value), color: "text-white animate-pulse-white", status: "Normal" };
     }
     
     if (isHemoglobinDisplay) {
       const numValue = Number(value);
-      if (numValue === 0) return { text: "--", color: "text-white", status: "" };
+      if (numValue === 0) return { text: "--", color: "text-white animate-pulse-white", status: "" };
       
       if (numValue < 8) return { text: String(value), color: "text-red-500", status: "Anemia Severa" };
       if (numValue < 12) return { text: String(value), color: "text-orange-500", status: "Anemia Moderada" };
       if (numValue > 18) return { text: String(value), color: "text-red-500", status: "Policitemia Severa" };
       if (numValue > 16) return { text: String(value), color: "text-yellow-500", status: "Policitemia Leve" };
-      return { text: String(value), color: "text-green-500", status: "Normal" };
+      return { text: String(value), color: "text-white animate-pulse-white", status: "Normal" };
     }
     
     if (isGlucoseDisplay) {
       const numValue = Number(value);
-      if (numValue === 0) return { text: "--", color: "text-white", status: "" };
+      if (numValue === 0) return { text: "--", color: "text-white animate-pulse-white", status: "" };
       
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
@@ -78,16 +78,16 @@ const VitalSign: React.FC<VitalSignProps> = ({
       if (numValue > 200) return { text: String(value), color: "text-orange-500", status: "Hiperglucemia Moderada" };
       if (numValue > 140) return { text: String(value), color: "text-yellow-500", status: "Hiperglucemia Leve" };
       
-      return { text: String(value), color: "text-green-500", status: "Normal" };
+      return { text: String(value), color: "text-white animate-pulse-white", status: "Normal" };
     }
     
     if (isLipidsDisplay) {
       if (value === "0/0" || value === "--/--") {
-        return { text: "--/--", color: "text-white", status: "" };
+        return { text: "--/--", color: "text-white animate-pulse-white", status: "" };
       }
       
       const [cholesterol, triglycerides] = String(value).split('/').map(Number);
-      let color = "text-green-500";
+      let color = "text-white animate-pulse-white";
       let status = "Normal";
       
       if (cholesterol > 240 || triglycerides > 500) {
@@ -106,7 +106,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     if (isPressureDisplay) {
       if (value === "--/--") {
-        return { text: "--/--", color: "text-white", status: "" };
+        return { text: "--/--", color: "text-white animate-pulse-white", status: "" };
       }
       
       const [systolic, diastolic] = String(value).split('/').map(Number);
@@ -123,14 +123,14 @@ const VitalSign: React.FC<VitalSignProps> = ({
         return { text: String(value), color: "text-blue-500", status: "Hipotensión" };
       }
       
-      return { text: String(value), color: "text-green-500", status: "Normal" };
+      return { text: String(value), color: "text-white animate-pulse-white", status: "Normal" };
     }
     
     if (isArrhythmiaDisplay) {
       if (value === "--") {
         return { 
           text: "--/--", 
-          color: "text-white" 
+          color: "text-white animate-pulse-white" 
         };
       }
       
@@ -160,7 +160,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     return {
       text: value,
-      color: "text-white",
+      color: "text-white animate-pulse-white",
       status: ""
     };
   };
@@ -168,7 +168,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="vital-sign-panel flex flex-col h-full bg-opacity-20">
+    <div className="vital-sign-panel flex flex-col h-full bg-opacity-20 backdrop-blur-sm">
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
         <h3 className="text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
@@ -177,7 +177,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
           <div className="flex items-center justify-center gap-1">
             <span 
-              className={`font-bold ${color} transition-colors duration-300 animate-pulse 
+              className={`font-bold ${color} transition-colors duration-300  
                 ${isArrhythmiaDisplay ? 'text-[15px]' : ''}
                 ${isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : ''}
                 ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : ''}`}

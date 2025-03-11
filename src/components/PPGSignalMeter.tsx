@@ -92,8 +92,8 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#FEF7CD');
-    gradient.addColorStop(1, '#FDE1D3');
+    gradient.addColorStop(0, 'rgba(254, 247, 205, 0.1)');
+    gradient.addColorStop(1, 'rgba(253, 225, 211, 0.1)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -105,7 +105,7 @@ const PPGSignalMeter = ({
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
       if (x % (GRID_SIZE_X * 4) === 0) {
-        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'center';
         ctx.fillText(`${x / 10}ms`, x, CANVAS_HEIGHT - 5);
@@ -117,7 +117,7 @@ const PPGSignalMeter = ({
       ctx.lineTo(CANVAS_WIDTH, y);
       if (y % (GRID_SIZE_Y * 4) === 0) {
         const amplitude = ((CANVAS_HEIGHT / 2) - y) / verticalScale;
-        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'right';
         ctx.fillText(amplitude.toFixed(1), 25, y + 4);
@@ -126,7 +126,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.2)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 1;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X * 4) {
@@ -141,7 +141,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1.5;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
@@ -289,7 +289,7 @@ const PPGSignalMeter = ({
 
     if (points.length > 1) {
       ctx.beginPath();
-      ctx.strokeStyle = '#0EA5E9';
+      ctx.strokeStyle = isFingerDetected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.3)';
       ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
@@ -322,7 +322,7 @@ const PPGSignalMeter = ({
           ctx.stroke();
           
           ctx.beginPath();
-          ctx.strokeStyle = '#0EA5E9';
+          ctx.strokeStyle = isFingerDetected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.3)';
           ctx.lineWidth = 2;
           ctx.moveTo(x2, y2);
           firstPoint = true;
@@ -359,7 +359,7 @@ const PPGSignalMeter = ({
           }
 
           ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = '#000000';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
           ctx.textAlign = 'center';
           ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
@@ -386,14 +386,14 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-white/5 to-slate-50/5">
+    <div className="fixed inset-0 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[1px]">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
         <div className="flex items-center gap-2 mr-6">
-          <span className="text-lg font-bold text-slate-700">PPG</span>
+          <span className="text-lg font-bold text-white animate-pulse-white">PPG</span>
           <div className="ml-13 w-[180px] mt-1">
             <div className="flex items-center space-x-1.5">
-              <Activity size={16} className="text-slate-600" />
-              <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+              <Activity size={16} className="text-white" />
+              <div className="relative w-full h-2.5 bg-slate-200/20 rounded-full overflow-hidden shadow-inner">
                 <div 
                   className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
                   style={{ 
@@ -402,12 +402,12 @@ const PPGSignalMeter = ({
                   }}
                 />
               </div>
-              <span className="text-[10px] font-medium text-slate-600 w-12 text-right">
+              <span className="text-[10px] font-medium text-white w-12 text-right animate-pulse-white">
                 {isFingerDetected ? `${quality}%` : '--%'}
               </span>
             </div>
             <div className="flex items-center justify-between mt-0.5">
-              <span className="text-[9px] font-medium text-slate-600">
+              <span className="text-[9px] font-medium text-white">
                 {getQualityText(quality)}
               </span>
               {quality <= 50 && isFingerDetected && (
@@ -429,7 +429,7 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[8px] text-center font-medium text-slate-600">
+          <span className="text-[8px] text-center font-medium text-white">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
@@ -447,7 +447,7 @@ const PPGSignalMeter = ({
           onClick={onStartMeasurement}
           className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
         >
-          <span className="text-base font-semibold">
+          <span className="text-base font-semibold animate-pulse-white">
             INICIAR/DETENER
           </span>
         </button>
@@ -456,7 +456,7 @@ const PPGSignalMeter = ({
           onClick={handleReset}
           className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
         >
-          <span className="text-base font-semibold">
+          <span className="text-base font-semibold animate-pulse-white">
             RESETEAR
           </span>
         </button>
@@ -466,4 +466,3 @@ const PPGSignalMeter = ({
 };
 
 export default PPGSignalMeter;
-
