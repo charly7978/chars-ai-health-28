@@ -90,8 +90,15 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.fillStyle = '#FDF5E6';
+    // Cambiar el fondo del lienzo a un gradiente suave
+    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    gradient.addColorStop(0, '#F2FCE2'); // Soft Green (top)
+    gradient.addColorStop(0.5, '#FDF5E6'); // Original color (middle)
+    gradient.addColorStop(1, '#D3E4FD'); // Soft Blue (bottom)
+    
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(60, 60, 60, 0.3)';
     ctx.lineWidth = 0.5;
