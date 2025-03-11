@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle, ActivitySquare } from 'lucide-react';
+import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -385,49 +385,39 @@ const PPGSignalMeter = ({
     onReset();
   }, [onReset]);
 
-  const getQualityBarStyle = useCallback((index: number, totalBars: number = 5) => {
-    if (!isFingerDetected) return 'bg-gray-300';
-    
-    const threshold = Math.floor((quality / 100) * totalBars);
-    
-    if (index <= threshold) {
-      if (quality > 75) return 'bg-green-500';
-      if (quality > 50) return 'bg-yellow-500';
-      return 'bg-red-500';
-    }
-    
-    return 'bg-gray-200';
-  }, [quality, isFingerDetected]);
-
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-5">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="ml-10 w-[180px]">
-            <div className="flex items-center">
-              <ActivitySquare size={18} className="mr-2 text-slate-600" />
-              <div className="flex gap-0.5 items-center">
-                {[1, 2, 3, 4, 5].map((bar) => (
-                  <div 
-                    key={bar} 
-                    className={`h-5 w-6 rounded-sm ${getQualityBarStyle(bar)} transition-colors duration-300 flex items-center justify-center ${bar <= Math.ceil(quality / 20) ? 'shadow-inner' : ''}`}
-                    style={{
-                      height: `${Math.min(20 + (bar * 5), 40)}px`,
-                      opacity: bar <= Math.ceil(quality / 20) ? 1 : 0.3
-                    }}
-                  >
-                    {bar === Math.ceil(quality / 20) && (
-                      <span className="text-[8px] font-bold text-white">{quality}%</span>
-                    )}
-                  </div>
-                ))}
+            <div className="flex items-center space-x-1">
+              <Activity size={16} className="text-slate-600" />
+              <div className="relative w-full h-3 bg-slate-200 rounded-sm overflow-hidden">
+                <div 
+                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-sm`}
+                  style={{ 
+                    width: `${isFingerDetected ? quality : 0}%`,
+                    backgroundColor: quality > 75 ? '#10b981' : quality > 50 ? '#f59e0b' : '#ef4444',
+                    boxShadow: 'inset 0 0 4px rgba(255, 255, 255, 0.5)'
+                  }}
+                />
+                <div className="absolute inset-0 border border-slate-300 rounded-sm pointer-events-none" />
               </div>
+              <span className="text-[10px] font-medium text-slate-600 w-12 text-right">
+                {isFingerDetected ? `${quality}%` : '--%'}
+              </span>
             </div>
-            <span className="text-[9px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
-                  style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
-              {getQualityText(quality)}
-            </span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[9px] font-medium text-slate-600">
+                {getQualityText(quality)}
+              </span>
+              {quality <= 50 && isFingerDetected && (
+                <span className="text-[8px] font-medium text-red-500 animate-pulse">
+                  Reposicione su dedo
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
