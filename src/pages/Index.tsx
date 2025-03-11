@@ -47,13 +47,34 @@ const Index = () => {
     forceCalibrationCompletion
   } = useVitalSignsProcessor();
 
-  const enterFullScreen = async () => {
-    try {
-      await document.documentElement.requestFullscreen();
-    } catch (err) {
-      console.log('Error al entrar en pantalla completa:', err);
-    }
-  };
+  useEffect(() => {
+    const activateFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if ((document.documentElement as any).webkitRequestFullscreen) {
+          await (document.documentElement as any).webkitRequestFullscreen();
+        } else if ((document.documentElement as any).mozRequestFullScreen) {
+          await (document.documentElement as any).mozRequestFullScreen();
+        } else if ((document.documentElement as any).msRequestFullscreen) {
+          await (document.documentElement as any).msRequestFullscreen();
+        }
+        
+        // Intentar bloquear la orientación si es posible
+        if (screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock('portrait');
+          } catch (err) {
+            console.log('No se pudo bloquear la orientación:', err);
+          }
+        }
+      } catch (err) {
+        console.log('Error al entrar en pantalla completa:', err);
+      }
+    };
+    
+    activateFullscreen();
+  }, []);
 
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
@@ -77,7 +98,6 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
-      // enterFullScreen(); // Comentado temporalmente para pruebas
       setIsMonitoring(true);
       setIsCameraOn(true);
       setShowResults(false);
@@ -93,7 +113,6 @@ const Index = () => {
       }));
       
       // Iniciar calibración automática
-      // Importante: esto debe establecer correctamente el estado de calibración
       console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
@@ -119,7 +138,6 @@ const Index = () => {
   };
 
   const startAutoCalibration = () => {
-    // Si ya está calibrando, no iniciar otro proceso
     if (isCalibrating) {
       console.log("Ya hay una calibración en progreso, ignorando nueva solicitud");
       return;
@@ -128,10 +146,8 @@ const Index = () => {
     console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
     
-    // Iniciar la calibración en el procesador
     startCalibration();
     
-    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
     console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
@@ -146,7 +162,6 @@ const Index = () => {
       }
     });
     
-    // Actualizar el progreso visualmente en intervalos regulares
     let step = 0;
     const calibrationInterval = setInterval(() => {
       if (!isCalibrating) {
@@ -157,7 +172,6 @@ const Index = () => {
 
       step += 1;
       
-      // Actualizar progreso visual (10 pasos en total)
       if (step <= 10) {
         const progressPercent = step * 10;
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
@@ -178,7 +192,6 @@ const Index = () => {
           };
         });
       } else {
-        // Al finalizar, detener el intervalo
         console.log("Finalizando animación de calibración");
         clearInterval(calibrationInterval);
         
@@ -276,7 +289,6 @@ const Index = () => {
     const videoTrack = stream.getVideoTracks()[0];
     const imageCapture = new ImageCapture(videoTrack);
     
-    // Asegurar que la linterna esté encendida para mediciones de PPG
     if (videoTrack.getCapabilities()?.torch) {
       console.log("Activando linterna para mejorar la señal PPG");
       videoTrack.applyConstraints({
@@ -286,7 +298,6 @@ const Index = () => {
       console.warn("Esta cámara no tiene linterna disponible, la medición puede ser menos precisa");
     }
     
-    // Crear un canvas de tamaño óptimo para el procesamiento
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d', {willReadFrequently: true});
     if (!tempCtx) {
@@ -294,17 +305,15 @@ const Index = () => {
       return;
     }
     
-    // Variables para controlar el rendimiento y la tasa de frames
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/30; // Apuntar a 30 FPS para precisión
+    const targetFrameInterval = 1000/30;
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
     
-    // Crearemos un contexto dedicado para el procesamiento de imagen
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
-    enhanceCanvas.width = 320;  // Tamaño óptimo para procesamiento PPG
+    enhanceCanvas.width = 320;
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
@@ -313,56 +322,41 @@ const Index = () => {
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
-      // Control de tasa de frames para no sobrecargar el dispositivo
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
-          // Capturar frame 
           const frame = await imageCapture.grabFrame();
           
-          // Configurar tamaño adecuado del canvas para procesamiento
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
           
           tempCanvas.width = targetWidth;
           tempCanvas.height = targetHeight;
           
-          // Dibujar el frame en el canvas
           tempCtx.drawImage(
             frame, 
             0, 0, frame.width, frame.height, 
             0, 0, targetWidth, targetHeight
           );
           
-          // Mejorar la imagen para detección PPG
           if (enhanceCtx) {
-            // Resetear canvas
             enhanceCtx.clearRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
-            
-            // Dibujar en el canvas de mejora
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
-            // Opcionales: Ajustes para mejorar la señal roja
             enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
+            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';
             enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             enhanceCtx.globalCompositeOperation = 'source-over';
-          
-            // Obtener datos de la imagen mejorada
-            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             
-            // Procesar el frame mejorado
+            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             processFrame(imageData);
           } else {
-            // Fallback a procesamiento normal
             const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
             processFrame(imageData);
           }
           
-          // Actualizar contadores para monitoreo de rendimiento
           frameCount++;
           lastProcessTime = now;
           
-          // Calcular FPS cada segundo
           if (now - lastFpsUpdateTime > 1000) {
             processingFps = frameCount;
             frameCount = 0;
@@ -374,7 +368,6 @@ const Index = () => {
         }
       }
       
-      // Programar el siguiente frame
       if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
@@ -390,31 +383,25 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        // Solo actualizar valores válidos
         setVitalSigns(prevState => {
           const newState = { ...prevState };
           
-          // Actualizar SpO2 solo si es un valor válido
           if (vitals.spo2 && vitals.spo2 > 0) {
             newState.spo2 = vitals.spo2;
           }
           
-          // Actualizar presión arterial si es válida
           if (vitals.pressure && vitals.pressure !== "--/--") {
             newState.pressure = vitals.pressure;
           }
           
-          // Actualizar estado de arritmia
           if (vitals.arrhythmiaStatus) {
             newState.arrhythmiaStatus = vitals.arrhythmiaStatus;
           }
           
-          // Actualizar glucosa si es válida
           if (vitals.glucose && vitals.glucose > 0) {
             newState.glucose = vitals.glucose;
           }
           
-          // Actualizar lípidos si son válidos
           if (vitals.lipids) {
             if (vitals.lipids.totalCholesterol > 0) {
               newState.lipids.totalCholesterol = vitals.lipids.totalCholesterol;
@@ -424,7 +411,6 @@ const Index = () => {
             }
           }
           
-          // Actualizar hemoglobina si es válida
           if (vitals.hemoglobin && vitals.hemoglobin > 0) {
             newState.hemoglobin = vitals.hemoglobin;
           }
@@ -445,7 +431,10 @@ const Index = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
-      height: 'calc(100vh + env(safe-area-inset-bottom))',
+      height: '100vh',
+      width: '100vw',
+      maxWidth: '100vw',
+      maxHeight: '100vh',
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
@@ -481,8 +470,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
-            <div className="grid grid-cols-3 gap-3 h-full">
+          <div className="absolute inset-x-0 top-[50%] bottom-[65px] bg-black px-3 py-3">
+            <div className="grid grid-cols-3 gap-2 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -522,15 +511,15 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+          <div className="h-[65px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
             <button 
               onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
-              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
+              className="w-full h-full bg-gradient-to-b from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800 active:from-gray-800 active:to-gray-900 transition-colors duration-200 shadow-md text-lg font-bold"
+              style={{textShadow: '0 1px 2px rgba(0,0,0,0.3)'}}
             >
               RESETEAR
             </button>
