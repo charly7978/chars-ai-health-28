@@ -1,4 +1,3 @@
-
 import { SpO2Processor } from './spo2-processor';
 import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
@@ -83,9 +82,8 @@ export class VitalSignsProcessor {
     totalCholesterol: [] as number[],
     triglycerides: [] as number[]
   };
-  
-  // Added separate kalmanState property definition
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
+
+  constructor() {tate: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -416,7 +414,6 @@ export class VitalSignsProcessor {
     
     // Aplicar el procesamiento final de la presión arterial (nuevo)
     const finalBP = this.bpProcessor.completeMeasurement();
-    // Fixed this line by removing the trailing backslash
     const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
     
     if (this.lastValidResults) {
