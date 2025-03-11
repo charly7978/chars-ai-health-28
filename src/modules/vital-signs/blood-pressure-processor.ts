@@ -1,4 +1,3 @@
-
 import { calculateSlope, calculateAreaUnderCurve } from './utils';
 
 interface BloodPressureResult {
@@ -52,10 +51,13 @@ export class BloodPressureProcessor {
     }
     
     // During measurement, return median values for more dynamic display
-    return {
+    const medianResult = {
       systolic: this.calculateMedian(this.systolicBuffer),
       diastolic: this.calculateMedian(this.diastolicBuffer)
     };
+    
+    // Return processed results if available, otherwise median
+    return this.processingResult.systolic > 0 ? this.processingResult : medianResult;
   }
 
   /**
@@ -95,8 +97,8 @@ export class BloodPressureProcessor {
     });
     
     this.processingResult = { 
-      systolic: finalSystolic, 
-      diastolic: finalDiastolic 
+      systolic: finalSystolic || 0, 
+      diastolic: finalDiastolic || 0 
     };
     
     this.measurementCompleted = true;
@@ -129,13 +131,26 @@ export class BloodPressureProcessor {
       const medianSystolic = this.calculateMedian(this.systolicBuffer);
       const medianDiastolic = this.calculateMedian(this.diastolicBuffer);
       
+      // Apply simple weighting for intermediate results to smooth values
+      const recentBuffer = this.weightedBuffer.slice(-3);
+      const recentSystolicAvg = recentBuffer.length > 0 ? 
+        recentBuffer.reduce((sum, item) => sum + item.systolic, 0) / recentBuffer.length : 0;
+      const recentDiastolicAvg = recentBuffer.length > 0 ? 
+        recentBuffer.reduce((sum, item) => sum + item.diastolic, 0) / recentBuffer.length : 0;
+        
+      // Combine median and recent average (70% median, 30% recent average)
+      const intermediateSystolic = Math.round(medianSystolic * 0.7 + recentSystolicAvg * 0.3);
+      const intermediateDiastolic = Math.round(medianDiastolic * 0.7 + recentDiastolicAvg * 0.3);
+      
       console.log("BloodPressure: Intermediate processing complete", {
-        values: { systolic: medianSystolic, diastolic: medianDiastolic }
+        medianValues: { systolic: medianSystolic, diastolic: medianDiastolic },
+        recentAverage: { systolic: recentSystolicAvg, diastolic: recentDiastolicAvg },
+        finalValues: { systolic: intermediateSystolic, diastolic: intermediateDiastolic }
       });
       
       this.processingResult = { 
-        systolic: medianSystolic, 
-        diastolic: medianDiastolic 
+        systolic: intermediateSystolic || 0, 
+        diastolic: intermediateDiastolic || 0 
       };
       
       this.processingInProgress = false;
@@ -464,3 +479,4 @@ export class BloodPressureProcessor {
     }
   }
 }
+
