@@ -594,7 +594,7 @@ const Index = () => {
           )}
 
           <div className="absolute inset-x-0 bottom-0 mb-[58px] relative">
-            <div className="grid grid-cols-3 gap-0 relative z-10">
+            <div className="grid grid-cols-3 gap-0 relative z-10 pb-6">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
