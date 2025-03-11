@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -7,7 +6,6 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import ShareButton from "@/components/ShareButton";
-import VitalSignDetailDialog from "@/components/VitalSignDetailDialog";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -186,7 +184,6 @@ const Index = () => {
           url: window.location.href,
         });
       } else {
-        // Fallback for browsers that don't support the Web Share API
         const text = `Frecuencia cardíaca: ${heartRate || "--"} BPM\nSPO2: ${vitalSigns.spo2 || "--"}%\nPresión arterial: ${vitalSigns.pressure}\nArritmias: ${arrhythmiaCount === "--" ? "No detectadas" : arrhythmiaCount}`;
         await navigator.clipboard.writeText(text);
         toast.success("Información copiada al portapapeles");
@@ -353,3 +350,4 @@ const Index = () => {
 };
 
 export default Index;
+
