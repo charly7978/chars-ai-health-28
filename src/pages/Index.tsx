@@ -6,6 +6,7 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -35,6 +36,7 @@ const Index = () => {
     rrVariation: number;
   } | null>(null);
   
+  const { toast } = useToast();
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
   const { 
@@ -161,69 +163,78 @@ const Index = () => {
     }
   }, [lastValidResults, isMonitoring]);
 
-  const startMonitoring = () => {
+  const toggleMonitoring = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
-      requestAnimationFrame(() => {
-        try {
-          const element = document.documentElement;
-          
-          const isFullscreen = Boolean(
-            document.fullscreenElement || 
-            document.webkitFullscreenElement || 
-            document.mozFullScreenElement || 
-            document.msFullscreenElement
-          );
-          
-          if (!isFullscreen) {
-            if (element.requestFullscreen) {
-              element.requestFullscreen();
-            } else if (element.webkitRequestFullscreen) {
-              element.webkitRequestFullscreen();
-            } else if (element.mozRequestFullScreen) {
-              element.mozRequestFullScreen();
-            } else if (element.msRequestFullscreen) {
-              element.msRequestFullscreen();
-            }
-          }
-        } catch (e) {
-          console.error("Error forcing fullscreen on start:", e);
-        }
-      });
-      
-      setIsMonitoring(true);
-      setIsCameraOn(true);
-      setShowResults(false);
-      
-      startProcessing();
-      
-      setElapsedTime(0);
-      setVitalSigns(prev => ({
-        ...prev,
-        arrhythmiaStatus: "SIN ARRITMIAS|0"
-      }));
-      
-      console.log("Iniciando fase de calibración automática");
-      startAutoCalibration();
-      
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-      }
-      
-      measurementTimerRef.current = window.setInterval(() => {
-        setElapsedTime(prev => {
-          const newTime = prev + 1;
-          console.log(`Tiempo transcurrido: ${newTime}s`);
-          
-          if (newTime >= 30) {
-            finalizeMeasurement();
-            return 30;
-          }
-          return newTime;
-        });
-      }, 1000);
+      startMonitoring();
     }
+  };
+
+  const startMonitoring = () => {
+    requestAnimationFrame(() => {
+      try {
+        const element = document.documentElement;
+        
+        const isFullscreen = Boolean(
+          document.fullscreenElement || 
+          document.webkitFullscreenElement || 
+          document.mozFullScreenElement || 
+          document.msFullscreenElement
+        );
+        
+        if (!isFullscreen) {
+          if (element.requestFullscreen) {
+            element.requestFullscreen();
+          } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+          } else if (element.mozRequestFullScreen) {
+            element.mozRequestFullScreen();
+          } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
+          }
+        }
+      } catch (e) {
+        console.error("Error forcing fullscreen on start:", e);
+      }
+    });
+    
+    setIsMonitoring(true);
+    setIsCameraOn(true);
+    setShowResults(false);
+    
+    startProcessing();
+    
+    setElapsedTime(0);
+    setVitalSigns(prev => ({
+      ...prev,
+      arrhythmiaStatus: "SIN ARRITMIAS|0"
+    }));
+    
+    console.log("Iniciando fase de calibración automática");
+    startAutoCalibration();
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+    }
+    
+    measurementTimerRef.current = window.setInterval(() => {
+      setElapsedTime(prev => {
+        const newTime = prev + 1;
+        console.log(`Tiempo transcurrido: ${newTime}s`);
+        
+        if (newTime >= 30) {
+          finalizeMeasurement();
+          return 30;
+        }
+        return newTime;
+      });
+    }, 1000);
+
+    toast({
+      title: "Medición iniciada",
+      description: "Coloque su dedo sobre la cámara",
+    });
   };
 
   const startAutoCalibration = () => {
@@ -600,7 +611,7 @@ const Index = () => {
 
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
-              onClick={startMonitoring}
+              onClick={toggleMonitoring}
               className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
                 isMonitoring 
                   ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
