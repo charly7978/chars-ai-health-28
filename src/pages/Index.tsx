@@ -452,6 +452,16 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
+          {/* Se agrega header para sensor de calidad y estado de huella digital */}
+          <div className="px-4 py-2 flex justify-around items-center bg-black/20">
+            <div className="text-white text-lg">
+              Calidad: {signalQuality}
+            </div>
+            <div className="text-white text-lg">
+              {lastSignal?.fingerDetected ? "Huella Detectada" : "Huella No Detectada"}
+            </div>
+          </div>
+
           <div className="flex-1">
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
@@ -465,8 +475,9 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/10 px-3 py-4">
-            <div className="grid grid-cols-3 gap-2 place-items-center">
+          {/* Contenedor de los displays ampliado y con mayor espaciamiento */}
+          <div className="absolute inset-x-0 top-[55%] bottom-[60px] bg-black/10 px-4 py-6">
+            <div className="grid grid-cols-3 gap-4 place-items-center">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -506,12 +517,22 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Se agrega la botonera central */}
-          <div className="absolute inset-x-0 bottom-4 flex justify-center">
-            <MonitorButton 
-              isMonitoring={isMonitoring} 
-              onToggle={handleToggleMonitoring} 
-            />
+          {/* Botonera inferior: botón de iniciar/detener y de reset en fila */}
+          <div className="absolute inset-x-0 bottom-4 flex gap-4 px-4">
+            <div className="w-1/2">
+              <MonitorButton 
+                isMonitoring={isMonitoring} 
+                onToggle={handleToggleMonitoring} 
+                variant="monitor"
+              />
+            </div>
+            <div className="w-1/2">
+              <MonitorButton 
+                isMonitoring={isMonitoring} 
+                onToggle={handleReset} 
+                variant="reset"
+              />
+            </div>
           </div>
         </div>
       </div>
