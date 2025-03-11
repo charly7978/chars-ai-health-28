@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -595,7 +594,7 @@ const Index = () => {
           )}
 
           <div className="absolute inset-x-0 bottom-0 mb-[58px]">
-            <div className="grid grid-cols-3 gap-0 h-auto" style={{ minHeight: "180px" }}>
+            <div className="grid grid-cols-3 gap-0" style={{ minHeight: "210px" }}>
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
