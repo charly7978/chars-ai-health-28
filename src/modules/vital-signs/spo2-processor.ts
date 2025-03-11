@@ -23,12 +23,14 @@ export class SpO2Processor {
     // Calculate DC component
     const dc = calculateDC(values);
     if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { 
+      this.resetBuffers();
       return 0; // No DC component or too weak signal
     }
 
     // Calculate AC component
     const ac = calculateAC(values);
     if (ac < this.MIN_AC_VALUE) {
+      this.resetBuffers();
       return 0; // AC component too small - indicates no pulsation
     }
 
@@ -38,26 +40,21 @@ export class SpO2Processor {
     
     // Check if there's actual pulsatile variation representative of a real finger
     if (stdDev < 2.0 || cv < 0.05) {
-      // Clear all buffers when there's no valid signal
-      this.spo2Buffer = [];
-      this.medianBuffer = [];
+      this.resetBuffers();
       return 0; // Not enough variation in signal - likely no finger present
     }
 
     // Calculate and check perfusion index
     const perfusionIndex = calculatePerfusionIndex(values);
     if (perfusionIndex < this.MIN_PERFUSION_INDEX) {
-      // Clear buffers when losing signal to prevent displaying old values
-      this.spo2Buffer = [];
-      this.medianBuffer = [];
+      this.resetBuffers();
       return 0; // Signal too weak for reliable measurement
     }
     
     // Check for signal stability - real PPG should not be completely flat or too erratic
     const isStableSignal = this.checkSignalStability(values);
     if (!isStableSignal) {
-      this.spo2Buffer = [];
-      this.medianBuffer = [];
+      this.resetBuffers();
       return 0; // Signal not stable enough for reading
     }
 
@@ -165,10 +162,17 @@ export class SpO2Processor {
   }
 
   /**
+   * Reset all buffers to clear any stale measurements
+   */
+  private resetBuffers(): void {
+    this.spo2Buffer = [];
+    this.medianBuffer = [];
+  }
+
+  /**
    * Reset the SpO2 processor state
    */
   public reset(): void {
-    this.spo2Buffer = [];
-    this.medianBuffer = [];
+    this.resetBuffers();
   }
 }
