@@ -26,13 +26,13 @@ export class PPGSignalProcessor implements SignalProcessor {
   private kalmanFilter: KalmanFilter;
   private lastValues: number[] = [];
   private readonly DEFAULT_CONFIG = {
-    BUFFER_SIZE: 15,           // Aumentado para mejor estabilidad
-    MIN_RED_THRESHOLD: 40,     // Ajustado para mejor detección
-    MAX_RED_THRESHOLD: 250,    // Aumentado para captar señales más intensas
-    STABILITY_WINDOW: 6,       // Ventana más grande para mejor estabilidad
-    MIN_STABILITY_COUNT: 4,    // Más muestras para confirmar estabilidad
-    HYSTERESIS: 5,            // Nuevo: histéresis para evitar fluctuaciones
-    MIN_CONSECUTIVE_DETECTIONS: 3  // Nuevo: mínimo de detecciones consecutivas
+    BUFFER_SIZE: 15,
+    MIN_RED_THRESHOLD: 30,     // Reducido para mejor detección
+    MAX_RED_THRESHOLD: 250,
+    STABILITY_WINDOW: 6,
+    MIN_STABILITY_COUNT: 3,    // Reducido para respuesta más rápida
+    HYSTERESIS: 3,            // Reducido para mejor sensibilidad
+    MIN_CONSECUTIVE_DETECTIONS: 2  // Reducido para detección más rápida
   };
 
   private currentConfig: typeof this.DEFAULT_CONFIG;
@@ -105,23 +105,30 @@ export class PPGSignalProcessor implements SignalProcessor {
     }
 
     try {
-      // Extraer y procesar el canal rojo (el más importante para PPG)
+      console.log("Procesando frame...");
+      
+      // Extraer y procesar el canal rojo
       const redValue = this.extractRedChannel(imageData);
+      console.log("Valor rojo extraído:", redValue);
       
-      // Aplicar filtro Kalman para suavizar la señal y reducir el ruido
+      // Aplicar filtro Kalman
       const filtered = this.kalmanFilter.filter(redValue);
+      console.log("Valor filtrado:", filtered);
       
-      // Análisis avanzado de la señal para determinar la presencia del dedo y calidad
+      // Análisis de señal
       const { isFingerDetected, quality } = this.analyzeSignal(filtered, redValue);
+      console.log("Detección de dedo:", isFingerDetected, "Calidad:", quality);
       
-      // Calcular coordenadas del ROI (región de interés)
+      // Calcular ROI
       const roi = this.detectROI(redValue);
       
-      // Métricas adicionales para debugging y análisis
+      // Métricas adicionales
       const perfusionIndex = redValue > 0 ? 
         Math.abs(filtered - this.lastStableValue) / Math.max(1, redValue) : 0;
       
-      // Crear objeto de señal procesada con todos los datos relevantes
+      console.log("Índice de perfusión:", perfusionIndex);
+      
+      // Crear objeto de señal procesada
       const processedSignal: ProcessedSignal = {
         timestamp: Date.now(),
         rawValue: redValue,
@@ -151,16 +158,16 @@ export class PPGSignalProcessor implements SignalProcessor {
         });
       }
       
-      // Enviar la señal procesada al callback
+      // Enviar la señal procesada
       if (this.onSignalReady) {
         this.onSignalReady(processedSignal);
       }
       
-      // Almacenar el último valor procesado para cálculos futuros
+      // Almacenar el último valor procesado
       this.lastStableValue = isFingerDetected ? filtered : this.lastStableValue;
 
     } catch (error) {
-      console.error("PPGSignalProcessor: Error procesando frame", error);
+      console.error("Error procesando frame:", error);
       this.handleError("PROCESSING_ERROR", "Error al procesar frame");
     }
   }
@@ -168,26 +175,17 @@ export class PPGSignalProcessor implements SignalProcessor {
   private extractRedChannel(imageData: ImageData): number {
     const data = imageData.data;
     let redSum = 0;
-    let greenSum = 0;
-    let blueSum = 0;
     let pixelCount = 0;
-    let maxRed = 0;
-    let minRed = 255;
     
-    // ROI (Region of Interest) central
-    // Usar un área más pequeña y centrada para mejor precisión
+    // Usar un ROI más grande (50% del tamaño más pequeño)
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
-    const roiSize = Math.min(imageData.width, imageData.height) * 0.3; // 30% del tamaño más pequeño
+    const roiSize = Math.min(imageData.width, imageData.height) * 0.5;
     
     const startX = Math.max(0, Math.floor(centerX - roiSize / 2));
     const endX = Math.min(imageData.width, Math.floor(centerX + roiSize / 2));
     const startY = Math.max(0, Math.floor(centerY - roiSize / 2));
     const endY = Math.min(imageData.height, Math.floor(centerY + roiSize / 2));
-    
-    // Matriz para acumular valores por regiones y detectar la mejor área
-    const regionSize = 10; // Dividir el ROI en regiones de 10x10 píxeles
-    const regions = [];
     
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
@@ -196,75 +194,23 @@ export class PPGSignalProcessor implements SignalProcessor {
         const g = data[i+1];   // Canal verde
         const b = data[i+2];   // Canal azul
         
-        // Solo incluir píxeles que tengan una predominancia clara del rojo
-        // Esto ayuda a filtrar áreas que no son del dedo o están mal iluminadas
-        if (r > g * 1.1 && r > b * 1.1) {
+        // Criterio más permisivo para la detección de rojo
+        if (r > g && r > b) {
           redSum += r;
-          greenSum += g;
-          blueSum += b;
           pixelCount++;
-          
-          // Registrar valores máximos y mínimos para calcular contraste
-          maxRed = Math.max(maxRed, r);
-          minRed = Math.min(minRed, r);
-          
-          // Registrar región para análisis avanzado
-          const regionX = Math.floor((x - startX) / regionSize);
-          const regionY = Math.floor((y - startY) / regionSize);
-          const regionKey = `${regionX},${regionY}`;
-          
-          if (!regions[regionKey]) {
-            regions[regionKey] = {
-              redSum: 0,
-              count: 0,
-              x: regionX,
-              y: regionY
-            };
-          }
-          
-          regions[regionKey].redSum += r;
-          regions[regionKey].count++;
         }
       }
     }
     
-    // Si no hay suficientes píxeles con dominancia roja, no hay dedo
-    if (pixelCount < 50) {
+    // Reducir el umbral mínimo de píxeles
+    if (pixelCount < 25) {
+      console.log("Insuficientes píxeles rojos detectados:", pixelCount);
       return 0;
     }
     
-    // Encontrar la región con la mayor intensidad de rojo
-    let bestRegion = null;
-    let bestAvgRed = 0;
-    
-    for (const key in regions) {
-      const region = regions[key];
-      if (region.count > 10) {  // Ignorar regiones con muy pocos píxeles
-        const avgRed = region.redSum / region.count;
-        if (avgRed > bestAvgRed) {
-          bestAvgRed = avgRed;
-          bestRegion = region;
-        }
-      }
-    }
-    
-    // Si encontramos una buena región, usar ese valor
-    if (bestRegion && bestAvgRed > 100) {
-      return bestAvgRed;
-    }
-    
-    // Cálculo estándar si no podemos encontrar una región óptima
     const avgRed = redSum / pixelCount;
-    const avgGreen = greenSum / pixelCount;
-    const avgBlue = blueSum / pixelCount;
-    
-    // Métricas mejoradas de detección del dedo
-    const isRedDominant = avgRed > (avgGreen * 1.2) && avgRed > (avgBlue * 1.2);
-    const hasGoodContrast = pixelCount > 100 && (maxRed - minRed) > 15;
-    const isInRange = avgRed > 50 && avgRed < 250; // Evitar valores extremos
-    
-    // Devolver el valor procesado o 0 si no se detecta un dedo
-    return (isRedDominant && hasGoodContrast && isInRange) ? avgRed : 0;
+    console.log("Promedio de rojo:", avgRed, "Píxeles válidos:", pixelCount);
+    return avgRed;
   }
 
   private analyzeSignal(filtered: number, rawValue: number): { isFingerDetected: boolean, quality: number } {
