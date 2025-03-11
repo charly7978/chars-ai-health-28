@@ -1,3 +1,4 @@
+
 /**
  * Procesador de presión arterial basado en señales PPG reales
  * Implementa técnicas de procesamiento de señal para calcular presión sistólica y diastólica
@@ -177,6 +178,85 @@ export class BloodPressureProcessor {
   }
   
   /**
+   * Calcula la calidad de la señal PPG
+   */
+  private calculateSignalQuality(values: number[]): number {
+    if (values.length < 4) return 0;
+    
+    // Calcular relación señal-ruido
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    if (mean === 0) return 0;
+    
+    // Calcular variabilidad como medida de ruido
+    const stdDev = Math.sqrt(
+      values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
+    );
+    const cv = stdDev / Math.abs(mean);
+    
+    // Calcular estabilidad de línea base
+    const segments = 4;
+    const segmentSize = Math.floor(values.length / segments);
+    const segmentMeans = [];
+    
+    for (let i = 0; i < segments; i++) {
+      const segment = values.slice(i * segmentSize, (i + 1) * segmentSize);
+      segmentMeans.push(segment.reduce((a, b) => a + b, 0) / segment.length);
+    }
+    
+    const baselineStability = 1 - Math.min(1, Math.max(...segmentMeans) - Math.min(...segmentMeans)) / mean;
+    
+    // Alta frecuencia vs baja frecuencia
+    const highFreqComponent = this.calculateHighFrequencyComponent(values);
+    
+    // Combinar métricas en score de calidad
+    return Math.max(0, Math.min(1, 
+      (1 - Math.min(cv, 0.5) * 2) * 0.4 +
+      baselineStability * 0.3 +
+      (1 - Math.min(highFreqComponent, 0.5) * 2) * 0.3
+    ));
+  }
+  
+  /**
+   * Calcula componente de alta frecuencia (ruido)
+   */
+  private calculateHighFrequencyComponent(values: number[]): number {
+    if (values.length < 4) return 0.5;
+    
+    let highFreqSum = 0;
+    
+    for (let i = 2; i < values.length; i++) {
+      const firstOrder = values[i] - values[i-1];
+      const secondOrder = firstOrder - (values[i-1] - values[i-2]);
+      highFreqSum += Math.abs(secondOrder);
+    }
+    
+    const signalRange = Math.max(...values) - Math.min(...values);
+    if (signalRange === 0) return 0.5;
+    
+    return highFreqSum / ((values.length - 2) * signalRange);
+  }
+  
+  /**
+   * Calcula índice de perfusión real
+   */
+  private calculatePerfusionIndex(values: number[]): number {
+    const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
+    
+    if (peakIndices.length < 2 || valleyIndices.length < 2) return 0;
+    
+    const peakValues = peakIndices.map(idx => values[idx]);
+    const valleyValues = valleyIndices.map(idx => values[idx]);
+    
+    const avgPeak = peakValues.reduce((a, b) => a + b, 0) / peakValues.length;
+    const avgValley = valleyValues.reduce((a, b) => a + b, 0) / valleyValues.length;
+    
+    const acComponent = avgPeak - avgValley;
+    const dcComponent = avgValley;
+    
+    return dcComponent === 0 ? 0 : acComponent / dcComponent;
+  }
+  
+  /**
    * Preprocesa la señal PPG para análisis de presión arterial
    */
   private preprocessSignal(values: number[]): number[] {
@@ -251,14 +331,84 @@ export class BloodPressureProcessor {
   }
   
   /**
+   * Añade valor al buffer de mediana
+   */
+  private addToMedianBuffer(buffer: number[], value: number): void {
+    buffer.push(value);
+    if (buffer.length > this.MEDIAN_BUFFER_SIZE) {
+      buffer.shift();
+    }
+  }
+  
+  /**
+   * Calcula la mediana del buffer
+   */
+  private calculateMedian(buffer: number[]): number {
+    if (buffer.length === 0) return 0;
+    
+    const sorted = [...buffer].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    
+    if (sorted.length % 2 === 0) {
+      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    }
+    return sorted[mid];
+  }
+  
+  /**
+   * Encuentra muescas dicróticas en la señal PPG
+   */
+  private findDicroticNotches(values: number[], peaks: number[], troughs: number[]): number[] {
+    const notches: number[] = [];
+    
+    for (let i = 0; i < peaks.length; i++) {
+      const peakIndex = peaks[i];
+      let nextTroughIndex = -1;
+      
+      // Encontrar el siguiente valle
+      for (let j = 0; j < troughs.length; j++) {
+        if (troughs[j] > peakIndex) {
+          nextTroughIndex = troughs[j];
+          break;
+        }
+      }
+      
+      if (nextTroughIndex !== -1) {
+        // Buscar muesca dicrótica entre pico y valle siguiente
+        // (punto de inflexión en la pendiente descendente)
+        let lastDerivative = 0;
+        let notchIndex = -1;
+        
+        for (let j = peakIndex + 2; j < nextTroughIndex - 2; j++) {
+          const derivative = values[j] - values[j-1];
+          
+          // Detectar cambio de pendiente descendente a ascendente
+          if (lastDerivative < 0 && derivative >= 0) {
+            notchIndex = j;
+            break;
+          }
+          
+          lastDerivative = derivative;
+        }
+        
+        if (notchIndex !== -1) {
+          notches.push(notchIndex);
+        }
+      }
+    }
+    
+    return notches;
+  }
+  
+  /**
    * Extrae características relevantes para presión arterial de la señal PPG
    */
   private extractBPFeatures(ppgValues: number[]): any {
     // Detectar puntos característicos
-    const { peaks, troughs } = this.findPeaksAndTroughs(ppgValues);
-    const dicroticNotches = this.findDicroticNotches(ppgValues, peaks, troughs);
+    const { peakIndices: peaks, valleyIndices: valleys } = findPeaksAndValleys(ppgValues);
+    const dicroticNotches = this.findDicroticNotches(ppgValues, peaks, valleys);
     
-    if (peaks.length < 3 || troughs.length < 3) {
+    if (peaks.length < 3 || valleys.length < 3) {
       return {
         pulseTransitTime: 0,
         systolicUptime: 0,

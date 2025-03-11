@@ -1,3 +1,4 @@
+
 import { calculateAmplitude, findPeaksAndValleys } from './utils';
 
 /**
@@ -148,12 +149,12 @@ export class SpO2Processor {
    * Calcula índice de perfusión real
    */
   private calculatePerfusionIndex(values: number[]): number {
-    const { peaks, valleys } = findPeaksAndValleys(values);
+    const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
     
-    if (peaks.length < 2 || valleys.length < 2) return 0;
+    if (peakIndices.length < 2 || valleyIndices.length < 2) return 0;
     
-    const peakValues = peaks.map(idx => values[idx]);
-    const valleyValues = valleys.map(idx => values[idx]);
+    const peakValues = peakIndices.map(idx => values[idx]);
+    const valleyValues = valleyIndices.map(idx => values[idx]);
     
     const avgPeak = peakValues.reduce((a, b) => a + b, 0) / peakValues.length;
     const avgValley = valleyValues.reduce((a, b) => a + b, 0) / valleyValues.length;
@@ -232,9 +233,9 @@ export class SpO2Processor {
    * Extrae características relacionadas con SpO2
    */
   private extractSpO2Features(values: number[]): any {
-    const { peaks, valleys } = findPeaksAndValleys(values);
+    const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
     
-    if (peaks.length < 3 || valleys.length < 3) {
+    if (peakIndices.length < 3 || valleyIndices.length < 3) {
       return {
         acRed: 0,
         dcRed: 0,
@@ -245,19 +246,19 @@ export class SpO2Processor {
     }
     
     // Componente AC (variación pulsátil)
-    const acComponent = peaks.reduce((sum, peakIdx, i) => {
-      if (i < valleys.length) {
-        return sum + Math.abs(values[peakIdx] - values[valleys[i]]);
+    const acComponent = peakIndices.reduce((sum, peakIdx, i) => {
+      if (i < valleyIndices.length) {
+        return sum + Math.abs(values[peakIdx] - values[valleyIndices[i]]);
       }
       return sum;
-    }, 0) / Math.min(peaks.length, valleys.length);
+    }, 0) / Math.min(peakIndices.length, valleyIndices.length);
     
     // Componente DC (nivel base)
-    const dcComponent = valleys.reduce((sum, idx) => sum + values[idx], 0) / valleys.length;
+    const dcComponent = valleyIndices.reduce((sum, idx) => sum + values[idx], 0) / valleyIndices.length;
     
     // Amplitud de pulso promedio
-    const pulseAmplitude = peaks.reduce((sum, idx) => sum + values[idx], 0) / peaks.length -
-                          valleys.reduce((sum, idx) => sum + values[idx], 0) / valleys.length;
+    const pulseAmplitude = peakIndices.reduce((sum, idx) => sum + values[idx], 0) / peakIndices.length -
+                          valleyIndices.reduce((sum, idx) => sum + values[idx], 0) / valleyIndices.length;
     
     // Área bajo la curva
     let waveformArea = 0;
