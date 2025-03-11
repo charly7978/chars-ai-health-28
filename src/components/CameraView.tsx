@@ -146,7 +146,12 @@ const CameraView = ({
       
       if (onStreamReady) {
         const cleanup = onStreamReady(newStream);
-        streamCleanupRef.current = cleanup || null;
+        // Fixed error by checking if cleanup is a function before assigning
+        if (typeof cleanup === 'function') {
+          streamCleanupRef.current = cleanup;
+        } else {
+          streamCleanupRef.current = null;
+        }
       }
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);

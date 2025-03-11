@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -93,16 +92,13 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Clear background with solid color
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.3)';
     ctx.lineWidth = 0.5;
 
-    // Horizontal grid lines
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
@@ -115,7 +111,6 @@ const PPGSignalMeter = ({
       }
     }
     
-    // Vertical grid lines
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
@@ -128,7 +123,6 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Draw more prominent grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.5)';
     ctx.lineWidth = 1;
@@ -144,7 +138,6 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Draw horizontal center line
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.7)';
     ctx.lineWidth = 1.5;
@@ -152,7 +145,6 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Display arrhythmia warning if needed
     if (arrhythmiaStatus) {
       const [status, _] = arrhythmiaStatus.split('|');
       
@@ -298,8 +290,6 @@ const PPGSignalMeter = ({
     dataBufferRef.current.push(dataPoint);
     const points = dataBufferRef.current.getPoints();
     
-    detectPeaks(points, now);
-
     if (points.length > 1) {
       ctx.beginPath();
       ctx.strokeStyle = '#0EA5E9';
@@ -372,7 +362,7 @@ const PPGSignalMeter = ({
           }
 
           ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = '#000000';
+          ctx.fillStyle = '#FFFFFF';
           ctx.textAlign = 'center';
           ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
@@ -381,7 +371,7 @@ const PPGSignalMeter = ({
 
     lastRenderTimeRef.current = currentTime;
     animationFrameRef.current = requestAnimationFrame(renderSignal);
-  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus, drawGrid, detectPeaks, smoothValue, preserveResults]);
+  }, [value, quality, isFingerDetected, rawArrhythmiaData, arrhythmiaStatus, drawGrid, smoothValue, preserveResults]);
 
   useEffect(() => {
     renderSignal();
