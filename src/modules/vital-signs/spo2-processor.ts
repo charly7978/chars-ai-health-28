@@ -6,11 +6,10 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
-  private readonly MIN_PERFUSION_INDEX = 0.45; // Increased threshold for finger detection
-  private readonly MIN_AC_VALUE = 10.0; // Increased minimum AC variation required for real signal
+  private readonly MIN_PERFUSION_INDEX = 0.25; // Significantly increased threshold for finger detection
+  private readonly MIN_AC_VALUE = 5.0; // Increased minimum AC variation required for real signal
   private readonly MIN_VALUES_LENGTH = 30; // Minimum sample size for calculation
-  private readonly MIN_SIGNAL_INTENSITY = 80; // Increased minimum signal intensity
-  private readonly MIN_STANDARD_DEVIATION = 5.0; // Higher minimum standard deviation for real signal
+  private readonly MIN_SIGNAL_INTENSITY = 40; // Minimum signal intensity
 
   /**
    * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
@@ -24,16 +23,12 @@ export class SpO2Processor {
     // Calculate DC component
     const dc = calculateDC(values);
     if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { // Increased minimum threshold for DC
-      this.spo2Buffer = [];
-      this.medianBuffer = [];
       return 0; // No DC component or too weak signal
     }
 
     // Calculate AC component
     const ac = calculateAC(values);
     if (ac < this.MIN_AC_VALUE) {
-      this.spo2Buffer = [];
-      this.medianBuffer = [];
       return 0; // AC component too small - indicates no pulsation
     }
 
@@ -42,7 +37,7 @@ export class SpO2Processor {
     const cv = stdDev / Math.abs(dc); // Coefficient of variation
     
     // Check if there's actual pulsatile variation representative of a real finger
-    if (stdDev < this.MIN_STANDARD_DEVIATION || cv < 0.06) {
+    if (stdDev < 2.5 || cv < 0.03) {
       // Clear all buffers when there's no valid signal
       this.spo2Buffer = [];
       this.medianBuffer = [];
@@ -119,9 +114,9 @@ export class SpO2Processor {
       }
     }
     
-    // Real PPG should have between 8-30 zero crossings in this length of signal
+    // Real PPG should have between 6-30 zero crossings in this length of signal
     // (representing heart beats and their harmonics)
-    if (zeroCrossings < 8 || zeroCrossings > 30) {
+    if (zeroCrossings < 6 || zeroCrossings > 30) {
       return false;
     }
     

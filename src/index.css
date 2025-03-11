@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -72,7 +73,7 @@
   }
 
   body {
-    @apply bg-transparent text-foreground;
+    @apply bg-gold-darkest text-foreground;
   }
 }
 
@@ -92,11 +93,10 @@
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, rgba(50, 46, 52, 0.2) 0%, rgba(34, 31, 38, 0.2) 100%);
-  border: 1px solid rgba(159, 142, 106, 0.15);
+  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
+  border: 1px solid #9F8E6A25;
   overflow: hidden;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(1px);
 }
 
 .background-grid {
@@ -126,36 +126,4 @@
 
 .stop-button:active {
   background: linear-gradient(to bottom, #941111, #71110e);
-}
-
-@keyframes shining {
-  0% {
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.1), 0 0 2px rgba(255, 255, 255, 0.1);
-  }
-  50% {
-    text-shadow: 0 0 2px rgba(255, 255, 255, 0.5), 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5);
-  }
-  100% {
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.1), 0 0 2px rgba(255, 255, 255, 0.1);
-  }
-}
-
-.animate-shine {
-  animation: shining 2.5s infinite;
-}
-
-@keyframes glowing {
-  0% {
-    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
-  }
-  100% {
-    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
-  }
-}
-
-.animate-glow {
-  animation: glowing 3s infinite;
 }
