@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -128,19 +129,19 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
     
-    // Draw arrhythmia status if present
+    // Draw arrhythmia status if present - INCREASED FONT SIZE
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
       if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 20px Inter';
+        ctx.font = 'bold 24px Inter'; // Increased from 20px to 24px
         ctx.textAlign = 'left';
         ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 95);
         setShowArrhythmiaAlert(true);
       } else if (status.includes("ARRITMIA") && Number(count) > 1) {
         ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 20px Inter';
+        ctx.font = 'bold 24px Inter'; // Increased from 20px to 24px
         ctx.textAlign = 'left';
         const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
         ctx.fillText(`Arritmias detectadas: ${count}`, 45, 95);
@@ -333,13 +334,13 @@ const PPGSignalMeter = ({
             ctx.lineWidth = 3;
             ctx.stroke();
             
-            ctx.font = 'bold 14px Inter';
+            ctx.font = 'bold 18px Inter'; // Increased from 14px to 18px
             ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
           
-          ctx.font = 'bold 14px Inter';
+          ctx.font = 'bold 16px Inter'; // Increased from 14px to 16px
           ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
           ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
