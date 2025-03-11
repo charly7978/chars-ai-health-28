@@ -4,7 +4,6 @@ import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 import { GlucoseProcessor } from './glucose-processor';
 import { LipidProcessor } from './lipid-processor';
-import { calculateAC, calculateDC } from './utils';
 
 export interface VitalSignsResult {
   spo2: number;
@@ -77,14 +76,6 @@ export class VitalSignsProcessor {
   private cholesterolBuffer: number[] = [];
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
-
-  private lipidBuffer = {
-    totalCholesterol: [] as number[],
-    triglycerides: [] as number[]
-  };
-  
-  // Fixed: Added the kalmanState property correctly
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -252,24 +243,6 @@ export class VitalSignsProcessor {
       }
     }
   }
-
-  // NUEVO: Método de filtro de Kalman para optimizar el suavizado de la señal
-  private applyKalmanFilter(value: number): number {
-    const Q = 0.01; // Varianza del proceso (puede afinarse)
-    const R = 1;    // Varianza de la medición
-    // Predicción
-    const prediction = this.kalmanState.estimate;
-    const predictionError = this.kalmanState.errorCovariance + Q;
-    // Cálculo de ganancia
-    const K = predictionError / (predictionError + R);
-    // Actualización
-    const updatedEstimate = prediction + K * (value - prediction);
-    const updatedErrorCovariance = (1 - K) * predictionError;
-    // Guardar valores actualizados
-    this.kalmanState.estimate = updatedEstimate;
-    this.kalmanState.errorCovariance = updatedErrorCovariance;
-    return updatedEstimate;
-  }
   
   /**
    * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
@@ -282,8 +255,7 @@ export class VitalSignsProcessor {
       this.calibrationSamples++;
     }
     
-    // Utilizar filtro de Kalman en vez de SMA para optimizar la reducción de ruido
-    const filtered = this.applyKalmanFilter(ppgValue);
+    const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     
@@ -292,11 +264,6 @@ export class VitalSignsProcessor {
     
     // Calculate SpO2 using real signal data
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
-    console.log("[VITAL_SIGNS] SpO2 calculado:", {
-      valor: spo2,
-      muestras: ppgValues.length,
-      filtrado: filtered
-    });
     
     // Calculate blood pressure using real waveform analysis
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
@@ -308,14 +275,6 @@ export class VitalSignsProcessor {
     // Calculate real lipid values using spectral analysis
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     
-    // Store lipid values for further processing
-    if (lipids.totalCholesterol > 0) {
-      this.lipidBuffer.totalCholesterol.push(lipids.totalCholesterol);
-    }
-    if (lipids.triglycerides > 0) {
-      this.lipidBuffer.triglycerides.push(lipids.triglycerides);
-    }
-
     // Calculate real hemoglobin using optimized algorithm
     const hemoglobin = this.calculateHemoglobin(ppgValues);
     
@@ -448,11 +407,6 @@ export class VitalSignsProcessor {
       clearTimeout(this.calibrationTimer);
       this.calibrationTimer = null;
     }
-
-    this.lipidBuffer = {
-      totalCholesterol: [],
-      triglycerides: []
-    };
     
     return savedResults;
   }

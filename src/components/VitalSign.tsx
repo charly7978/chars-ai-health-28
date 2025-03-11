@@ -26,7 +26,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (!value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
-        color: "text-gold-light",
+        color: "text-white",
         status: ""
       };
     }
@@ -68,6 +68,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const numValue = Number(value);
       if (numValue === 0) return { text: "--", color: "text-white", status: "" };
       
+      // Expanded glucose ranges
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
@@ -157,7 +158,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     return {
       text: value,
-      color: "text-gold-light",
+      color: "text-white",
       status: ""
     };
   };
@@ -165,9 +166,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="vital-sign-panel flex flex-col h-full bg-opacity-50">
-      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
-        <h3 className="text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
+    <div className="relative overflow-hidden bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full">
+      <div className="flex flex-col items-center justify-center flex-1 gap-2">
+        <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
         
@@ -183,7 +184,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gold-medium/90 text-[13px] font-medium">
+              <span className="text-gray-400/90 text-[13px] font-medium">
                 {unit}
               </span>
             )}
