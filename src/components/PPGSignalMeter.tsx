@@ -40,9 +40,9 @@ const PPGSignalMeter = ({
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
 
   const WINDOW_WIDTH_MS = 2800;
-  const CANVAS_WIDTH = 1000; // Increased for better resolution
-  const CANVAS_HEIGHT = 900;
-  const GRID_SIZE_X = 30; // More dense grid
+  const CANVAS_WIDTH = 900; // Increased for better resolution
+  const CANVAS_HEIGHT = 700;
+  const GRID_SIZE_X = 25; // More dense grid
   const GRID_SIZE_Y = 15; // More dense grid
   const verticalScale = 33.0;
   const SMOOTHING_FACTOR = 1.5;
