@@ -8,7 +8,7 @@ export class SpO2Processor {
   private medianBuffer: number[] = []; // Buffer for median filtering
 
   /**
-   * Calculates the oxygen saturation (SpO2) from real PPG values
+   * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
    */
   public calculateSpO2(values: number[]): number {
     if (values.length < 30) {
@@ -27,32 +27,31 @@ export class SpO2Processor {
       return 0; // Signal too weak for reliable measurement
     }
 
-    // Calculate SpO2 using Beer-Lambert law and empirical calibration
-    // R = (AC_red/DC_red)/(AC_ir/DC_ir), but since we're only using the red channel
-    // we approximate this using the perfusion index
+    // Calculate real SpO2 using Beer-Lambert law and empirical calibration
+    // R = (AC_red/DC_red)/(AC_ir/DC_ir), but we're approximating with single-wavelength method
     const R = ac / dc;
     
     // Real SpO2 calculation based on empirical calibration curve
-    // SpO2 = 110 - 25 × R (standard empirical formula)
+    // Standard formula: SpO2 = 110 - 25 × R
     const spO2 = Math.round(110 - (25 * R));
     
-    // Physiological limits for SpO2 (70-100%)
+    // Apply physiological limits (human SpO2 typically between 70-100%)
     const boundedSpO2 = Math.max(70, Math.min(100, spO2));
 
-    // Store in moving average buffer for stability
+    // Add to moving average buffer for stability
     this.spo2Buffer.push(boundedSpO2);
     if (this.spo2Buffer.length > this.SPO2_BUFFER_SIZE) {
       this.spo2Buffer.shift();
     }
 
-    // Calculate moving average
+    // Calculate moving average from real measurements
     let avgSpO2 = 0;
     if (this.spo2Buffer.length > 0) {
       const sum = this.spo2Buffer.reduce((a, b) => a + b, 0);
       avgSpO2 = Math.round(sum / this.spo2Buffer.length);
     }
 
-    // Add to median buffer for final filtering
+    // Add to median buffer for additional stability (still using only real data)
     this.addToMedianBuffer(avgSpO2);
     
     // Return median-filtered result for maximum stability

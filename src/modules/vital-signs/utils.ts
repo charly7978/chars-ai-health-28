@@ -92,7 +92,7 @@ export function calculateAmplitude(
 /**
  * Calculates the perfusion index of a PPG signal
  * @param values Array of PPG signal values
- * @returns Perfusion index as a ratio
+ * @returns Perfusion index as a raw ratio (not percentage)
  */
 export function calculatePerfusionIndex(values: number[]): number {
   if (values.length < 10) return 0;
@@ -102,7 +102,7 @@ export function calculatePerfusionIndex(values: number[]): number {
   
   if (dc === 0) return 0;
   
-  // PI is expressed as a ratio
+  // Return raw ratio without any adjustments
   return ac / Math.abs(dc);
 }
 
