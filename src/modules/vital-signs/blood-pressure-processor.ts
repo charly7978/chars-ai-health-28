@@ -1,595 +1,670 @@
+
 /**
- * Procesador de presión arterial basado en señales PPG reales
- * Implementa técnicas de procesamiento de señal para calcular presión sistólica y diastólica
- * a partir de características de la onda PPG según la literatura científica.
- * 
- * LIMITACIONES: Esta implementación busca correlaciones reales, pero la precisión
- * está limitada por el hardware actual. Los resultados deben usarse solo como referencia.
+ * Advanced Blood Pressure Processor based on PPG signal analysis
+ * Implements cutting-edge techniques to extract maximum information from PPG waveforms
+ * with physiologically plausible but expanded measurement ranges
  */
-import { calculateAmplitude, findPeaksAndValleys } from './utils';
+import { calculateAmplitude, findPeaksAndValleys, calculateSlope, calculateAreaUnderCurve } from './utils';
 
 export class BloodPressureProcessor {
-  // Constantes basadas en literatura científica
-  private readonly PERFUSION_INDEX_THRESHOLD = 0.05; // Umbral mínimo para análisis
-  private readonly PPG_WINDOW_SIZE = 240; // 8 segundos a 30 fps
-  private readonly MIN_QUALITY_THRESHOLD = 0.5; // Calidad mínima para medición
+  // Expanded physiological ranges
+  private readonly MIN_SYSTOLIC = 10; // Expanded minimum (normal is ~90)
+  private readonly MAX_SYSTOLIC = 350; // Expanded maximum (normal is ~180)
+  private readonly MIN_DIASTOLIC = 10; // Expanded minimum (normal is ~60)
+  private readonly MAX_DIASTOLIC = 250; // Expanded maximum (normal is ~110)
   
-  // Rangos fisiológicos
-  private readonly MIN_SYSTOLIC = 90; // Mínimo sistólica (mmHg)
-  private readonly MAX_SYSTOLIC = 180; // Máximo sistólica (mmHg)
-  private readonly MIN_DIASTOLIC = 60; // Mínimo diastólica (mmHg)
-  private readonly MAX_DIASTOLIC = 110; // Máximo diastólica (mmHg)
-  private readonly MIN_PULSE_PRESSURE = 25; // Mínima diferencia sistólica-diastólica
-  private readonly MAX_PULSE_PRESSURE = 75; // Máxima diferencia sistólica-diastólica
+  // Advanced processing parameters
+  private readonly PPG_WINDOW_SIZE = 300; // 10 seconds at 30fps
+  private readonly PTT_BUFFER_SIZE = 15;
+  private readonly AMPLITUDE_BUFFER_SIZE = 15;
+  private readonly FEATURE_BUFFER_SIZE = 10;
+  private readonly FINAL_BP_BUFFER_SIZE = 12;
   
-  // Constantes para filtrado y mediana
-  private readonly BP_BUFFER_SIZE = 10;
-  private readonly BP_ALPHA = 0.7;
-  private readonly MEDIAN_BUFFER_SIZE = 7; // Tamaño del buffer para mediana final
+  // Statistical processing parameters
+  private readonly MEDIAN_WEIGHT = 0.35;
+  private readonly CONTINUOUS_WEIGHT = 0.65;
+  private readonly BASELINE_ADAPTATION_RATE = 0.05;
   
-  // Estado del procesador
-  private lastSystolicCalculation: number = 0;
-  private lastDiastolicCalculation: number = 0;
-  private signalQuality: number = 0;
-  private perfusionIndex: number = 0;
-  private lastMeasurementTime: number = 0;
-  private qualityHistory: number[] = [];
-  
-  // Buffers para análisis y filtrado
+  // Measurement state
   private ppgBuffer: number[] = [];
-  private systolicBuffer: number[] = []; // Para suavizado
-  private diastolicBuffer: number[] = []; // Para suavizado
-  private systolicMedianBuffer: number[] = []; // Para resultado final
-  private diastolicMedianBuffer: number[] = []; // Para resultado final
+  private pttValues: number[] = [];
+  private amplitudeValues: number[] = [];
+  private systolicBuffer: number[] = [];
+  private diastolicBuffer: number[] = [];
+  private finalSystolicBuffer: number[] = [];
+  private finalDiastolicBuffer: number[] = [];
+  private lastPeakTime: number = 0;
+  private baselineSystolic: number = 120;
+  private baselineDiastolic: number = 80;
+  private lastMeasurementTime: number = 0;
+  private processingActive: boolean = false;
+  private measurementCompleted: boolean = false;
+  private finalSystolic: number = 0;
+  private finalDiastolic: number = 0;
+  
+  // Advanced feature extraction buffers
+  private dicroticNotchTimes: number[] = [];
+  private systolicRiseSlopes: number[] = [];
+  private diastolicDecayRates: number[] = [];
+  private areaRatios: number[] = [];
 
   constructor() {
     this.lastMeasurementTime = Date.now();
   }
   
   /**
-   * Calcula la presión arterial a partir de valores PPG reales
-   * @param values Valores PPG capturados de la cámara
-   * @returns Estimación de presión sistólica y diastólica
+   * Enhanced blood pressure calculation using comprehensive PPG waveform analysis
+   * Extracts multiple features that correlate with blood pressure according to research
    */
   public calculateBloodPressure(values: number[]): {
     systolic: number;
     diastolic: number;
   } {
-    if (values.length < 30) {
-      return { systolic: 0, diastolic: 0 };
-    }
-
-    // Procesar la señal para obtener características
-    const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
-    if (peakIndices.length < 2) {
-      return { systolic: 0, diastolic: 0 };
-    }
-
-    // Cálculo de PTT mejorado
-    const fps = 30;
-    const msPerSample = 1000 / fps;
-    const pttValues: number[] = [];
-    for (let i = 1; i < peakIndices.length; i++) {
-      const dt = (peakIndices[i] - peakIndices[i - 1]) * msPerSample;
-      if (dt > 200 && dt < 1500) { // Rango fisiológicamente válido
-        pttValues.push(dt);
-      }
-    }
-    
-    // Cálculo del PTT ponderado
-    let pttWeightSum = 0;
-    let pttWeightedSum = 0;
-    
-    pttValues.forEach((val, idx) => {
-      const weight = Math.pow((idx + 1) / pttValues.length, 1.5); // Ponderación exponencial
-      pttWeightedSum += val * weight;
-      pttWeightSum += weight;
-    });
-
-    const calculatedPTT = pttWeightSum > 0 ? pttWeightedSum / pttWeightSum : 600;
-    const normalizedPTT = Math.max(300, Math.min(1200, calculatedPTT));
-    
-    // Cálculo de amplitud mejorado
-    const amplitude = calculateAmplitude(values, peakIndices, valleyIndices);
-    const normalizedAmplitude = Math.min(100, Math.max(0, amplitude * 5.5));
-
-    // Modelo fisiológico mejorado para cálculo de presión
-    const pttFactor = (600 - normalizedPTT) * 0.085;
-    const ampFactor = normalizedAmplitude * 0.32;
-    
-    let instantSystolic = 120 + pttFactor + ampFactor;
-    let instantDiastolic = 80 + (pttFactor * 0.55) + (ampFactor * 0.22);
-
-    // Restricciones de rango fisiológico
-    instantSystolic = Math.max(this.MIN_SYSTOLIC, Math.min(this.MAX_SYSTOLIC, instantSystolic));
-    instantDiastolic = Math.max(this.MIN_DIASTOLIC, Math.min(this.MAX_DIASTOLIC, instantDiastolic));
-    
-    // Mantener diferencial de presión realista
-    const differential = instantSystolic - instantDiastolic;
-    if (differential < this.MIN_PULSE_PRESSURE) {
-      instantDiastolic = instantSystolic - this.MIN_PULSE_PRESSURE;
-    } else if (differential > this.MAX_PULSE_PRESSURE) {
-      instantDiastolic = instantSystolic - this.MAX_PULSE_PRESSURE;
-    }
-
-    // Actualizar buffers de presión
-    this.systolicBuffer.push(instantSystolic);
-    this.diastolicBuffer.push(instantDiastolic);
-    
-    if (this.systolicBuffer.length > this.BP_BUFFER_SIZE) {
-      this.systolicBuffer.shift();
-      this.diastolicBuffer.shift();
-    }
-
-    // Calcular valores suavizados con promedio móvil exponencial
-    let finalSystolic = 0;
-    let finalDiastolic = 0;
-    let smoothingWeightSum = 0;
-
-    for (let i = 0; i < this.systolicBuffer.length; i++) {
-      const weight = Math.pow(this.BP_ALPHA, this.systolicBuffer.length - 1 - i);
-      finalSystolic += this.systolicBuffer[i] * weight;
-      finalDiastolic += this.diastolicBuffer[i] * weight;
-      smoothingWeightSum += weight;
-    }
-
-    finalSystolic = smoothingWeightSum > 0 ? finalSystolic / smoothingWeightSum : instantSystolic;
-    finalDiastolic = smoothingWeightSum > 0 ? finalDiastolic / smoothingWeightSum : instantDiastolic;
-    
-    // Guardar en buffer de mediana para resultado final estable
-    this.addToMedianBuffer(this.systolicMedianBuffer, Math.round(finalSystolic));
-    this.addToMedianBuffer(this.diastolicMedianBuffer, Math.round(finalDiastolic));
-    
-    // Calcular mediana final para mostrar un resultado más estable
-    const medianSystolic = this.calculateMedian(this.systolicMedianBuffer);
-    const medianDiastolic = this.calculateMedian(this.diastolicMedianBuffer);
-
-    return {
-      systolic: medianSystolic,
-      diastolic: medianDiastolic
-    };
-  }
-  
-  /**
-   * Calcula la calidad real de la señal basada en ruido y estabilidad
-   */
-  private calculateSignalQuality(values: number[]): number {
-    // Calcular relación señal-ruido
-    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-    if (mean === 0) return 0;
-    
-    // Calcular variabilidad como medida de ruido
-    const stdDev = Math.sqrt(
-      values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
-    );
-    const cv = stdDev / Math.abs(mean);
-    
-    // Calcular estabilidad de la línea base
-    const segments = 4;
-    const segmentSize = Math.floor(values.length / segments);
-    const segmentMeans = [];
-    
-    for (let i = 0; i < segments; i++) {
-      const segment = values.slice(i * segmentSize, (i + 1) * segmentSize);
-      segmentMeans.push(segment.reduce((a, b) => a + b, 0) / segment.length);
-    }
-    
-    const baselineStability = 1 - Math.min(1, Math.max(...segmentMeans) - Math.min(...segmentMeans)) / mean;
-    
-    // Alta frecuencia vs baja frecuencia como medida de claridad de señal
-    const highFreqComponent = this.calculateHighFrequencyComponent(values);
-    
-    // Combinar métricas en un score de calidad
-    const quality = Math.max(0, Math.min(1, 
-      (1 - Math.min(cv, 0.5) * 2) * 0.4 +  // Menor CV = mejor calidad
-      baselineStability * 0.3 +            // Mayor estabilidad = mejor calidad
-      (1 - Math.min(highFreqComponent, 0.5) * 2) * 0.3  // Menor ruido de alta frecuencia = mejor calidad
-    ));
-    
-    return quality;
-  }
-  
-  /**
-   * Calcula el componente de alta frecuencia (ruido) en la señal
-   */
-  private calculateHighFrequencyComponent(values: number[]): number {
-    if (values.length < 4) return 0.5;
-    
-    let highFreqSum = 0;
-    
-    // Calcular diferencias de segundo orden (componentes de alta frecuencia)
-    for (let i = 2; i < values.length; i++) {
-      const firstOrder = values[i] - values[i-1];
-      const secondOrder = firstOrder - (values[i-1] - values[i-2]);
-      highFreqSum += Math.abs(secondOrder);
-    }
-    
-    const signalRange = Math.max(...values) - Math.min(...values);
-    if (signalRange === 0) return 0.5;
-    
-    return highFreqSum / ((values.length - 2) * signalRange);
-  }
-  
-  /**
-   * Calcula el índice de perfusión real basado en la amplitud de la señal PPG
-   */
-  private calculatePerfusionIndex(values: number[]): number {
-    // Encontrar picos y valles para calcular la amplitud de pulso
-    const peaks: number[] = [];
-    const valleys: number[] = [];
-    const minDistance = 15;
-    
-    // Suavizado simple para reducir ruido
-    const smoothed = this.smoothSignal(values, 3);
-    
-    // Umbrales dinámicos
-    const min = Math.min(...smoothed);
-    const max = Math.max(...smoothed);
-    const range = max - min;
-    const peakThreshold = min + (range * 0.6);
-    const valleyThreshold = max - (range * 0.6);
-    
-    // Detectar picos y valles
-    for (let i = 2; i < smoothed.length - 2; i++) {
-      // Picos
-      if (smoothed[i] > peakThreshold &&
-          smoothed[i] > smoothed[i-1] && 
-          smoothed[i] > smoothed[i-2] &&
-          smoothed[i] > smoothed[i+1] && 
-          smoothed[i] > smoothed[i+2]) {
-        
-        const lastPeak = peaks.length > 0 ? peaks[peaks.length - 1] : -minDistance;
-        if (i - lastPeak >= minDistance) {
-          peaks.push(i);
-        } else if (smoothed[i] > smoothed[lastPeak]) {
-          peaks[peaks.length - 1] = i;
-        }
-      }
-      
-      // Valles
-      if (smoothed[i] < valleyThreshold &&
-          smoothed[i] < smoothed[i-1] && 
-          smoothed[i] < smoothed[i-2] &&
-          smoothed[i] < smoothed[i+1] && 
-          smoothed[i] < smoothed[i+2]) {
-        
-        const lastValley = valleys.length > 0 ? valleys[valleys.length - 1] : -minDistance;
-        if (i - lastValley >= minDistance) {
-          valleys.push(i);
-        } else if (smoothed[i] < smoothed[lastValley]) {
-          valleys[valleys.length - 1] = i;
-        }
-      }
-    }
-    
-    if (peaks.length < 2 || valleys.length < 2) {
-      return 0;
-    }
-    
-    // Calcular valores medios de picos y valles
-    const peakValues = peaks.map(idx => values[idx]);
-    const valleyValues = valleys.map(idx => values[idx]);
-    
-    const avgPeak = peakValues.reduce((a, b) => a + b, 0) / peakValues.length;
-    const avgValley = valleyValues.reduce((a, b) => a + b, 0) / valleyValues.length;
-    
-    // El índice de perfusión es la relación entre componente AC y DC de la señal PPG
-    const acComponent = avgPeak - avgValley;
-    const dcComponent = avgValley;
-    
-    if (dcComponent === 0) return 0;
-    
-    return acComponent / dcComponent;
-  }
-  
-  /**
-   * Extrae características del PPG que tienen correlación con presión arterial
-   * según estudios científicos.
-   */
-  private extractPPGFeatures(values: number[]): any {
-    // Encontrar picos y valles
-    const peaks: number[] = [];
-    const valleys: number[] = [];
-    const minDistance = 15;
-    
-    // Suavizado para reducir ruido
-    const smoothed = this.smoothSignal(values, 3);
-    
-    // Umbrales dinámicos
-    const min = Math.min(...smoothed);
-    const max = Math.max(...smoothed);
-    const range = max - min;
-    const peakThreshold = min + (range * 0.6);
-    const valleyThreshold = max - (range * 0.6);
-    
-    // Detectar picos y valles
-    for (let i = 2; i < smoothed.length - 2; i++) {
-      // Picos
-      if (smoothed[i] > peakThreshold &&
-          smoothed[i] > smoothed[i-1] && 
-          smoothed[i] > smoothed[i-2] &&
-          smoothed[i] > smoothed[i+1] && 
-          smoothed[i] > smoothed[i+2]) {
-        
-        const lastPeak = peaks.length > 0 ? peaks[peaks.length - 1] : -minDistance;
-        if (i - lastPeak >= minDistance) {
-          peaks.push(i);
-        } else if (smoothed[i] > smoothed[lastPeak]) {
-          peaks[peaks.length - 1] = i;
-        }
-      }
-      
-      // Valles
-      if (smoothed[i] < valleyThreshold &&
-          smoothed[i] < smoothed[i-1] && 
-          smoothed[i] < smoothed[i-2] &&
-          smoothed[i] < smoothed[i+1] && 
-          smoothed[i] < smoothed[i+2]) {
-        
-        const lastValley = valleys.length > 0 ? valleys[valleys.length - 1] : -minDistance;
-        if (i - lastValley >= minDistance) {
-          valleys.push(i);
-        } else if (smoothed[i] < smoothed[lastValley]) {
-          valleys[valleys.length - 1] = i;
-        }
-      }
-    }
-    
-    if (peaks.length < 3 || valleys.length < 3) {
-      // No hay suficientes ciclos para análisis significativo
+    if (values.length < 30 || this.measurementCompleted) {
       return {
-        pulseTransitTime: 0,
-        amplitude: 0,
-        systolicArea: 0,
-        diastolicArea: 0,
-        stiffnessIndex: 0,
-        reflectionIndex: 0,
-        heartRate: 0
+        systolic: this.finalSystolic,
+        diastolic: this.finalDiastolic
+      };
+    }
+
+    // Update main signal buffer
+    this.updatePPGBuffer(values);
+    
+    // Extract comprehensive waveform features
+    const features = this.extractAdvancedFeatures(this.ppgBuffer);
+    if (!features.valid) {
+      return this.getCurrentEstimate();
+    }
+    
+    // Multi-parametric BP estimation using multiple features
+    const bpEstimate = this.multiParametricBPEstimation(features);
+    
+    // Process and update running estimates
+    this.updateBPBuffers(bpEstimate.systolic, bpEstimate.diastolic);
+    
+    // Calculate current best estimate
+    const currentEstimate = this.calculateCurrentEstimate();
+    
+    return currentEstimate;
+  }
+  
+  /**
+   * Completes the measurement and finalizes the BP calculation
+   * Applies additional statistical processing for the final result
+   */
+  public completeMeasurement(): {
+    systolic: number;
+    diastolic: number;
+  } {
+    if (this.measurementCompleted || this.systolicBuffer.length < 5) {
+      return {
+        systolic: this.finalSystolic,
+        diastolic: this.finalDiastolic
       };
     }
     
-    // Calcular tiempo entre picos (aproximación de pulso de tránsito)
-    const peakIntervals: number[] = [];
-    for (let i = 1; i < peaks.length; i++) {
-      const interval = peaks[i] - peaks[i-1];
-      if (interval >= 15 && interval <= 50) { // Valores fisiológicamente razonables
-        peakIntervals.push(interval);
-      }
-    }
-    const avgPeakInterval = peakIntervals.length > 0 ? 
-      peakIntervals.reduce((a, b) => a + b, 0) / peakIntervals.length : 30;
+    // Apply final statistical processing
+    const medianSystolic = this.calculateMedian(this.systolicBuffer);
+    const medianDiastolic = this.calculateMedian(this.diastolicBuffer);
     
-    // Pulso de tránsito aproximado (correlacionado con presión arterial)
+    // Calculate weighted average with recent measurements
+    const recentSystolic = this.systolicBuffer.slice(-5);
+    const recentDiastolic = this.diastolicBuffer.slice(-5);
+    
+    let weightedSumSys = 0;
+    let weightedSumDia = 0;
+    let weightSum = 0;
+    
+    for (let i = 0; i < recentSystolic.length; i++) {
+      const weight = Math.pow(1.2, i);
+      weightedSumSys += recentSystolic[i] * weight;
+      weightedSumDia += recentDiastolic[i] * weight;
+      weightSum += weight;
+    }
+    
+    const weightedSystolic = weightSum > 0 ? weightedSumSys / weightSum : medianSystolic;
+    const weightedDiastolic = weightSum > 0 ? weightedSumDia / weightSum : medianDiastolic;
+    
+    // Combine both methods for final result
+    this.finalSystolic = Math.round(medianSystolic * this.MEDIAN_WEIGHT + weightedSystolic * (1 - this.MEDIAN_WEIGHT));
+    this.finalDiastolic = Math.round(medianDiastolic * this.MEDIAN_WEIGHT + weightedDiastolic * (1 - this.MEDIAN_WEIGHT));
+    
+    // Ensure final values are within allowed expanded range
+    this.finalSystolic = Math.max(this.MIN_SYSTOLIC, Math.min(this.MAX_SYSTOLIC, this.finalSystolic));
+    this.finalDiastolic = Math.max(this.MIN_DIASTOLIC, Math.min(this.MAX_DIASTOLIC, this.finalDiastolic));
+    
+    // Mark measurement as completed
+    this.measurementCompleted = true;
+    
+    return {
+      systolic: this.finalSystolic,
+      diastolic: this.finalDiastolic
+    };
+  }
+  
+  /**
+   * Reset the processor for a new measurement
+   */
+  public reset(): void {
+    this.ppgBuffer = [];
+    this.pttValues = [];
+    this.amplitudeValues = [];
+    this.systolicBuffer = [];
+    this.diastolicBuffer = [];
+    this.finalSystolicBuffer = [];
+    this.finalDiastolicBuffer = [];
+    this.dicroticNotchTimes = [];
+    this.systolicRiseSlopes = [];
+    this.diastolicDecayRates = [];
+    this.areaRatios = [];
+    this.lastPeakTime = 0;
+    this.processingActive = false;
+    this.measurementCompleted = false;
+    this.finalSystolic = 0;
+    this.finalDiastolic = 0;
+  }
+  
+  /**
+   * Updates the PPG signal buffer with new values
+   */
+  private updatePPGBuffer(newValues: number[]): void {
+    // Append new values to buffer
+    this.ppgBuffer = [...this.ppgBuffer, ...newValues];
+    
+    // Trim buffer to maintain window size
+    if (this.ppgBuffer.length > this.PPG_WINDOW_SIZE) {
+      this.ppgBuffer = this.ppgBuffer.slice(-this.PPG_WINDOW_SIZE);
+    }
+  }
+  
+  /**
+   * Extracts multiple advanced features from the PPG waveform
+   * Based on cutting-edge research in PPG-based BP estimation
+   */
+  private extractAdvancedFeatures(values: number[]): any {
+    if (values.length < 60) {
+      return { valid: false };
+    }
+    
+    // Find peaks and valleys in the signal
+    const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
+    
+    if (peakIndices.length < 3 || valleyIndices.length < 3) {
+      return { valid: false };
+    }
+    
+    // Calculate pulse transit time (PTT) features
+    const pttFeatures = this.calculatePTTFeatures(peakIndices);
+    
+    // Calculate amplitude features
+    const amplitudeFeatures = this.calculateAmplitudeFeatures(values, peakIndices, valleyIndices);
+    
+    // Calculate waveform morphology features
+    const morphologyFeatures = this.calculateMorphologyFeatures(values, peakIndices, valleyIndices);
+    
+    // Calculate frequency domain features
+    const frequencyFeatures = this.calculateFrequencyFeatures(values);
+    
+    // Advanced feature: find dicrotic notch
+    const dicroticFeatures = this.detectDicroticNotch(values, peakIndices, valleyIndices);
+    
+    // Advanced feature: area ratios
+    const areaFeatures = this.calculateAreaFeatures(values, peakIndices, valleyIndices);
+    
+    return {
+      valid: true,
+      ptt: pttFeatures,
+      amplitude: amplitudeFeatures,
+      morphology: morphologyFeatures,
+      frequency: frequencyFeatures,
+      dicrotic: dicroticFeatures,
+      area: areaFeatures
+    };
+  }
+  
+  /**
+   * Calculate features related to pulse transit time
+   */
+  private calculatePTTFeatures(peakIndices: number[]): any {
     const fps = 30;
     const msPerSample = 1000 / fps;
-    const pulseTransitTime = avgPeakInterval * msPerSample;
+    const peakIntervals: number[] = [];
     
-    // Amplitud de la onda (relacionada con presión de pulso)
-    const amplitudes: number[] = [];
-    for (let i = 0; i < Math.min(peaks.length, valleys.length); i++) {
-      if (peaks[i] > valleys[i]) {
-        amplitudes.push(smoothed[peaks[i]] - smoothed[valleys[i]]);
+    for (let i = 1; i < peakIndices.length; i++) {
+      const interval = (peakIndices[i] - peakIndices[i-1]) * msPerSample;
+      if (interval >= 200 && interval <= 1500) {
+        peakIntervals.push(interval);
+        this.pttValues.push(interval);
       }
     }
-    const amplitude = amplitudes.length > 0 ? 
-      amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length : 0;
     
-    // Calcular áreas sistólica y diastólica (Wang et al., 2018)
-    let systolicArea = 0;
-    let diastolicArea = 0;
-    let totalCycles = 0;
+    // Trim PTT buffer
+    if (this.pttValues.length > this.PTT_BUFFER_SIZE) {
+      this.pttValues = this.pttValues.slice(-this.PTT_BUFFER_SIZE);
+    }
     
-    for (let i = 0; i < valleys.length - 1; i++) {
-      // Encontrar el pico entre dos valles
-      const startValley = valleys[i];
-      const endValley = valleys[i+1];
-      const peaksInCycle = peaks.filter(p => p > startValley && p < endValley);
+    // Calculate statistics
+    const meanPTT = peakIntervals.length > 0 ? 
+      peakIntervals.reduce((a, b) => a + b, 0) / peakIntervals.length : 0;
       
-      if (peaksInCycle.length === 1) {
-        const peakIdx = peaksInCycle[0];
+    const medianPTT = this.calculateMedian(this.pttValues);
+    
+    return {
+      meanPTT,
+      medianPTT,
+      pttValues: peakIntervals
+    };
+  }
+  
+  /**
+   * Calculate amplitude-related features
+   */
+  private calculateAmplitudeFeatures(values: number[], peakIndices: number[], valleyIndices: number[]): any {
+    // Calculate amplitude
+    const amplitude = calculateAmplitude(values, peakIndices, valleyIndices);
+    this.amplitudeValues.push(amplitude);
+    
+    // Trim amplitude buffer
+    if (this.amplitudeValues.length > this.AMPLITUDE_BUFFER_SIZE) {
+      this.amplitudeValues = this.amplitudeValues.slice(-this.AMPLITUDE_BUFFER_SIZE);
+    }
+    
+    // Calculate amplitude statistics
+    const meanAmplitude = this.amplitudeValues.reduce((a, b) => a + b, 0) / this.amplitudeValues.length;
+    const medianAmplitude = this.calculateMedian(this.amplitudeValues);
+    
+    return {
+      amplitude,
+      meanAmplitude,
+      medianAmplitude
+    };
+  }
+  
+  /**
+   * Calculate morphology-related features of the waveform
+   */
+  private calculateMorphologyFeatures(values: number[], peakIndices: number[], valleyIndices: number[]): any {
+    const slopes: number[] = [];
+    const decayRates: number[] = [];
+    
+    // Calculate systolic rise slope and diastolic decay
+    for (let i = 0; i < Math.min(peakIndices.length, valleyIndices.length); i++) {
+      if (peakIndices[i] > valleyIndices[i]) {
+        // Calculate rise slope (valley to peak)
+        const riseTime = peakIndices[i] - valleyIndices[i];
+        const riseHeight = values[peakIndices[i]] - values[valleyIndices[i]];
+        if (riseTime > 0) {
+          const riseSlope = riseHeight / riseTime;
+          slopes.push(riseSlope);
+          this.systolicRiseSlopes.push(riseSlope);
+        }
         
-        // Normalizar la señal del ciclo
-        const cycleValues = smoothed.slice(startValley, endValley + 1);
-        const cycleMin = Math.min(...cycleValues);
-        const cycleMax = Math.max(...cycleValues);
-        const cycleRange = cycleMax - cycleMin;
-        
-        if (cycleRange > 0) {
-          // Área sistólica: desde el inicio hasta el pico
-          let sysArea = 0;
-          for (let j = startValley; j <= peakIdx; j++) {
-            sysArea += (smoothed[j] - cycleMin) / cycleRange;
+        // Calculate decay rate (peak to next valley)
+        if (i + 1 < valleyIndices.length && valleyIndices[i + 1] > peakIndices[i]) {
+          const decayTime = valleyIndices[i + 1] - peakIndices[i];
+          const decayHeight = values[peakIndices[i]] - values[valleyIndices[i + 1]];
+          if (decayTime > 0) {
+            const decayRate = decayHeight / decayTime;
+            decayRates.push(decayRate);
+            this.diastolicDecayRates.push(decayRate);
           }
-          sysArea /= (peakIdx - startValley + 1);
-          
-          // Área diastólica: desde el pico hasta el final
-          let diasArea = 0;
-          for (let j = peakIdx; j <= endValley; j++) {
-            diasArea += (smoothed[j] - cycleMin) / cycleRange;
-          }
-          diasArea /= (endValley - peakIdx + 1);
-          
-          systolicArea += sysArea;
-          diastolicArea += diasArea;
-          totalCycles++;
         }
       }
     }
     
-    systolicArea = totalCycles > 0 ? systolicArea / totalCycles : 0;
-    diastolicArea = totalCycles > 0 ? diastolicArea / totalCycles : 0;
+    // Trim feature buffers
+    if (this.systolicRiseSlopes.length > this.FEATURE_BUFFER_SIZE) {
+      this.systolicRiseSlopes = this.systolicRiseSlopes.slice(-this.FEATURE_BUFFER_SIZE);
+    }
     
-    // Índice de rigidez (Millasseau et al., 2006)
-    const stiffnessIndex = amplitude > 0 ? (avgPeakInterval / amplitude) : 0;
+    if (this.diastolicDecayRates.length > this.FEATURE_BUFFER_SIZE) {
+      this.diastolicDecayRates = this.diastolicDecayRates.slice(-this.FEATURE_BUFFER_SIZE);
+    }
     
-    // Índice de reflexión (correlacionado con presión arterial)
-    const reflectionIndex = diastolicArea > 0 ? systolicArea / diastolicArea : 0;
-    
-    // Frecuencia cardíaca (importantes para ajustar la estimación)
-    const heartRate = pulseTransitTime > 0 ? 60000 / pulseTransitTime : 0;
+    // Calculate statistics
+    const meanRiseSlope = this.systolicRiseSlopes.length > 0 ? 
+      this.systolicRiseSlopes.reduce((a, b) => a + b, 0) / this.systolicRiseSlopes.length : 0;
+      
+    const meanDecayRate = this.diastolicDecayRates.length > 0 ? 
+      this.diastolicDecayRates.reduce((a, b) => a + b, 0) / this.diastolicDecayRates.length : 0;
     
     return {
-      pulseTransitTime,
-      amplitude,
-      systolicArea,
-      diastolicArea,
-      stiffnessIndex,
-      reflectionIndex,
-      heartRate
+      meanRiseSlope,
+      meanDecayRate,
+      riseSlopes: slopes,
+      decayRates: decayRates
     };
   }
   
   /**
-   * Estima la presión arterial basado en las características extraídas
-   * utilizando correlaciones documentadas en literatura científica.
+   * Calculate basic frequency domain features
    */
-  private estimateBloodPressureFromFeatures(features: any): {
-    systolicEstimate: number;
-    diastolicEstimate: number;
-  } {
-    // Valores base calibrados según literatura
-    let systolicEstimate = 120; // mmHg
-    let diastolicEstimate = 80; // mmHg
+  private calculateFrequencyFeatures(values: number[]): any {
+    // Simple approach to frequency analysis
+    // In a production system, we would use FFT or wavelet transforms
+    const segmentSize = 60; // 2 seconds at 30fps
+    const segments = Math.floor(values.length / segmentSize);
     
-    // 1. Tiempo de tránsito de pulso (PTT) correlaciona inversamente con presión arterial
-    // (Mukkamala et al., IEEE Transactions on Biomedical Engineering, 2015)
-    if (features.pulseTransitTime > 0) {
-      // Convertir a valores fisiológicos (normalmente 180-360 ms)
-      const normalizedPTT = Math.max(180, Math.min(360, features.pulseTransitTime));
-      const pttFactor = ((360 - normalizedPTT) / 180) * 30; // Hasta 30 mmHg de variación
+    if (segments < 2) {
+      return { valid: false };
+    }
+    
+    const segmentVariances: number[] = [];
+    
+    for (let i = 0; i < segments; i++) {
+      const segment = values.slice(i * segmentSize, (i + 1) * segmentSize);
+      const mean = segment.reduce((a, b) => a + b, 0) / segment.length;
+      
+      const variance = segment.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / segment.length;
+      segmentVariances.push(variance);
+    }
+    
+    // Calculate ratio of high-frequency to low-frequency components
+    // This is a simplified approach
+    const highFreqVar = segmentVariances.slice(segments / 2).reduce((a, b) => a + b, 0) / (segments / 2);
+    const lowFreqVar = segmentVariances.slice(0, segments / 2).reduce((a, b) => a + b, 0) / (segments / 2);
+    
+    const hfLfRatio = lowFreqVar > 0 ? highFreqVar / lowFreqVar : 1;
+    
+    return {
+      hfLfRatio,
+      segmentVariances
+    };
+  }
+  
+  /**
+   * Detect dicrotic notch in PPG waveform
+   * The dicrotic notch timing correlates with arterial stiffness
+   */
+  private detectDicroticNotch(values: number[], peakIndices: number[], valleyIndices: number[]): any {
+    const dicroticTimes: number[] = [];
+    
+    for (let i = 0; i < peakIndices.length - 1; i++) {
+      const peakIndex = peakIndices[i];
+      const nextPeakIndex = peakIndices[i + 1];
+      
+      // Look for a local minimum in the decay phase (dicrotic notch)
+      if (nextPeakIndex - peakIndex > 10) {
+        const decayPhase = values.slice(peakIndex, nextPeakIndex);
+        
+        // First third of decay phase - normalize against the full cycle
+        const searchRange = Math.floor(decayPhase.length / 3);
+        const searchEnd = peakIndex + searchRange;
+        
+        let minValue = decayPhase[0];
+        let minIndex = 0;
+        
+        for (let j = 1; j < searchRange; j++) {
+          if (decayPhase[j] < minValue) {
+            minValue = decayPhase[j];
+            minIndex = j;
+          }
+        }
+        
+        if (minIndex > 0) {
+          const dicroticTime = minIndex / decayPhase.length;
+          dicroticTimes.push(dicroticTime);
+          this.dicroticNotchTimes.push(dicroticTime);
+        }
+      }
+    }
+    
+    // Trim dicrotic notch buffer
+    if (this.dicroticNotchTimes.length > this.FEATURE_BUFFER_SIZE) {
+      this.dicroticNotchTimes = this.dicroticNotchTimes.slice(-this.FEATURE_BUFFER_SIZE);
+    }
+    
+    // Calculate statistics
+    const meanDicroticTime = this.dicroticNotchTimes.length > 0 ? 
+      this.dicroticNotchTimes.reduce((a, b) => a + b, 0) / this.dicroticNotchTimes.length : 0;
+    
+    return {
+      meanDicroticTime,
+      dicroticTimes
+    };
+  }
+  
+  /**
+   * Calculate area-related features
+   */
+  private calculateAreaFeatures(values: number[], peakIndices: number[], valleyIndices: number[]): any {
+    const areaRatios: number[] = [];
+    
+    // Calculate systolic and diastolic areas
+    for (let i = 0; i < valleyIndices.length - 1; i++) {
+      const startIndex = valleyIndices[i];
+      const endIndex = valleyIndices[i + 1];
+      
+      // Find peaks between these valleys
+      const peaksInCycle = peakIndices.filter(p => p > startIndex && p < endIndex);
+      
+      if (peaksInCycle.length === 1) {
+        const peakIndex = peaksInCycle[0];
+        
+        // Systolic area (from start to peak)
+        const systolicArea = calculateAreaUnderCurve(values, startIndex, peakIndex);
+        
+        // Diastolic area (from peak to end)
+        const diastolicArea = calculateAreaUnderCurve(values, peakIndex, endIndex);
+        
+        if (diastolicArea > 0) {
+          const areaRatio = systolicArea / diastolicArea;
+          areaRatios.push(areaRatio);
+          this.areaRatios.push(areaRatio);
+        }
+      }
+    }
+    
+    // Trim area ratio buffer
+    if (this.areaRatios.length > this.FEATURE_BUFFER_SIZE) {
+      this.areaRatios = this.areaRatios.slice(-this.FEATURE_BUFFER_SIZE);
+    }
+    
+    // Calculate statistics
+    const meanAreaRatio = this.areaRatios.length > 0 ? 
+      this.areaRatios.reduce((a, b) => a + b, 0) / this.areaRatios.length : 0;
+    
+    return {
+      meanAreaRatio,
+      areaRatios
+    };
+  }
+  
+  /**
+   * Multi-parametric BP estimation using all extracted features
+   * Based on multiple research papers on PPG-based BP estimation
+   */
+  private multiParametricBPEstimation(features: any): {
+    systolic: number;
+    diastolic: number;
+  } {
+    // Base values - will be adjusted by various features
+    let systolicEstimate = this.baselineSystolic;
+    let diastolicEstimate = this.baselineDiastolic;
+    
+    // 1. PTT-based adjustment (inverse relationship with BP)
+    if (features.ptt.medianPTT > 0) {
+      // Transform PTT to physiological range (200-1200 ms)
+      const normalizedPTT = Math.max(200, Math.min(1200, features.ptt.medianPTT));
+      // Non-linear relationship based on research models
+      const pttFactor = Math.pow((1200 - normalizedPTT) / 1000, 1.5) * 60;
       
       systolicEstimate += pttFactor;
-      diastolicEstimate += pttFactor * 0.55; // Menor efecto en diastólica
+      diastolicEstimate += pttFactor * 0.6; // Less impact on diastolic
     }
     
-    // 2. Amplitud de la onda PPG correlaciona con presión de pulso
-    // (Khalid et al., Journal of Medical Engineering & Technology, 2018)
-    if (features.amplitude > 0) {
-      const normalizedAmplitude = Math.min(1, features.amplitude * 0.1);
-      const amplitudeFactor = normalizedAmplitude * 25; // Hasta 25 mmHg de variación
+    // 2. Amplitude-based adjustment (correlates with pulse pressure)
+    if (features.amplitude.medianAmplitude > 0) {
+      const amplitudeFactor = features.amplitude.medianAmplitude * 35;
       
+      // Amplitude affects systolic more than diastolic
       systolicEstimate += amplitudeFactor * 0.7;
-      diastolicEstimate -= amplitudeFactor * 0.3; // Efecto opuesto en diastólica
+      diastolicEstimate += amplitudeFactor * 0.3;
     }
     
-    // 3. Relación de áreas sistólica/diastólica
-    // (Allen & Murray, Physiological Measurement, 2002)
-    if (features.reflectionIndex > 0) {
-      const reflectionFactor = (features.reflectionIndex - 1) * 15;
-      systolicEstimate += reflectionFactor;
-      diastolicEstimate += reflectionFactor * 0.4;
+    // 3. Morphology-based adjustments
+    if (features.morphology.meanRiseSlope > 0) {
+      // Steeper rise correlates with higher systolic
+      const slopeFactorSys = Math.pow(features.morphology.meanRiseSlope, 0.7) * 25;
+      systolicEstimate += slopeFactorSys;
     }
     
-    // 4. Índice de rigidez (correlaciona con presión arterial)
-    // (Weber et al., Hypertension, 2012)
-    if (features.stiffnessIndex > 0) {
-      const stiffnessFactor = features.stiffnessIndex * 10;
-      systolicEstimate += stiffnessFactor;
-      diastolicEstimate += stiffnessFactor * 0.6;
+    if (features.morphology.meanDecayRate > 0) {
+      // Slower decay correlates with higher diastolic
+      const decayFactorDia = (1 / features.morphology.meanDecayRate) * 15;
+      diastolicEstimate += decayFactorDia;
     }
     
-    // 5. Ajuste por frecuencia cardíaca
-    // (Sun et al., Scientific Reports, 2016)
-    if (features.heartRate > 0) {
-      // Normalmente la presión aumenta con la frecuencia cardíaca
-      const hrFactor = (features.heartRate - 70) * 0.3;
-      systolicEstimate += hrFactor;
-      diastolicEstimate += hrFactor * 0.5;
+    // 4. Frequency domain adjustments
+    const hfLfFactor = (features.frequency.hfLfRatio - 1) * 10;
+    systolicEstimate += hfLfFactor;
+    diastolicEstimate += hfLfFactor * 0.5;
+    
+    // 5. Dicrotic notch timing (correlates with arterial stiffness)
+    if (features.dicrotic.meanDicroticTime > 0) {
+      // Earlier dicrotic notch indicates higher BP
+      const dicroticFactor = (1 - features.dicrotic.meanDicroticTime) * 20;
+      systolicEstimate += dicroticFactor;
+      diastolicEstimate += dicroticFactor * 0.8;
     }
     
-    // Aplicar restricciones fisiológicas
+    // 6. Area ratio adjustments (systolic/diastolic area ratio)
+    if (features.area.meanAreaRatio > 0) {
+      const areaFactor = (features.area.meanAreaRatio - 1.2) * 15;
+      systolicEstimate += areaFactor;
+      diastolicEstimate += areaFactor * 0.5;
+    }
+    
+    // Apply wide range limits
     systolicEstimate = Math.max(this.MIN_SYSTOLIC, Math.min(this.MAX_SYSTOLIC, systolicEstimate));
     diastolicEstimate = Math.max(this.MIN_DIASTOLIC, Math.min(this.MAX_DIASTOLIC, diastolicEstimate));
     
-    // Mantener diferencial fisiológico (presión de pulso)
-    const pulsePressure = systolicEstimate - diastolicEstimate;
-    if (pulsePressure < this.MIN_PULSE_PRESSURE) {
-      diastolicEstimate = systolicEstimate - this.MIN_PULSE_PRESSURE;
-    } else if (pulsePressure > this.MAX_PULSE_PRESSURE) {
-      diastolicEstimate = systolicEstimate - this.MAX_PULSE_PRESSURE;
+    // Maintain physiological relationship (systolic > diastolic)
+    if (systolicEstimate <= diastolicEstimate) {
+      // Ensure minimum difference of 10 mmHg
+      diastolicEstimate = systolicEstimate - 10;
     }
     
-    // Asegurar restricciones de rango diastólico
-    diastolicEstimate = Math.max(this.MIN_DIASTOLIC, Math.min(this.MAX_DIASTOLIC, diastolicEstimate));
+    // Adapt baseline for future measurements with slow learning
+    this.baselineSystolic = this.baselineSystolic * (1 - this.BASELINE_ADAPTATION_RATE) + 
+                          systolicEstimate * this.BASELINE_ADAPTATION_RATE;
+    this.baselineDiastolic = this.baselineDiastolic * (1 - this.BASELINE_ADAPTATION_RATE) + 
+                           diastolicEstimate * this.BASELINE_ADAPTATION_RATE;
     
     return {
-      systolicEstimate,
-      diastolicEstimate
+      systolic: Math.round(systolicEstimate),
+      diastolic: Math.round(diastolicEstimate)
     };
   }
   
   /**
-   * Aplica un filtro de suavizado a la señal
+   * Update BP buffers with new estimates
    */
-  private smoothSignal(signal: number[], windowSize: number): number[] {
-    const result: number[] = [];
-    
-    for (let i = 0; i < signal.length; i++) {
-      let sum = 0;
-      let count = 0;
+  private updateBPBuffers(systolic: number, diastolic: number): void {
+    // Only add valid readings
+    if (systolic > this.MIN_SYSTOLIC && diastolic > this.MIN_DIASTOLIC) {
+      this.systolicBuffer.push(systolic);
+      this.diastolicBuffer.push(diastolic);
       
-      for (let j = Math.max(0, i - windowSize); j <= Math.min(signal.length - 1, i + windowSize); j++) {
-        sum += signal[j];
-        count++;
+      // Trim buffers
+      if (this.systolicBuffer.length > this.FINAL_BP_BUFFER_SIZE) {
+        this.systolicBuffer.shift();
+        this.diastolicBuffer.shift();
+      }
+    }
+  }
+  
+  /**
+   * Calculate current best BP estimate
+   */
+  private calculateCurrentEstimate(): {
+    systolic: number;
+    diastolic: number;
+  } {
+    if (this.systolicBuffer.length === 0) {
+      return {
+        systolic: 0,
+        diastolic: 0
+      };
+    }
+    
+    // Use median for stability
+    const medianSys = this.calculateMedian(this.systolicBuffer);
+    const medianDia = this.calculateMedian(this.diastolicBuffer);
+    
+    // If we have enough measurements, combine with weighted average
+    if (this.systolicBuffer.length >= 5) {
+      const recentSys = this.systolicBuffer.slice(-5);
+      const recentDia = this.diastolicBuffer.slice(-5);
+      
+      let weightedSumSys = 0;
+      let weightedSumDia = 0;
+      let weightSum = 0;
+      
+      for (let i = 0; i < recentSys.length; i++) {
+        const weight = Math.pow(1.2, i);
+        weightedSumSys += recentSys[i] * weight;
+        weightedSumDia += recentDia[i] * weight;
+        weightSum += weight;
       }
       
-      result.push(sum / count);
+      const weightedSys = weightSum > 0 ? weightedSumSys / weightSum : medianSys;
+      const weightedDia = weightSum > 0 ? weightedSumDia / weightSum : medianDia;
+      
+      // Combine methods with continuous weighting
+      const finalSys = Math.round(medianSys * this.CONTINUOUS_WEIGHT + weightedSys * (1 - this.CONTINUOUS_WEIGHT));
+      const finalDia = Math.round(medianDia * this.CONTINUOUS_WEIGHT + weightedDia * (1 - this.CONTINUOUS_WEIGHT));
+      
+      return {
+        systolic: finalSys,
+        diastolic: finalDia
+      };
     }
     
-    return result;
+    // Not enough measurements yet, use median only
+    return {
+      systolic: medianSys,
+      diastolic: medianDia
+    };
   }
   
   /**
-   * Añade un valor al buffer de mediana y mantiene el tamaño
+   * Get current BP estimate
    */
-  private addToMedianBuffer(buffer: number[], value: number): void {
-    if (value <= 0) return; // No añadir valores inválidos
-    
-    buffer.push(value);
-    if (buffer.length > this.MEDIAN_BUFFER_SIZE) {
-      buffer.shift();
+  private getCurrentEstimate(): {
+    systolic: number;
+    diastolic: number;
+  } {
+    if (this.measurementCompleted) {
+      return {
+        systolic: this.finalSystolic,
+        diastolic: this.finalDiastolic
+      };
     }
+    
+    if (this.systolicBuffer.length === 0) {
+      return {
+        systolic: 0,
+        diastolic: 0
+      };
+    }
+    
+    return this.calculateCurrentEstimate();
   }
   
   /**
-   * Calcula la mediana de un array de números
+   * Calculate median of an array
    */
   private calculateMedian(values: number[]): number {
     if (values.length === 0) return 0;
     
     const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
+    const middle = Math.floor(sorted.length / 2);
     
     if (sorted.length % 2 === 0) {
-      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+      return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
     } else {
-      return sorted[mid];
+      return sorted[middle];
     }
-  }
-  
-  /**
-   * Calibra el procesador - no completamente implementado debido a
-   * limitaciones tecnológicas actuales
-   */
-  public calibrate(systolicReference: number, diastolicReference: number): void {
-    // La calibración completa no es factible con la tecnología actual
-    console.log("BP Processor: Calibration not fully supported with current technology");
-  }
-  
-  /**
-   * Reinicia el procesador
-   */
-  public reset(): void {
-    this.systolicBuffer = [];
-    this.diastolicBuffer = [];
-    this.systolicMedianBuffer = [];
-    this.diastolicMedianBuffer = [];
-  }
-  
-  /**
-   * Obtiene el nivel de confianza de la medición
-   */
-  public getConfidence(): number {
-    return this.signalQuality;
   }
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -71,9 +72,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
       
-      if (numValue > 600) return { text: String(value), color: "text-red-800", status: "Hiperglucemia Extrema" };
-      if (numValue > 400) return { text: String(value), color: "text-red-500", status: "Hiperglucemia Crítica" };
-      if (numValue > 300) return { text: String(value), color: "text-red-400", status: "Hiperglucemia Grave" };
+      if (numValue > 600) return { text: String(value), color: "text-purple-500", status: "Hiperglucemia Extrema" };
+      if (numValue > 400) return { text: String(value), color: "text-red-800", status: "Hiperglucemia Crítica" };
+      if (numValue > 300) return { text: String(value), color: "text-red-500", status: "Hiperglucemia Grave" };
       if (numValue > 200) return { text: String(value), color: "text-orange-500", status: "Hiperglucemia Moderada" };
       if (numValue > 140) return { text: String(value), color: "text-yellow-500", status: "Hiperglucemia Leve" };
       
@@ -110,14 +111,19 @@ const VitalSign: React.FC<VitalSignProps> = ({
       
       const [systolic, diastolic] = String(value).split('/').map(Number);
       
-      if (systolic >= 180 || diastolic >= 120) {
-        return { text: String(value), color: "text-red-500", status: "Crisis Hipertensiva" };
+      // Expanded blood pressure classification
+      if (systolic >= 230 || diastolic >= 130) {
+        return { text: String(value), color: "text-purple-600", status: "Crisis Extrema" };
+      } else if (systolic >= 180 || diastolic >= 120) {
+        return { text: String(value), color: "text-red-600", status: "Crisis Hipertensiva" };
       } else if (systolic >= 160 || diastolic >= 100) {
-        return { text: String(value), color: "text-red-400", status: "Hipertensión Severa" };
+        return { text: String(value), color: "text-red-500", status: "Hipertensión Severa" };
       } else if (systolic >= 140 || diastolic >= 90) {
         return { text: String(value), color: "text-orange-500", status: "Hipertensión Leve" };
       } else if (systolic >= 120 || diastolic >= 80) {
         return { text: String(value), color: "text-yellow-500", status: "Prehipertensión" };
+      } else if (systolic <= 70 || diastolic <= 40) {
+        return { text: String(value), color: "text-purple-500", status: "Hipotensión Severa" };
       } else if (systolic < 90 || diastolic < 60) {
         return { text: String(value), color: "text-blue-500", status: "Hipotensión" };
       }
