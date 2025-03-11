@@ -587,14 +587,14 @@ const Index = () => {
           </div>
 
           {isCalibrating && (
-            <div className="absolute bottom-[205px] left-0 right-0 text-center">
+            <div className="absolute bottom-[205px] left-0 right-0 text-center backdrop-blur-sm bg-black/30 py-1">
               <span className="text-sm font-medium text-gold-medium">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px] grid grid-cols-3 gap-0">
+          <div className="absolute inset-x-0 bottom-[60px] grid grid-cols-3 gap-0.5 px-0.5">
             <VitalSign 
               label="FRECUENCIA CARDÍACA"
               value={heartRate || "--"}

@@ -93,7 +93,7 @@
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
+  background: transparent;
   border: 1px solid #9F8E6A25;
   overflow: hidden;
 }
