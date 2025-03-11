@@ -1,4 +1,3 @@
-
 import { SpO2Processor } from './spo2-processor';
 import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
@@ -78,13 +77,13 @@ export class VitalSignsProcessor {
   private cholesterolBuffer: number[] = [];
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
+  
+  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   private lipidBuffer = {
     totalCholesterol: [] as number[],
     triglycerides: [] as number[]
   };
-
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -410,12 +409,12 @@ export class VitalSignsProcessor {
   public completeMeasurement(): VitalSignsResult | null {
     console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
-    // Aplicar el procesamiento final de la glucosa
-    const finalGlucose = this.glucoseProcessor.completeMeasurement();
+    // Usar valor actual de glucosa en vez de intentar llamar a completeMeasurement
+    const finalGlucose = this.glucoseProcessor.calculateGlucose(this.signalProcessor.getPPGValues());
     
-    // Aplicar el procesamiento final de la presión arterial (nuevo)
-    const finalBP = this.bpProcessor.completeMeasurement();
-    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
+    // Usar valores actuales de presión en vez de intentar llamar a completeMeasurement
+    const bp = this.bpProcessor.calculateBloodPressure(this.signalProcessor.getPPGValues().slice(-60));
+    const finalPressure = `${bp.systolic}/${bp.diastolic}`;
     
     if (this.lastValidResults) {
       // Actualizamos el resultado final con los valores finales de glucosa y presión

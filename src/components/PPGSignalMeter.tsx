@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -454,7 +453,7 @@ const PPGSignalMeter = ({
       </div>
 
       <div className="flex-1 relative">
-        <div className="canvas-container absolute inset-0">
+        <div className="canvas-container absolute inset-0 bottom-[100px]">
           <canvas
             ref={canvasRef}
             width={CANVAS_WIDTH}
