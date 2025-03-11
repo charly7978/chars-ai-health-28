@@ -169,12 +169,12 @@ const VitalSign: React.FC<VitalSignProps> = ({
 
   return (
     <div className="seamless-panel flex flex-col h-full">
-      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
-        <h3 className={`text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center ${!highlighted ? 'opacity-75' : ''}`}>
+      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-1">
+        <h3 className={`text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[28px] flex items-center justify-center ${!highlighted ? 'opacity-75' : ''}`}>
           {label}
         </h3>
         
-        <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
+        <div className="flex flex-col items-center justify-center gap-1 flex-1 py-1">
           <div className="flex items-center justify-center gap-1">
             <span 
               className={`font-bold ${highlighted ? 'glowing-text' : color} transition-colors duration-300 
