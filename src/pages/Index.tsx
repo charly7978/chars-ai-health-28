@@ -48,80 +48,104 @@ const Index = () => {
   } = useVitalSignsProcessor();
 
   useEffect(() => {
-    let fullscreenAttempts = 0;
-    const maxAttempts = 5;
+    let fullscreenChangeCount = 0;
+    const maxAttempts = 10;
     
-    const requestFullscreen = async (element: any) => {
-      if (element.requestFullscreen) {
-        await element.requestFullscreen();
-      } else if (element.webkitRequestFullscreen) {
-        await element.webkitRequestFullscreen();
-      } else if (element.mozRequestFullScreen) {
-        await element.mozRequestFullScreen();
-      } else if (element.msRequestFullscreen) {
-        await element.msRequestFullscreen();
-      }
-    };
-    
-    const tryEnterFullscreen = async () => {
+    const requestFullscreen = () => {
       try {
-        await requestFullscreen(document.documentElement);
-        console.log("Fullscreen requested successfully");
+        const element = document.documentElement;
         
-        if (screen.orientation && screen.orientation.lock) {
-          try {
-            await screen.orientation.lock('portrait');
-            console.log("Orientation locked to portrait");
-          } catch (err) {
-            console.log('No se pudo bloquear la orientación:', err);
+        if (!document.fullscreenElement && 
+            !document.webkitFullscreenElement && 
+            !document.mozFullScreenElement && 
+            !document.msFullscreenElement) {
+          
+          console.log("Attempting fullscreen entry");
+          
+          if (element.requestFullscreen) {
+            element.requestFullscreen();
+          } else if ((element as any).webkitRequestFullscreen) {
+            (element as any).webkitRequestFullscreen();
+          } else if ((element as any).mozRequestFullScreen) {
+            (element as any).mozRequestFullScreen();
+          } else if ((element as any).msRequestFullscreen) {
+            (element as any).msRequestFullscreen();
           }
+          
+          setTimeout(() => {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('portrait')
+                .catch(err => console.warn('Orientation lock failed:', err));
+            }
+          }, 500);
         }
       } catch (err) {
-        console.log(`Intento ${fullscreenAttempts + 1} fallido para activar pantalla completa:`, err);
-        fullscreenAttempts++;
-        
-        if (fullscreenAttempts < maxAttempts) {
-          setTimeout(tryEnterFullscreen, 1000); // Try again after a delay
-        }
+        console.error("Fullscreen request failed:", err);
       }
     };
     
-    // Try fullscreen on load
-    tryEnterFullscreen();
-    
-    // Setup event listeners for user interactions which can trigger fullscreen
-    const userInteractionEvents = ['click', 'touchstart', 'pointerdown'];
-    
-    const fullscreenOnUserInteraction = () => {
-      tryEnterFullscreen();
+    const checkFullscreen = () => {
+      fullscreenChangeCount++;
       
-      // Remove this specific handler after first interaction
-      userInteractionEvents.forEach(eventType => {
-        document.removeEventListener(eventType, fullscreenOnUserInteraction);
-      });
+      if (!document.fullscreenElement && 
+          !document.webkitFullscreenElement && 
+          !document.mozFullScreenElement && 
+          !document.msFullscreenElement) {
+        
+        console.log(`Not in fullscreen, attempt ${fullscreenChangeCount}/${maxAttempts}`);
+        
+        if (fullscreenChangeCount < maxAttempts) {
+          setTimeout(requestFullscreen, 300);
+        }
+      } else {
+        console.log("Successfully entered fullscreen mode");
+      }
     };
     
-    // Add listeners for user interaction events
-    userInteractionEvents.forEach(eventType => {
-      document.addEventListener(eventType, fullscreenOnUserInteraction, { once: true });
-    });
+    requestFullscreen();
     
-    // Clean up event listeners on component unmount
+    document.addEventListener('fullscreenchange', checkFullscreen);
+    document.addEventListener('webkitfullscreenchange', checkFullscreen);
+    document.addEventListener('mozfullscreenchange', checkFullscreen);
+    document.addEventListener('MSFullscreenChange', checkFullscreen);
+    
+    const handleUserInteraction = () => {
+      requestFullscreen();
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction);
+    
     return () => {
-      userInteractionEvents.forEach(eventType => {
-        document.removeEventListener(eventType, fullscreenOnUserInteraction);
-      });
+      document.removeEventListener('fullscreenchange', checkFullscreen);
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen);
+      document.removeEventListener('mozfullscreenchange', checkFullscreen);
+      document.removeEventListener('MSFullscreenChange', checkFullscreen);
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
     };
   }, []);
 
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
+    
     document.body.addEventListener('touchmove', preventScroll, { passive: false });
     document.body.addEventListener('scroll', preventScroll, { passive: false });
-
+    
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+    document.body.style.overflow = 'hidden';
+    
     return () => {
       document.body.removeEventListener('touchmove', preventScroll);
       document.body.removeEventListener('scroll', preventScroll);
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      document.body.style.overflow = '';
     };
   }, []);
 
@@ -136,20 +160,29 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
-      try {
-        const element = document.documentElement;
-        if (element.requestFullscreen) {
-          element.requestFullscreen();
-        } else if ((element as any).webkitRequestFullscreen) {
-          (element as any).webkitRequestFullscreen();
-        } else if ((element as any).mozRequestFullScreen) {
-          (element as any).mozRequestFullScreen();
-        } else if ((element as any).msRequestFullscreen) {
-          (element as any).msRequestFullscreen();
+      requestAnimationFrame(() => {
+        try {
+          const element = document.documentElement;
+          
+          if (!document.fullscreenElement && 
+              !document.webkitFullscreenElement && 
+              !document.mozFullScreenElement && 
+              !document.msFullscreenElement) {
+            
+            if (element.requestFullscreen) {
+              element.requestFullscreen();
+            } else if ((element as any).webkitRequestFullscreen) {
+              (element as any).webkitRequestFullscreen();
+            } else if ((element as any).mozRequestFullScreen) {
+              (element as any).mozRequestFullScreen();
+            } else if ((element as any).msRequestFullscreen) {
+              (element as any).msRequestFullscreen();
+            }
+          }
+        } catch (e) {
+          console.error("Error forcing fullscreen on start:", e);
         }
-      } catch (e) {
-        console.error("Error forcing fullscreen on start:", e);
-      }
+      });
       
       setIsMonitoring(true);
       setIsCameraOn(true);
@@ -478,7 +511,7 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-black" style={{ 
+    <div className="fixed inset-0 flex flex-col bg-gold-black" style={{ 
       height: '100dvh',
       width: '100vw',
       maxWidth: '100vw',
@@ -512,62 +545,59 @@ const Index = () => {
 
           {isCalibrating && (
             <div className="absolute bottom-[55%] left-0 right-0 text-center">
-              <span className="text-sm font-medium text-gray-400">
+              <span className="text-sm font-medium text-gold-medium">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px]">
-            <div className="grid grid-cols-3 gap-0">
-              <VitalSign 
-                label="FRECUENCIA CARDÍACA"
-                value={heartRate || "--"}
-                unit="BPM"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="SPO2"
-                value={vitalSigns.spo2 || "--"}
-                unit="%"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="PRESIÓN ARTERIAL"
-                value={vitalSigns.pressure}
-                unit="mmHg"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="HEMOGLOBINA"
-                value={vitalSigns.hemoglobin || "--"}
-                unit="g/dL"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="GLUCOSA"
-                value={vitalSigns.glucose || "--"}
-                unit="mg/dL"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                unit="mg/dL"
-                highlighted={showResults}
-              />
-            </div>
+          <div className="absolute inset-x-0 bottom-[60px] grid grid-cols-3 gap-0">
+            <VitalSign 
+              label="FRECUENCIA CARDÍACA"
+              value={heartRate || "--"}
+              unit="BPM"
+              highlighted={showResults}
+            />
+            <VitalSign 
+              label="SPO2"
+              value={vitalSigns.spo2 || "--"}
+              unit="%"
+              highlighted={showResults}
+            />
+            <VitalSign 
+              label="PRESIÓN ARTERIAL"
+              value={vitalSigns.pressure}
+              unit="mmHg"
+              highlighted={showResults}
+            />
+            <VitalSign 
+              label="HEMOGLOBINA"
+              value={vitalSigns.hemoglobin || "--"}
+              unit="g/dL"
+              highlighted={showResults}
+            />
+            <VitalSign 
+              label="GLUCOSA"
+              value={vitalSigns.glucose || "--"}
+              unit="mg/dL"
+              highlighted={showResults}
+            />
+            <VitalSign 
+              label="COLESTEROL/TRIGL."
+              value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+              unit="mg/dL"
+              highlighted={showResults}
+            />
           </div>
 
-          <div className="h-[60px] grid grid-cols-2 gap-0 bg-blue-800 mt-auto">
+          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
             <button 
               onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-blue-700 to-blue-800 text-white hover:from-blue-800 hover:to-blue-900 active:from-blue-900 active:to-blue-950 transition-colors duration-200 shadow-md text-lg font-bold"
-              style={{textShadow: '0 1px 2px rgba(0,0,0,0.3)'}}
+              className="w-full h-full gold-button text-lg font-bold text-white"
             >
               RESETEAR
             </button>
