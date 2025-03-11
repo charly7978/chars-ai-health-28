@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -82,23 +81,35 @@
 }
 
 .gold-button {
-  background: linear-gradient(to bottom, rgba(159, 142, 106, 0.7), rgba(125, 110, 82, 0.7));
-  border: 1px solid rgba(226, 209, 181, 0.5);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(4px);
+  background: linear-gradient(to bottom, #9F8E6A, #7D6E52);
+  border: 1px solid #E2D1B5;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .gold-button:active {
-  background: linear-gradient(to bottom, rgba(125, 110, 82, 0.8), rgba(90, 78, 58, 0.8));
+  background: linear-gradient(to bottom, #7D6E52, #5A4E3A);
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, rgba(30, 41, 59, 0.1) 0%, rgba(15, 23, 42, 0.1) 100%);
-  box-shadow: none;
+  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
+  border: 1px solid #9F8E6A25;
   overflow: hidden;
-  backdrop-filter: blur(4px);
-  border: none;
+  backdrop-filter: blur(1px);
+}
+
+.vital-signs-panel-container {
+  background: linear-gradient(180deg, rgba(20, 18, 22, 0.95) 0%, rgba(32, 29, 36, 0.98) 100%);
+  border-top: 2px solid rgba(159, 142, 106, 0.3);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  position: absolute;
+  top: 50%;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
 .background-grid {
@@ -109,97 +120,23 @@
 }
 
 .start-button {
-  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.6), rgba(29, 78, 216, 0.6));
-  border: 1px solid rgba(96, 165, 250, 0.3);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
-  font-size: 1.5rem;
-  padding: 1rem;
-  height: auto;
+  background: linear-gradient(to bottom, #0b65d4, #0f4a94);
+  border: 1px solid #2e8eff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .start-button:active {
-  background: linear-gradient(to bottom, rgba(30, 64, 175, 0.7), rgba(30, 58, 138, 0.7));
+  background: linear-gradient(to bottom, #0f4a94, #0b3871);
 }
 
 .stop-button {
-  background: linear-gradient(to bottom, rgba(239, 68, 68, 0.6), rgba(185, 28, 28, 0.6));
-  border: 1px solid rgba(252, 165, 165, 0.3);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
-  font-size: 1.5rem;
-  padding: 1rem;
-  height: auto;
+  background: linear-gradient(to bottom, #d40b0b, #941111);
+  border: 1px solid #ff2e2e;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .stop-button:active {
-  background: linear-gradient(to bottom, rgba(153, 27, 27, 0.7), rgba(127, 29, 29, 0.7));
-}
-
-/* Updating the vital sign display style for better visual appearance */
-.vital-sign-value {
-  color: white;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 1), rgba(226, 209, 181, 0.85));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-weight: bold;
-}
-
-.vital-sign-inactive {
-  opacity: 0.5;
-  color: #94a3b8;
-  text-shadow: none;
-  background: none;
-  -webkit-text-fill-color: #94a3b8;
-}
-
-/* Seamless display panel with no divisions */
-.seamless-panel {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-}
-
-/* Glowing text effect for vital signs */
-.glowing-text {
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.7), 0 0 20px rgba(226, 209, 181, 0.5);
-  color: white;
-}
-
-/* Softer button styles */
-.soft-button {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  font-size: 1.25rem !important;
-  height: 4rem !important;
-}
-
-.soft-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
-}
-
-.soft-button:active {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transform: translateY(1px);
-}
-
-/* Grid styling for PPGSignalMeter */
-.graph-grid {
-  background: rgba(254, 247, 205, 0.05);
-}
-
-/* Canvas container */
-.canvas-container {
-  height: calc(100vh - 120px);
-  width: 100%;
-  overflow: hidden;
+  background: linear-gradient(to bottom, #941111, #71110e);
 }

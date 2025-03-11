@@ -29,40 +29,36 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Enhanced logic to prevent false positives in finger detection
-      // Requirements:
-      // 1. Higher threshold for what counts as a finger
-      // 2. More stable signal quality assessment
+      console.log("useSignalProcessor: Señal recibida detallada:", {
+        timestamp: signal.timestamp,
+        formattedTime: new Date(signal.timestamp).toISOString(),
+        quality: signal.quality,
+        rawValue: signal.rawValue,
+        filteredValue: signal.filteredValue,
+        fingerDetected: signal.fingerDetected,
+        roi: signal.roi,
+        processingTime: Date.now() - signal.timestamp
+      });
       
-      // A real finger should have high contrast (raw value) and stability (quality)
-      // The threshold for stability needs to be higher
-      const isSignalStrong = signal.rawValue > 80; // Higher raw value threshold
-      const isSignalStable = signal.quality > 40; // Higher quality threshold
-      
-      // A real finger will have both components
-      const enhancedFingerDetected = signal.fingerDetected && isSignalStrong && isSignalStable;
-      
-      // Create validated signal with stricter criteria
-      const validatedSignal = {
-        ...signal,
-        fingerDetected: enhancedFingerDetected
-      };
-      
-      setLastSignal(validatedSignal);
+      setLastSignal(signal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      if ((framesProcessed + 1) % 50 === 0 && enhancedFingerDetected) {
-        setSignalStats(prev => {
-          const newStats = {
-            minValue: Math.min(prev.minValue, signal.filteredValue),
-            maxValue: Math.max(prev.maxValue, signal.filteredValue),
-            avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
-            totalValues: prev.totalValues + 1
-          };
-          return newStats;
-        });
-      }
+      // Actualizar estadísticas
+      setSignalStats(prev => {
+        const newStats = {
+          minValue: Math.min(prev.minValue, signal.filteredValue),
+          maxValue: Math.max(prev.maxValue, signal.filteredValue),
+          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+          totalValues: prev.totalValues + 1
+        };
+        
+        if (prev.totalValues % 50 === 0) {
+          console.log("useSignalProcessor: Estadísticas de señal:", newStats);
+        }
+        
+        return newStats;
+      });
     };
 
     processor.onError = (error: ProcessingError) => {
@@ -178,7 +174,6 @@ export const useSignalProcessor = () => {
     startProcessing,
     stopProcessing,
     calibrate,
-    processFrame,
-    setLastSignal // Export this to allow external reset
+    processFrame
   };
 };
