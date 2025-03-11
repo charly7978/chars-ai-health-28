@@ -1,4 +1,3 @@
-
 /**
  * Advanced glucose processor based on real-time PPG signal analysis
  * Implements scientific research-based techniques for extracting glucose-related 
@@ -30,6 +29,7 @@ export class GlucoseProcessor {
   private processingTimer: NodeJS.Timeout | null = null;
   private processingInProgress: boolean = false;
   private processingResult: number = 0;
+  private measurementCompleted: boolean = false;
   
   // Advanced feature extraction parameters
   private readonly SPECTRAL_BANDS = [0.5, 1.0, 1.5, 2.0, 2.5]; // Hz, for spectral analysis
@@ -62,8 +62,8 @@ export class GlucoseProcessor {
       }
     }
     
-    // If processing is already in progress, return the last valid result
-    if (this.processingInProgress && this.processingResult > 0) {
+    // Si el procesamiento final ya se completó, devolver ese resultado
+    if (this.measurementCompleted && this.processingResult > 0) {
       return this.processingResult;
     }
     
@@ -128,27 +128,61 @@ export class GlucoseProcessor {
     this.lastCalculation = glucoseEstimate;
     this.lastMeasurementTime = Date.now();
     
-    // Add to statistical processing buffers
+    // Durante la medición, solo usamos la mediana para dar más dinamismo
+    // Add to median buffer for real-time display
     this.addToMedianBuffer(Math.round(glucoseEstimate));
+    
+    // Añadir al buffer ponderado solo para el procesamiento final
     this.addToWeightedBuffer(glucoseEstimate, this.signalQuality);
     
     // Schedule delayed processing if not already in progress
+    // and if we have enough samples
     if (!this.processingInProgress && this.samplesBuffer.length >= 3) {
       this.startDelayedProcessing();
     }
     
-    // Return either the last processed result or the current median-filtered value
-    if (this.processingResult > 0) {
-      return this.processingResult;
-    }
-    
-    // Return median-filtered result (first statistical filter)
+    // Durante la medición, devolvemos solo la mediana (más dinámica)
     return this.calculateMedian();
   }
   
   /**
+   * Marca la medición como completada para aplicar el procesamiento final
+   * Esta función debe llamarse cuando el usuario finaliza la medición
+   */
+  public completeMeasurement(): number {
+    if (this.processingInProgress) {
+      // Si ya está procesando, esperamos al resultado
+      return this.processingResult > 0 ? this.processingResult : this.calculateMedian();
+    }
+    
+    // Si no está procesando, iniciamos el procesamiento final
+    console.log("Glucose: Completing measurement, starting final processing");
+    this.processingInProgress = true;
+    
+    // Apply weighted averaging as the final step
+    const weightedAverage = this.calculateWeightedAverage();
+    const medianValue = this.calculateMedian();
+    
+    // Combine both with bias toward the weighted average
+    const finalValue = Math.round(medianValue * 0.35 + weightedAverage * 0.65);
+    
+    console.log("Glucose: Final processing complete", {
+      medianValue,
+      weightedAverage,
+      finalValue,
+      samples: this.samplesBuffer.length
+    });
+    
+    this.processingResult = finalValue;
+    this.measurementCompleted = true;
+    this.processingInProgress = false;
+    
+    return finalValue;
+  }
+  
+  /**
    * Start delayed processing of collected samples
-   * Applies median filtering followed by weighted averaging as requested
+   * Now only applies median filtering during measurement
    */
   private startDelayedProcessing(): void {
     if (this.processingTimer) {
@@ -157,33 +191,24 @@ export class GlucoseProcessor {
     
     this.processingInProgress = true;
     
-    // Schedule processing with 2-second delay as requested
+    // Schedule processing with 2-second delay
     this.processingTimer = setTimeout(() => {
-      console.log("Glucose: Starting advanced statistical processing", {
+      console.log("Glucose: Starting intermediate processing", {
         samplesCount: this.samplesBuffer.length,
-        medianBufferSize: this.medianBuffer.length,
-        weightedBufferSize: this.weightedBuffer.length
+        medianBufferSize: this.medianBuffer.length
       });
       
-      // First apply median filtering
+      // Durante la medición, solo aplicamos la mediana para valores más dinámicos
       const medianValue = this.calculateMedian();
       
-      // Then apply weighted averaging
-      const weightedAverage = this.calculateWeightedAverage();
-      
-      // Combine both with bias toward the weighted average for more stability
-      const finalValue = Math.round(medianValue * 0.35 + weightedAverage * 0.65);
-      
-      console.log("Glucose: Advanced statistical processing complete", {
+      console.log("Glucose: Intermediate processing complete", {
         medianValue,
-        weightedAverage,
-        finalValue,
         samples: this.samplesBuffer.length
       });
       
-      this.processingResult = finalValue;
+      this.processingResult = medianValue;
       this.processingInProgress = false;
-    }, 2000); // 2 second delay as requested
+    }, 2000); // 2 second delay
   }
   
   /**
@@ -732,6 +757,7 @@ export class GlucoseProcessor {
     this.weightedBuffer = [];
     this.processingResult = 0;
     this.processingInProgress = false;
+    this.measurementCompleted = false;
     
     if (this.processingTimer) {
       clearTimeout(this.processingTimer);

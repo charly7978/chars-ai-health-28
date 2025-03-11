@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -20,6 +21,7 @@ export const useVitalSignsProcessor = () => {
   const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
+  const measurementActive = useRef<boolean>(false);
   
   // Advanced configuration based on clinical guidelines
   const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
@@ -57,6 +59,7 @@ export const useVitalSignsProcessor = () => {
     });
     
     processor.startCalibration();
+    measurementActive.current = true;
   }, [processor]);
   
   /**
@@ -85,8 +88,14 @@ export const useVitalSignsProcessor = () => {
       sessionId: sessionId.current,
       timestamp: new Date().toISOString(),
       calibrando: processor.isCurrentlyCalibrating(),
-      progresoCalibración: processor.getCalibrationProgress()
+      progresoCalibración: processor.getCalibrationProgress(),
+      medicionActiva: measurementActive.current
     });
+    
+    // Marcar que la medición está activa
+    if (!measurementActive.current) {
+      measurementActive.current = true;
+    }
     
     // Process signal through the vital signs processor
     const result = processor.processSignal(value, rrData);
@@ -233,6 +242,42 @@ export const useVitalSignsProcessor = () => {
     };
   }, [processor, arrhythmiaCounter]);
 
+  /**
+   * Finaliza la medición y aplica el procesamiento estadístico final
+   * Devuelve los resultados finales
+   */
+  const completeMeasurement = useCallback(() => {
+    if (!measurementActive.current) {
+      console.log("useVitalSignsProcessor: No hay medición activa para completar");
+      return lastValidResults;
+    }
+    
+    console.log("useVitalSignsProcessor: Completando medición, aplicando procesamiento final");
+    
+    // Aplicar el procesamiento final para la glucosa
+    const finalResults = processor.completeMeasurement();
+    
+    measurementActive.current = false;
+    
+    console.log("useVitalSignsProcessor: Medición completada", {
+      resultadosFinales: finalResults,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Actualizar los resultados válidos con los valores finales
+    if (finalResults && lastValidResults) {
+      const updatedResults = {
+        ...lastValidResults,
+        glucose: finalResults.glucose
+      };
+      
+      setLastValidResults(updatedResults);
+      return updatedResults;
+    }
+    
+    return lastValidResults;
+  }, [processor, lastValidResults]);
+
   // Soft reset: mantener los resultados pero reiniciar los procesadores
   const reset = useCallback(() => {
     console.log("useVitalSignsProcessor: Reseteo suave", {
@@ -267,6 +312,7 @@ export const useVitalSignsProcessor = () => {
     setArrhythmiaCounter(0);
     lastArrhythmiaTime.current = 0;
     hasDetectedArrhythmia.current = false;
+    measurementActive.current = false;
     console.log("Reseteo suave completado - manteniendo resultados");
     return savedResults;
   }, [processor]);
@@ -292,6 +338,7 @@ export const useVitalSignsProcessor = () => {
     hasDetectedArrhythmia.current = false;
     processedSignals.current = 0;
     signalLog.current = [];
+    measurementActive.current = false;
     console.log("Reseteo completo finalizado - borrando todos los resultados");
   }, [processor, arrhythmiaCounter, lastValidResults]);
 
@@ -301,8 +348,10 @@ export const useVitalSignsProcessor = () => {
     fullReset,
     startCalibration,
     forceCalibrationCompletion,
+    completeMeasurement,
     arrhythmiaCounter,
     lastValidResults,
+    isMeasurementActive: () => measurementActive.current,
     debugInfo: {
       processedSignals: processedSignals.current,
       signalLog: signalLog.current.slice(-10)
