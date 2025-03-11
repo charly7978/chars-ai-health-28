@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -28,8 +29,14 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      const qualityThreshold = 20; // Minimum quality required to consider finger detected
-      const enhancedFingerDetected = signal.fingerDetected && signal.quality >= qualityThreshold;
+      // Increased quality threshold to be more strict about what counts as a finger detection
+      const qualityThreshold = 35; // Increased from 20 to 35 for stricter detection
+      
+      // Enhanced validation criteria
+      const hasStrongSignal = signal.rawValue > 80; // Ensure we have a strong red channel value
+      const enhancedFingerDetected = signal.fingerDetected && 
+                                    signal.quality >= qualityThreshold &&
+                                    hasStrongSignal;
       
       const validatedSignal = {
         ...signal,

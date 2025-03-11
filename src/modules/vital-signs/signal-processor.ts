@@ -1,3 +1,4 @@
+
 import { calculateAC, calculateDC } from './utils';
 
 /**
@@ -13,26 +14,26 @@ export class SignalProcessor {
   private readonly BASELINE_FACTOR = 0.92;
   private baselineValue: number = 0;
 
-  // Improved finger detection parameters with stricter thresholds
-  private readonly MIN_RED_THRESHOLD = 60;      // Increased for better signal strength
-  private readonly MAX_RED_THRESHOLD = 230;     // Reduced to avoid saturation
-  private readonly RED_DOMINANCE_RATIO = 1.35;  // Increased for clearer red channel isolation
-  private readonly MIN_SIGNAL_AMPLITUDE = 4;    // Increased minimum variation threshold
-  private readonly MIN_VALID_PIXELS = 100;      // Increased required pixels for detection
-  private readonly ROI_SCALE = 0.20;           // Smaller ROI for more focused detection
-  private readonly SIGNAL_MEMORY = 5;          // Increased frames to remember signal
-  private readonly HYSTERESIS = 12;            // Increased hysteresis for better stability
+  // Stricter finger detection parameters
+  private readonly MIN_RED_THRESHOLD = 80;      // Increased from 60 for stronger signal requirement
+  private readonly MAX_RED_THRESHOLD = 220;     // Reduced from 230 to avoid saturation
+  private readonly RED_DOMINANCE_RATIO = 1.6;   // Increased from 1.35 for clearer red channel isolation
+  private readonly MIN_SIGNAL_AMPLITUDE = 6;    // Increased from 4 for better variation
+  private readonly MIN_VALID_PIXELS = 150;      // Increased from 100 to require more consistent coverage
+  private readonly ROI_SCALE = 0.18;            // Smaller ROI (from 0.20) for more focused detection
+  private readonly SIGNAL_MEMORY = 5;
+  private readonly HYSTERESIS = 15;             // Increased from 12 for better stability
 
-  // Signal quality and stability parameters
-  private readonly STABILITY_THRESHOLD = 0.75;  // Increased for better signal quality
-  private readonly MIN_PERFUSION_INDEX = 0.08;  // Higher threshold for perfusion detection
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 15; // Reduced allowed variation
+  // Enhanced signal quality and stability parameters
+  private readonly STABILITY_THRESHOLD = 0.80;  // Increased from 0.75
+  private readonly MIN_PERFUSION_INDEX = 0.12;  // Increased from 0.08
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 12; // Reduced from 15
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
-  private readonly MIN_CONSECUTIVE_FRAMES = 4;  // Increased minimum frames for validation
-  private lastStableValue: number = 0;         // Added missing property
+  private readonly MIN_CONSECUTIVE_FRAMES = 6;  // Increased from 4
+  private lastStableValue: number = 0;
   private stableSignalCount: number = 0;
-  private readonly MIN_STABLE_SIGNAL_COUNT = 10;
+  private readonly MIN_STABLE_SIGNAL_COUNT = 12; // Increased from 10
   private signalBuffer: number[] = [];
   private readonly SIGNAL_BUFFER_SIZE = 30;
 
@@ -88,7 +89,7 @@ export class SignalProcessor {
     let blueSum = 0;
     let pixelCount = 0;
     
-    // Calculate ROI dimensions with strict center focus
+    // Calculate ROI dimensions with stricter center focus
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
     const roiSize = Math.min(imageData.width, imageData.height) * this.ROI_SCALE;
@@ -134,10 +135,19 @@ export class SignalProcessor {
       }
     }
     
-    // Advanced validation with temporal consistency
-    if (pixelCount < this.MIN_VALID_PIXELS) {
+    // ROI area calculation for coverage check
+    const roiArea = (endX - startX) * (endY - startY);
+    
+    // Enhanced validation with coverage requirement
+    if (pixelCount < this.MIN_VALID_PIXELS || pixelCount / roiArea < 0.35) {
       this.consecutiveValidFrames = 0;
       this.stableSignalCount = 0;
+      return 0;
+    }
+    
+    // Also check for contrast - an essential feature of a real finger
+    if ((maxRed - minRed) < 20) {
+      this.consecutiveValidFrames = 0;
       return 0;
     }
     
@@ -154,7 +164,7 @@ export class SignalProcessor {
       signalAmplitude >= this.MIN_SIGNAL_AMPLITUDE &&
       avgRed > (avgGreen * this.RED_DOMINANCE_RATIO) &&
       avgRed > (avgBlue * this.RED_DOMINANCE_RATIO) &&
-      validRegionCount >= (pixelCount * 0.4); // Increased required consistent regions to 40%
+      validRegionCount >= (pixelCount * 0.45); // Increased from 0.4 to 0.45 - stricter consistency requirement
 
     // Buffer management for signal stability analysis
     this.signalBuffer.push(avgRed);
@@ -178,11 +188,11 @@ export class SignalProcessor {
       }
     } else {
       // Reset stability counter but maintain brief signal memory
-      if (currentTime - this.lastValidDetectionTime < 500) {
+      if (currentTime - this.lastValidDetectionTime < 400) { // Reduced from 500 to 400ms
         return this.lastStableValue;
       }
-      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 1);
-      this.stableSignalCount = Math.max(0, this.stableSignalCount - 1);
+      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 2); // Faster decrease - from 1 to 2
+      this.stableSignalCount = Math.max(0, this.stableSignalCount - 2); // Faster stability loss
     }
     
     return 0;
@@ -271,8 +281,8 @@ export class SignalProcessor {
       Math.abs(val - recentValues[i])
     ));
     
-    // Combined stability check
-    return variance < (mean * 0.1) && // Low variance relative to signal
+    // Combined stability check with stricter criteria
+    return variance < (mean * 0.08) && // Reduced from 0.1 to 0.08 - require more consistency
            maxVariation < this.MAX_FRAME_TO_FRAME_VARIATION;
   }
 }
