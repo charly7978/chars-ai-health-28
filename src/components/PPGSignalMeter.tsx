@@ -37,6 +37,11 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
+  const [arrhythmiaStats, setArrhythmiaStats] = useState({
+    total: 0,
+    lastMinute: 0,
+    lastUpdate: Date.now()
+  });
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -148,19 +153,31 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     if (arrhythmiaStatus) {
-      const [status, _] = arrhythmiaStatus.split('|');
+      const [status, count] = arrhythmiaStatus.split('|');
       
       if (status.includes("ARRITMIA") && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
+
+        ctx.font = '12px Inter';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Total: ${arrhythmiaStats.total}`, CANVAS_WIDTH - 20, 25);
+        ctx.fillText(`Último min: ${arrhythmiaStats.lastMinute}`, CANVAS_WIDTH - 20, 45);
+        
+        if (rawArrhythmiaData) {
+          ctx.fillText(`RMSSD: ${rawArrhythmiaData.rmssd.toFixed(1)}`, CANVAS_WIDTH - 20, 65);
+          ctx.fillText(`Var RR: ${(rawArrhythmiaData.rrVariation * 100).toFixed(1)}%`, CANVAS_WIDTH - 20, 85);
+        }
+        
         setShowArrhythmiaAlert(true);
       } 
     }
     
     ctx.stroke();
-  }, [arrhythmiaStatus, showArrhythmiaAlert]);
+  }, [arrhythmiaStatus, showArrhythmiaAlert, arrhythmiaStats, rawArrhythmiaData]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
@@ -379,8 +396,27 @@ const PPGSignalMeter = ({
     };
   }, [renderSignal]);
 
+  useEffect(() => {
+    if (arrhythmiaStatus) {
+      const [status, count] = arrhythmiaStatus.split('|');
+      if (status.includes("ARRITMIA")) {
+        const now = Date.now();
+        setArrhythmiaStats(prev => ({
+          total: Number(count) || prev.total,
+          lastMinute: now - prev.lastUpdate < 60000 ? prev.lastMinute + 1 : 1,
+          lastUpdate: now
+        }));
+      }
+    }
+  }, [arrhythmiaStatus]);
+
   const handleReset = useCallback(() => {
     setShowArrhythmiaAlert(false);
+    setArrhythmiaStats({
+      total: 0,
+      lastMinute: 0,
+      lastUpdate: Date.now()
+    });
     peaksRef.current = [];
     onReset();
   }, [onReset]);
