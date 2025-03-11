@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
-import { applyTimeBasedProcessing } from '../modules/vital-signs/utils';
 
 /**
  * Custom hook for processing vital signs with advanced algorithms
@@ -22,19 +21,11 @@ export const useVitalSignsProcessor = () => {
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   const measurementActive = useRef<boolean>(false);
-  const measurementStartTime = useRef<number>(0);
-  const elapsedTimeRef = useRef<number>(0);
-  const bloodPressureReadings = useRef<{systolic: number[], diastolic: number[]}>({
-    systolic: [],
-    diastolic: []
-  });
   
   // Advanced configuration based on clinical guidelines
   const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
   const MAX_ARRHYTHMIAS_PER_SESSION = 20; // Reasonable maximum for 30 seconds
   const SIGNAL_QUALITY_THRESHOLD = 0.55; // Signal quality required for reliable detection
-  const MEASUREMENT_DURATION = 30; // Total duration in seconds
-  const FINAL_PROCESSING_TIME = 29; // Time in seconds when to apply special processing
   
   useEffect(() => {
     console.log("useVitalSignsProcessor: Hook inicializado", {
@@ -43,9 +34,7 @@ export const useVitalSignsProcessor = () => {
       parametros: {
         MIN_TIME_BETWEEN_ARRHYTHMIAS,
         MAX_ARRHYTHMIAS_PER_SESSION,
-        SIGNAL_QUALITY_THRESHOLD,
-        MEASUREMENT_DURATION,
-        FINAL_PROCESSING_TIME
+        SIGNAL_QUALITY_THRESHOLD
       }
     });
     
@@ -70,9 +59,6 @@ export const useVitalSignsProcessor = () => {
     
     processor.startCalibration();
     measurementActive.current = true;
-    measurementStartTime.current = Date.now();
-    elapsedTimeRef.current = 0;
-    bloodPressureReadings.current = { systolic: [], diastolic: [] };
   }, [processor]);
   
   /**
@@ -91,11 +77,6 @@ export const useVitalSignsProcessor = () => {
   const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
     
-    // Update elapsed time for time-based processing
-    if (measurementActive.current && measurementStartTime.current > 0) {
-      elapsedTimeRef.current = (Date.now() - measurementStartTime.current) / 1000;
-    }
-    
     console.log("useVitalSignsProcessor: Procesando señal", {
       valorEntrada: value,
       rrDataPresente: !!rrData,
@@ -107,69 +88,24 @@ export const useVitalSignsProcessor = () => {
       timestamp: new Date().toISOString(),
       calibrando: processor.isCurrentlyCalibrating(),
       progresoCalibración: processor.getCalibrationProgress(),
-      medicionActiva: measurementActive.current,
-      tiempoTranscurrido: elapsedTimeRef.current.toFixed(1)
+      medicionActiva: measurementActive.current
     });
     
     // Marcar que la medición está activa
     if (!measurementActive.current) {
       measurementActive.current = true;
-      measurementStartTime.current = Date.now();
     }
     
     // Process signal through the vital signs processor
     const result = processor.processSignal(value, rrData);
     const currentTime = Date.now();
     
-    // Store blood pressure readings for time-based processing
-    if (result.pressure && result.pressure !== "--/--") {
-      const [systolic, diastolic] = result.pressure.split('/').map(Number);
-      if (!isNaN(systolic) && !isNaN(diastolic)) {
-        bloodPressureReadings.current.systolic.push(systolic);
-        bloodPressureReadings.current.diastolic.push(diastolic);
-      }
-    }
-    
-    // Apply advanced time-based processing at the 29s mark (o al finalizar la medición) for blood pressure readings
-    let processedResult = { ...result };
-    
-    if (elapsedTimeRef.current >= FINAL_PROCESSING_TIME && 
-        bloodPressureReadings.current.systolic.length > 5 && 
-        bloodPressureReadings.current.diastolic.length > 5) {
-        
-      console.log(`[Time-Based BP Processing] Advanced filtering at ${FINAL_PROCESSING_TIME}s: using median and average fusion`, {
-        systolicReadings: bloodPressureReadings.current.systolic.length,
-        diastolicReadings: bloodPressureReadings.current.diastolic.length,
-        exactTime: elapsedTimeRef.current
-      });
-      
-      const processedSystolic = applyTimeBasedProcessing(
-        bloodPressureReadings.current.systolic, 
-        elapsedTimeRef.current,
-        FINAL_PROCESSING_TIME
-      );
-      
-      const processedDiastolic = applyTimeBasedProcessing(
-        bloodPressureReadings.current.diastolic, 
-        elapsedTimeRef.current,
-        FINAL_PROCESSING_TIME
-      );
-      
-      if (processedSystolic > 0 && processedDiastolic > 0) {
-        processedResult.pressure = `${processedSystolic}/${processedDiastolic}`;
-        console.log(`[Time-Based BP Processing] Final advanced processed value:`, {
-          pressure: processedResult.pressure,
-          originalPressure: result.pressure
-        });
-      }
-    }
-    
     // Guardar para depuración
     if (processedSignals.current % 20 === 0) {
       signalLog.current.push({
         timestamp: currentTime,
         value,
-        result: {...processedResult}
+        result: {...result}
       });
       
       // Mantener el log a un tamaño manejable
@@ -179,23 +115,21 @@ export const useVitalSignsProcessor = () => {
       
       console.log("useVitalSignsProcessor: Log de señales", {
         totalEntradas: signalLog.current.length,
-        ultimasEntradas: signalLog.current.slice(-3),
-        tiempoTranscurrido: elapsedTimeRef.current.toFixed(1)
+        ultimasEntradas: signalLog.current.slice(-3)
       });
     }
     
     // Si tenemos un resultado válido, guárdalo
-    if (processedResult.spo2 > 0 && processedResult.glucose > 0 && processedResult.lipids.totalCholesterol > 0) {
+    if (result.spo2 > 0 && result.glucose > 0 && result.lipids.totalCholesterol > 0) {
       console.log("useVitalSignsProcessor: Resultado válido detectado", {
-        spo2: processedResult.spo2,
-        presión: processedResult.pressure,
-        glucosa: processedResult.glucose,
-        lípidos: processedResult.lipids,
-        timestamp: new Date().toISOString(),
-        tiempoTranscurrido: elapsedTimeRef.current.toFixed(1)
+        spo2: result.spo2,
+        presión: result.pressure,
+        glucosa: result.glucose,
+        lípidos: result.lipids,
+        timestamp: new Date().toISOString()
       });
       
-      setLastValidResults(processedResult);
+      setLastValidResults(result);
     }
     
     // Enhanced RR interval analysis (more robust than previous)
@@ -297,7 +231,7 @@ export const useVitalSignsProcessor = () => {
     // If we previously detected an arrhythmia, maintain that state
     if (hasDetectedArrhythmia.current) {
       return {
-        ...processedResult,
+        ...result,
         arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter}`,
         lastArrhythmiaData: null
       };
@@ -305,7 +239,7 @@ export const useVitalSignsProcessor = () => {
     
     // No arrhythmias detected
     return {
-      ...processedResult,
+      ...result,
       arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
     };
   }, [processor, arrhythmiaCounter]);
@@ -320,50 +254,12 @@ export const useVitalSignsProcessor = () => {
       return lastValidResults;
     }
     
-    console.log("useVitalSignsProcessor: Completando medición, aplicando procesamiento final", {
-      tiempoTranscurrido: elapsedTimeRef.current.toFixed(1),
-      lecturasSistolicas: bloodPressureReadings.current.systolic.length,
-      lecturasDiastolicas: bloodPressureReadings.current.diastolic.length
-    });
+    console.log("useVitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
-    // Process final readings with special processing if not already done
-    let finalResults = processor.completeMeasurement();
-    
-    // If we have enough blood pressure readings and haven't already applied special processing
-    if (bloodPressureReadings.current.systolic.length > 5 && 
-        bloodPressureReadings.current.diastolic.length > 5) {
-      
-      const processedSystolic = applyTimeBasedProcessing(
-        bloodPressureReadings.current.systolic, 
-        MEASUREMENT_DURATION,  // Force processing by using target time
-        FINAL_PROCESSING_TIME
-      );
-      
-      const processedDiastolic = applyTimeBasedProcessing(
-        bloodPressureReadings.current.diastolic, 
-        MEASUREMENT_DURATION,  // Force processing by using target time
-        FINAL_PROCESSING_TIME
-      );
-      
-      if (processedSystolic > 0 && processedDiastolic > 0) {
-        const processedBP = `${processedSystolic}/${processedDiastolic}`;
-        
-        console.log("useVitalSignsProcessor: Presión arterial finalizada con procesamiento avanzado:", {
-          presionProcesada: processedBP,
-          presionOriginal: finalResults?.pressure || "N/A",
-          lecturasSistolicas: bloodPressureReadings.current.systolic.length,
-          lecturasDiastolicas: bloodPressureReadings.current.diastolic.length
-        });
-        
-        if (finalResults) {
-          finalResults.pressure = processedBP;
-        }
-      }
-    }
+    // Aplicar el procesamiento final para la presión arterial y glucosa
+    const finalResults = processor.completeMeasurement();
     
     measurementActive.current = false;
-    measurementStartTime.current = 0;
-    elapsedTimeRef.current = 0;
     
     console.log("useVitalSignsProcessor: Medición completada", {
       resultadosFinales: finalResults,
@@ -461,13 +357,7 @@ export const useVitalSignsProcessor = () => {
     isMeasurementActive: () => measurementActive.current,
     debugInfo: {
       processedSignals: processedSignals.current,
-      signalLog: signalLog.current.slice(-10),
-      elapsedTime: elapsedTimeRef.current,
-      bloodPressureReadings: {
-        systolicCount: bloodPressureReadings.current.systolic.length,
-        diastolicCount: bloodPressureReadings.current.diastolic.length
-      }
+      signalLog: signalLog.current.slice(-10)
     }
   };
 };
-

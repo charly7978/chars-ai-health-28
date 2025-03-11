@@ -4,7 +4,6 @@ import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 import { GlucoseProcessor } from './glucose-processor';
 import { LipidProcessor } from './lipid-processor';
-import { applyTimeBasedProcessing } from './utils';
 
 export interface VitalSignsResult {
   spo2: number;
@@ -78,13 +77,6 @@ export class VitalSignsProcessor {
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
 
-  private lipidBuffer = {
-    totalCholesterol: [] as number[],
-    triglycerides: [] as number[]
-  };
-
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
-
   constructor() {
     this.spo2Processor = new SpO2Processor();
     this.bpProcessor = new BloodPressureProcessor();
@@ -94,6 +86,10 @@ export class VitalSignsProcessor {
     this.lipidProcessor = new LipidProcessor();
   }
 
+  /**
+   * Inicia el proceso de calibración que analiza y optimiza los algoritmos
+   * para las condiciones específicas del usuario y dispositivo
+   */
   public startCalibration(): void {
     console.log("VitalSignsProcessor: Iniciando calibración avanzada");
     this.isCalibrating = true;
@@ -125,13 +121,16 @@ export class VitalSignsProcessor {
       }
     }, this.CALIBRATION_DURATION_MS);
     
-    console.log("VitalSignsProcessor: Calibración iniciada con parámetros:", {
+    console.log("VitalSignsProcessor: Calibraci��n iniciada con parámetros:", {
       muestrasRequeridas: this.CALIBRATION_REQUIRED_SAMPLES,
       tiempoMáximo: this.CALIBRATION_DURATION_MS,
       inicioCalibración: new Date(this.calibrationStartTime).toISOString()
     });
   }
   
+  /**
+   * Finaliza el proceso de calibración y aplica los parámetros optimizados
+   */
   private completeCalibration(): void {
     if (!this.isCalibrating) return;
     
@@ -206,6 +205,11 @@ export class VitalSignsProcessor {
     });
   }
 
+  /**
+   * Calcula la mediana de un array de números
+   * @param values Array de valores numéricos
+   * @returns Valor de la mediana
+   */
   private calculateMedian(values: number[]): number {
     if (values.length === 0) return 0;
     
@@ -223,6 +227,11 @@ export class VitalSignsProcessor {
     return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
   }
   
+  /**
+   * Añade un valor al buffer de mediana y mantiene el tamaño máximo
+   * @param buffer Buffer donde se almacenan los valores
+   * @param value Nuevo valor a añadir
+   */
   private addToMedianBuffer(buffer: number[], value: number): void {
     // Solo añadir valores válidos (mayores que cero)
     if (value > 0) {
@@ -234,35 +243,19 @@ export class VitalSignsProcessor {
       }
     }
   }
-
-  private applyKalmanFilter(value: number): number {
-    const Q = 0.01; // Varianza del proceso (puede afinarse)
-    const R = 1;    // Varianza de la medición
-    // Predicción
-    const prediction = this.kalmanState.estimate;
-    const predictionError = this.kalmanState.errorCovariance + Q;
-    // Cálculo de ganancia
-    const K = predictionError / (predictionError + R);
-    // Actualización
-    const updatedEstimate = prediction + K * (value - prediction);
-    const updatedErrorCovariance = (1 - K) * predictionError;
-    // Guardar valores actualizados
-    this.kalmanState.estimate = updatedEstimate;
-    this.kalmanState.errorCovariance = updatedErrorCovariance;
-    return updatedEstimate;
-  }
   
+  /**
+   * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
+   */
   public processSignal(
     ppgValue: number,
-    rrData?: { intervals: number[]; lastPeakTime: number | null },
-    elapsedTimeRef?: { current: number }
+    rrData?: { intervals: number[]; lastPeakTime: number | null }
   ): VitalSignsResult {
     if (this.isCalibrating) {
       this.calibrationSamples++;
     }
     
-    // Utilizar filtro de Kalman en vez de SMA para optimizar la reducción de ruido
-    const filtered = this.applyKalmanFilter(ppgValue);
+    const filtered = this.signalProcessor.applySMAFilter(ppgValue);
     
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     
@@ -287,37 +280,6 @@ export class VitalSignsProcessor {
     // Calculate real lipid values using spectral analysis
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     
-    // Store lipid values for time-based processing
-    if (lipids.totalCholesterol > 0) {
-      this.lipidBuffer.totalCholesterol.push(lipids.totalCholesterol);
-    }
-    if (lipids.triglycerides > 0) {
-      this.lipidBuffer.triglycerides.push(lipids.triglycerides);
-    }
-    
-    // Apply time-based processing at 29 seconds
-    if (elapsedTimeRef?.current && elapsedTimeRef.current >= 29 && 
-        this.lipidBuffer.totalCholesterol.length > 5 && 
-        this.lipidBuffer.triglycerides.length > 5) {
-      
-      const processedCholesterol = applyTimeBasedProcessing(
-        this.lipidBuffer.totalCholesterol,
-        elapsedTimeRef.current,
-        29
-      );
-      
-      const processedTriglycerides = applyTimeBasedProcessing(
-        this.lipidBuffer.triglycerides,
-        elapsedTimeRef.current,
-        29
-      );
-      
-      if (processedCholesterol > 0 && processedTriglycerides > 0) {
-        lipids.totalCholesterol = processedCholesterol;
-        lipids.triglycerides = processedTriglycerides;
-      }
-    }
-
     // Calculate real hemoglobin using optimized algorithm
     const hemoglobin = this.calculateHemoglobin(ppgValues);
     
@@ -381,6 +343,10 @@ export class VitalSignsProcessor {
     return result;
   }
 
+  /**
+   * Completa la medición y aplica el procesamiento estadístico final
+   * a la glucosa y presión arterial, devolviendo los resultados finales.
+   */
   public completeMeasurement(): VitalSignsResult | null {
     console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
@@ -451,6 +417,9 @@ export class VitalSignsProcessor {
     this.forceCompleteCalibration = true;
   }
 
+  /**
+   * Resetea el procesador de signos vitales
+   */
   public reset(): VitalSignsResult | null {
     // Guardar resultados válidos antes de resetear
     const savedResults = this.lastValidResults;
@@ -479,22 +448,22 @@ export class VitalSignsProcessor {
       clearTimeout(this.calibrationTimer);
       this.calibrationTimer = null;
     }
-
-    this.lipidBuffer = {
-      totalCholesterol: [],
-      triglycerides: []
-    };
     
     return savedResults;
   }
   
+  /**
+   * Obtener los últimos resultados válidos
+   */
   public getLastValidResults(): VitalSignsResult | null {
     return this.lastValidResults;
   }
   
+  /**
+   * Reseteo completo incluyendo resultados guardados
+   */
   public fullReset(): void {
     this.reset();
     this.lastValidResults = null;
   }
 }
-
