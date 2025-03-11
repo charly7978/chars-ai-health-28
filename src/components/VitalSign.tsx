@@ -17,6 +17,7 @@ const VitalSign = ({
   calibrationProgress 
 }: VitalSignProps) => {
   const getRiskLabel = (label: string, value: string | number) => {
+    // First handle number values
     if (typeof value === 'number') {
       switch(label) {
         case 'FRECUENCIA CARDÍACA':
@@ -34,33 +35,35 @@ const VitalSign = ({
           if (value > 126) return 'Hiperglucemia';
           if (value < 70) return 'Hipoglucemia';
           return '';
+        default:
+          return '';
+      }
+    }
+    
+    // Then handle string values separately
+    if (typeof value === 'string') {
+      switch(label) {
         case 'PRESIÓN ARTERIAL':
-          // For this we need to parse the string like "120/80"
-          if (typeof value === 'string') {
-            const parts = value.split('/');
-            if (parts.length === 2) {
-              const systolic = parseInt(parts[0], 10);
-              const diastolic = parseInt(parts[1], 10);
-              if (!isNaN(systolic) && !isNaN(diastolic)) {
-                if (systolic >= 140 || diastolic >= 90) return 'Hipertensión';
-                if (systolic < 90 || diastolic < 60) return 'Hipotensión';
-              }
+          const pressureParts = value.split('/');
+          if (pressureParts.length === 2) {
+            const systolic = parseInt(pressureParts[0], 10);
+            const diastolic = parseInt(pressureParts[1], 10);
+            if (!isNaN(systolic) && !isNaN(diastolic)) {
+              if (systolic >= 140 || diastolic >= 90) return 'Hipertensión';
+              if (systolic < 90 || diastolic < 60) return 'Hipotensión';
             }
           }
           return '';
         case 'COLESTEROL/TRIGL.':
-          // For this we need to parse the string like "200/150"
-          if (typeof value === 'string') {
-            const parts = value.split('/');
-            if (parts.length === 2) {
-              const cholesterol = parseInt(parts[0], 10);
-              const triglycerides = parseInt(parts[1], 10);
-              if (!isNaN(cholesterol)) {
-                if (cholesterol > 200) return 'Hipercolesterolemia';
-              }
-              if (!isNaN(triglycerides)) {
-                if (triglycerides > 150) return 'Hipertrigliceridemia';
-              }
+          const lipidParts = value.split('/');
+          if (lipidParts.length === 2) {
+            const cholesterol = parseInt(lipidParts[0], 10);
+            const triglycerides = parseInt(lipidParts[1], 10);
+            if (!isNaN(cholesterol)) {
+              if (cholesterol > 200) return 'Hipercolesterolemia';
+            }
+            if (!isNaN(triglycerides)) {
+              if (triglycerides > 150) return 'Hipertrigliceridemia';
             }
           }
           return '';
@@ -68,6 +71,7 @@ const VitalSign = ({
           return '';
       }
     }
+    
     return '';
   };
 
