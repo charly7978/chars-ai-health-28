@@ -60,7 +60,6 @@ const Index = () => {
           await (document.documentElement as any).msRequestFullscreen();
         }
         
-        // Intentar bloquear la orientación si es posible
         if (screen.orientation && screen.orientation.lock) {
           try {
             await screen.orientation.lock('portrait');
@@ -102,21 +101,17 @@ const Index = () => {
       setIsCameraOn(true);
       setShowResults(false);
       
-      // Iniciar procesamiento de señal
       startProcessing();
       
-      // Resetear valores
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
         arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
-      // Iniciar calibración automática
       console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
-      // Iniciar temporizador para medición
       if (measurementTimerRef.current) {
         clearInterval(measurementTimerRef.current);
       }
@@ -126,7 +121,6 @@ const Index = () => {
           const newTime = prev + 1;
           console.log(`Tiempo transcurrido: ${newTime}s`);
           
-          // Finalizar medición después de 30 segundos
           if (newTime >= 30) {
             finalizeMeasurement();
             return 30;
@@ -470,8 +464,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[65px] bg-black px-3 py-3">
-            <div className="grid grid-cols-3 gap-2 h-full">
+          <div className="absolute inset-x-0 bottom-[60px] px-3 py-3">
+            <div className="grid grid-cols-3 gap-2">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -511,7 +505,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[65px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+          <div className="h-[60px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}

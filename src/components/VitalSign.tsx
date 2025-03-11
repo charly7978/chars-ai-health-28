@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -164,7 +165,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden bg-blue-900 rounded-lg flex flex-col h-full shadow-md">
+    <div className="relative overflow-hidden bg-blue-800 flex flex-col h-full shadow-md">
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
         <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
