@@ -168,7 +168,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="vital-sign-panel flex flex-col h-full">
+    <div className="seamless-panel flex flex-col h-full">
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
         <h3 className={`text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center ${!highlighted ? 'opacity-75' : ''}`}>
           {label}
@@ -177,7 +177,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
         <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
           <div className="flex items-center justify-center gap-1">
             <span 
-              className={`font-bold ${color} transition-colors duration-300 
+              className={`font-bold ${highlighted ? 'glowing-text' : color} transition-colors duration-300 
                 ${isArrhythmiaDisplay ? 'text-[15px]' : ''}
                 ${isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : ''}
                 ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : ''}`}
