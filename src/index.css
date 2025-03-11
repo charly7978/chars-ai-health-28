@@ -93,8 +93,8 @@
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
-  border: 1px solid #9F8E6A25;
+  background: linear-gradient(167deg, #1E293B 0%, #0F172A 100%);
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
   overflow: hidden;
   backdrop-filter: blur(1px);
 }
@@ -107,23 +107,23 @@
 }
 
 .start-button {
-  background: linear-gradient(to bottom, #0b65d4, #0f4a94);
-  border: 1px solid #2e8eff;
+  background: linear-gradient(to bottom, #3B82F6, #1D4ED8);
+  border: 1px solid #60A5FA;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .start-button:active {
-  background: linear-gradient(to bottom, #0f4a94, #0b3871);
+  background: linear-gradient(to bottom, #1E40AF, #1E3A8A);
 }
 
 .stop-button {
-  background: linear-gradient(to bottom, #d40b0b, #941111);
-  border: 1px solid #ff2e2e;
+  background: linear-gradient(to bottom, #EF4444, #B91C1C);
+  border: 1px solid #FCA5A5;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .stop-button:active {
-  background: linear-gradient(to bottom, #941111, #71110e);
+  background: linear-gradient(to bottom, #991B1B, #7F1D1D);
 }

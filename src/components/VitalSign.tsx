@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -22,10 +23,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const isSpO2Display = label === "SPO2";
 
   const getDisplayContent = () => {
-    if (!value || value === 0) {
+    if (!highlighted || !value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
-        color: "text-gold-light",
+        color: "text-gray-500",
         status: ""
       };
     }
@@ -159,7 +160,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     return {
       text: value,
-      color: "text-gold-light",
+      color: highlighted ? "text-white" : "text-gray-500",
       status: ""
     };
   };
@@ -167,9 +168,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="vital-sign-panel flex flex-col h-full bg-opacity-50">
+    <div className="vital-sign-panel flex flex-col h-full">
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
-        <h3 className="text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
+        <h3 className={`text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center ${!highlighted ? 'opacity-75' : ''}`}>
           {label}
         </h3>
         
@@ -185,13 +186,13 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gold-medium/90 text-[13px] font-medium">
+              <span className={`${highlighted ? 'text-gold-medium/90' : 'text-gray-500'} text-[13px] font-medium`}>
                 {unit}
               </span>
             )}
           </div>
           
-          {status && (
+          {status && highlighted && (
             <span className={`text-[12px] font-medium text-center ${color} mt-0.5`}>
               {status}
             </span>
