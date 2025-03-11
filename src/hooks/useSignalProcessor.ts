@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -29,27 +28,31 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
+      // Evaluación robusta de detección de dedo:
+      const robustFingerDetected = signal.fingerDetected && signal.quality >= 60;
+      const modifiedSignal = { ...signal, fingerDetected: robustFingerDetected };
       console.log("useSignalProcessor: Señal recibida detallada:", {
-        timestamp: signal.timestamp,
-        formattedTime: new Date(signal.timestamp).toISOString(),
-        quality: signal.quality,
-        rawValue: signal.rawValue,
-        filteredValue: signal.filteredValue,
-        fingerDetected: signal.fingerDetected,
-        roi: signal.roi,
-        processingTime: Date.now() - signal.timestamp
+        timestamp: modifiedSignal.timestamp,
+        formattedTime: new Date(modifiedSignal.timestamp).toISOString(),
+        quality: modifiedSignal.quality,
+        rawValue: modifiedSignal.rawValue,
+        filteredValue: modifiedSignal.filteredValue,
+        // Ahora el flag fingerDetected refleja la evaluación robusta
+        fingerDetected: modifiedSignal.fingerDetected,
+        roi: modifiedSignal.roi,
+        processingTime: Date.now() - modifiedSignal.timestamp
       });
       
-      setLastSignal(signal);
+      setLastSignal(modifiedSignal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
       // Actualizar estadísticas
       setSignalStats(prev => {
         const newStats = {
-          minValue: Math.min(prev.minValue, signal.filteredValue),
-          maxValue: Math.max(prev.maxValue, signal.filteredValue),
-          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+          minValue: Math.min(prev.minValue, modifiedSignal.filteredValue),
+          maxValue: Math.max(prev.maxValue, modifiedSignal.filteredValue),
+          avgValue: (prev.avgValue * prev.totalValues + modifiedSignal.filteredValue) / (prev.totalValues + 1),
           totalValues: prev.totalValues + 1
         };
         

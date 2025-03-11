@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
 
@@ -100,6 +99,20 @@ export const useHeartBeatProcessor = () => {
       timestamp: new Date().toISOString()
     });
     
+    if (result.confidence < 0.7) {
+      console.log('useHeartBeatProcessor: Confianza insuficiente, ignorando pico', { confidence: result.confidence });
+      return {
+        bpm: currentBPM,
+        confidence: result.confidence,
+        isPeak: false,
+        arrhythmiaCount: 0,
+        rrData: {
+          intervals: [],
+          lastPeakTime: null
+        }
+      };
+    }
+
     if (result.bpm > 0) {
       console.log('useHeartBeatProcessor - Actualizando BPM y confianza', {
         prevBPM: currentBPM,

@@ -1,10 +1,10 @@
-
 /**
  * Enhanced Signal Processor based on advanced biomedical signal processing techniques
  * Implements wavelet denoising and adaptive filter techniques from IEEE publications
  */
 export class SignalProcessor {
-  private readonly SMA_WINDOW = 5; // Increased window for better noise reduction
+  // Ajuste: reducimos la ventana del SMA para mayor reactividad
+  private readonly SMA_WINDOW = 3; // antes: 5
   private ppgValues: number[] = [];
   private readonly WINDOW_SIZE = 300;
   

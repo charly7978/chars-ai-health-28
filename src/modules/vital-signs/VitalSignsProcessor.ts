@@ -200,6 +200,22 @@ export class VitalSignsProcessor {
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
   ): VitalSignsResult {
+    // Si el valor es muy bajo, se asume que no hay dedo => no medir nada
+    if (ppgValue < 0.1) {
+      console.log("VitalSignsProcessor: No se detecta dedo, retornando resultados previos.");
+      return this.lastValidResults || {
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaStatus: "--",
+        glucose: 0,
+        lipids: {
+          totalCholesterol: 0,
+          triglycerides: 0
+        },
+        hemoglobin: 0
+      };
+    }
+
     if (this.isCalibrating) {
       this.calibrationSamples++;
     }
