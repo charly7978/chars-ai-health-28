@@ -163,10 +163,7 @@ const Index = () => {
 
   const startMonitoring = () => {
     console.log("Iniciando monitoreo");
-    
-    setIsCameraOn(true);
-    
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       try {
         const element = document.documentElement;
         
@@ -188,42 +185,41 @@ const Index = () => {
             element.msRequestFullscreen();
           }
         }
-
-        setIsMonitoring(true);
-        setShowResults(false);
-        
-        startProcessing();
-        
-        setElapsedTime(0);
-        setVitalSigns(prev => ({
-          ...prev,
-          arrhythmiaStatus: "SIN ARRITMIAS|0"
-        }));
-        
-        console.log("Iniciando fase de calibración automática");
-        startAutoCalibration();
-        
-        if (measurementTimerRef.current) {
-          clearInterval(measurementTimerRef.current);
-        }
-        
-        measurementTimerRef.current = window.setInterval(() => {
-          setElapsedTime(prev => {
-            const newTime = prev + 1;
-            console.log(`Tiempo transcurrido: ${newTime}s`);
-            
-            if (newTime >= 30) {
-              stopMonitoring();
-              return 30;
-            }
-            return newTime;
-          });
-        }, 1000);
       } catch (e) {
-        console.error("Error al iniciar monitoreo:", e);
-        setIsCameraOn(false);
-        setIsMonitoring(false);
+        console.error("Error forcing fullscreen on start:", e);
       }
+    });
+    
+    setIsMonitoring(true);
+    setIsCameraOn(true);
+    setShowResults(false);
+    
+    startProcessing();
+    
+    setElapsedTime(0);
+    setVitalSigns(prev => ({
+      ...prev,
+      arrhythmiaStatus: "SIN ARRITMIAS|0"
+    }));
+    
+    console.log("Iniciando fase de calibración automática");
+    startAutoCalibration();
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+    }
+    
+    measurementTimerRef.current = window.setInterval(() => {
+      setElapsedTime(prev => {
+        const newTime = prev + 1;
+        console.log(`Tiempo transcurrido: ${newTime}s`);
+        
+        if (newTime >= 30) {
+          stopMonitoring();
+          return 30;
+        }
+        return newTime;
+      });
     }, 1000);
   };
 
@@ -235,11 +231,10 @@ const Index = () => {
       forceCalibrationCompletion();
     }
     
-    stopProcessing();
-    
     setIsMonitoring(false);
     setIsCameraOn(false);
     setIsCalibrating(false);
+    stopProcessing();
     
     if (measurementTimerRef.current) {
       clearInterval(measurementTimerRef.current);

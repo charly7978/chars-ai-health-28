@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -6,7 +5,6 @@ interface CameraViewProps {
   isMonitoring: boolean;
   isFingerDetected?: boolean;
   signalQuality?: number;
-  onFrame?: (imageData: ImageData) => void;
 }
 
 const CameraView = ({ 
@@ -14,25 +12,25 @@ const CameraView = ({
   isMonitoring, 
   isFingerDetected = false, 
   signalQuality = 0,
-  onFrame,
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
+  const lastFrameTimeRef = useRef<number>(0);
 
   const stopCamera = async () => {
-    console.log("Deteniendo cámara...");
     if (stream) {
+      console.log("Stopping camera stream and turning off torch");
       stream.getTracks().forEach(track => {
+        // Turn off torch if it's available
         if (track.kind === 'video' && track.getCapabilities()?.torch) {
-          console.log("Desactivando linterna...");
           track.applyConstraints({
             advanced: [{ torch: false }]
           }).catch(err => console.error("Error desactivando linterna:", err));
         }
+        
+        // Stop the track
         track.stop();
       });
       
@@ -42,176 +40,140 @@ const CameraView = ({
       
       setStream(null);
       setTorchEnabled(false);
-      console.log("Cámara detenida correctamente");
-    }
-
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = undefined;
     }
   };
 
   const startCamera = async () => {
     try {
-      console.log("Iniciando cámara...");
-      setError(null);
-
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("getUserMedia no está soportado en este dispositivo");
+        throw new Error("getUserMedia no está soportado");
+      }
+
+      const isAndroid = /android/i.test(navigator.userAgent);
+
+      const baseVideoConstraints: MediaTrackConstraints = {
+        facingMode: 'environment',
+        width: { ideal: 720 },
+        height: { ideal: 480 }
+      };
+
+      if (isAndroid) {
+        // Ajustes para mejorar la extracción de señal en Android
+        Object.assign(baseVideoConstraints, {
+          frameRate: { ideal: 30, max: 30 }, // Limitamos explícitamente a 30 FPS
+          resizeMode: 'crop-and-scale'
+        });
       }
 
       const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 30 }
-        }
+        video: baseVideoConstraints
       };
 
-      console.log("Solicitando permisos de cámara...");
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log("Permisos de cámara concedidos");
-
       const videoTrack = newStream.getVideoTracks()[0];
-      console.log("Configuración de la cámara:", videoTrack.getSettings());
+
+      if (videoTrack && isAndroid) {
+        try {
+          const capabilities = videoTrack.getCapabilities();
+          const advancedConstraints: MediaTrackConstraintSet[] = [];
+          
+          if (capabilities.exposureMode) {
+            advancedConstraints.push({ exposureMode: 'continuous' });
+          }
+          if (capabilities.focusMode) {
+            advancedConstraints.push({ focusMode: 'continuous' });
+          }
+          if (capabilities.whiteBalanceMode) {
+            advancedConstraints.push({ whiteBalanceMode: 'continuous' });
+          }
+
+          if (advancedConstraints.length > 0) {
+            await videoTrack.applyConstraints({
+              advanced: advancedConstraints
+            });
+          }
+
+          if (videoRef.current) {
+            videoRef.current.style.transform = 'translateZ(0)';
+            videoRef.current.style.backfaceVisibility = 'hidden';
+          }
+          
+          // Activar linterna (flash) inmediatamente si está disponible
+          if (capabilities.torch) {
+            console.log("Activando linterna para mejorar la señal PPG");
+            await videoTrack.applyConstraints({
+              advanced: [{ torch: true }]
+            });
+            setTorchEnabled(true);
+          }
+        } catch (err) {
+          console.log("No se pudieron aplicar algunas optimizaciones:", err);
+        }
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
-        
-        // Esperar a que el video esté realmente listo
-        await new Promise((resolve) => {
-          if (videoRef.current) {
-            videoRef.current.onloadedmetadata = () => {
-              console.log("Video metadata cargada");
-              resolve(true);
-            };
-          }
-        });
-
-        // Intentar reproducir el video
-        try {
-          await videoRef.current.play();
-          console.log("Video reproduciendo correctamente");
-        } catch (playError) {
-          console.error("Error al reproducir el video:", playError);
-          throw new Error("No se pudo iniciar la reproducción del video");
+        if (isAndroid) {
+          videoRef.current.style.willChange = 'transform';
+          videoRef.current.style.transform = 'translateZ(0)';
         }
       }
 
       setStream(newStream);
       
-      // Activar la linterna después de un breve retraso
-      setTimeout(async () => {
-        if (videoTrack.getCapabilities()?.torch) {
-          console.log("Activando linterna...");
-          try {
-            await videoTrack.applyConstraints({
-              advanced: [{ torch: true }]
-            });
-            setTorchEnabled(true);
-            console.log("Linterna activada correctamente");
-          } catch (torchError) {
-            console.error("Error al activar la linterna:", torchError);
-          }
-        } else {
-          console.log("Este dispositivo no tiene linterna");
-        }
-      }, 500);
-
       if (onStreamReady) {
         onStreamReady(newStream);
       }
-      
-      // Iniciar el procesamiento de frames
-      startFrameProcessing();
-      
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
-      setError(err instanceof Error ? err.message : "Error desconocido al iniciar la cámara");
-      stopCamera();
     }
-  };
-  
-  const captureFrame = () => {
-    if (!videoRef.current || !canvasRef.current || !onFrame) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) return;
-    
-    // Ajustar el tamaño del canvas al del video
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    }
-    
-    // Dibujar el frame actual en el canvas
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Obtener los datos de la imagen para procesamiento
-    try {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      onFrame(imageData);
-    } catch (e) {
-      console.error("Error al capturar frame:", e);
-    }
-  };
-  
-  const startFrameProcessing = () => {
-    if (!onFrame) return;
-    
-    const processFrame = () => {
-      captureFrame();
-      animationRef.current = requestAnimationFrame(processFrame);
-    };
-    
-    animationRef.current = requestAnimationFrame(processFrame);
   };
 
   useEffect(() => {
     if (isMonitoring && !stream) {
-      console.log("Iniciando cámara (isMonitoring=true)");
+      console.log("Starting camera because isMonitoring=true");
       startCamera();
     } else if (!isMonitoring && stream) {
-      console.log("Deteniendo cámara (isMonitoring=false)");
+      console.log("Stopping camera because isMonitoring=false");
       stopCamera();
     }
     
     return () => {
-      console.log("Componente CameraView desmontándose");
+      console.log("CameraView component unmounting, stopping camera");
       stopCamera();
     };
   }, [isMonitoring]);
 
-  console.log("CameraView rendering - isMonitoring:", isMonitoring, "stream:", !!stream, "onFrame:", !!onFrame);
+  // Asegurar que la linterna esté encendida cuando se detecta un dedo
+  useEffect(() => {
+    if (stream && isFingerDetected && !torchEnabled) {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack && videoTrack.getCapabilities()?.torch) {
+        console.log("Activando linterna después de detectar dedo");
+        videoTrack.applyConstraints({
+          advanced: [{ torch: true }]
+        }).then(() => {
+          setTorchEnabled(true);
+        }).catch(err => {
+          console.error("Error activando linterna:", err);
+        });
+      }
+    }
+  }, [stream, isFingerDetected, torchEnabled]);
 
   return (
-    <>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="absolute top-0 left-0 min-w-full min-h-full w-auto h-auto z-0 object-cover"
-        style={{
-          willChange: 'transform',
-          transform: 'translateZ(0)',
-          backfaceVisibility: 'hidden'
-        }}
-      />
-      <canvas 
-        ref={canvasRef} 
-        className="hidden" 
-      />
-      {error && (
-        <div className="absolute top-4 left-4 right-4 bg-red-500 text-white p-2 rounded shadow">
-          {error}
-        </div>
-      )}
-    </>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      className="absolute top-0 left-0 min-w-full min-h-full w-auto h-auto z-0 object-cover"
+      style={{
+        willChange: 'transform',
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden'
+      }}
+    />
   );
 };
 
