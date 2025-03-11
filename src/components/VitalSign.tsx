@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -33,6 +34,36 @@ const VitalSign = ({
           if (value > 126) return 'Hiperglucemia';
           if (value < 70) return 'Hipoglucemia';
           return '';
+        case 'PRESIÓN ARTERIAL':
+          // For this we need to parse the string like "120/80"
+          if (typeof value === 'string') {
+            const parts = value.split('/');
+            if (parts.length === 2) {
+              const systolic = parseInt(parts[0], 10);
+              const diastolic = parseInt(parts[1], 10);
+              if (!isNaN(systolic) && !isNaN(diastolic)) {
+                if (systolic >= 140 || diastolic >= 90) return 'Hipertensión';
+                if (systolic < 90 || diastolic < 60) return 'Hipotensión';
+              }
+            }
+          }
+          return '';
+        case 'COLESTEROL/TRIGL.':
+          // For this we need to parse the string like "200/150"
+          if (typeof value === 'string') {
+            const parts = value.split('/');
+            if (parts.length === 2) {
+              const cholesterol = parseInt(parts[0], 10);
+              const triglycerides = parseInt(parts[1], 10);
+              if (!isNaN(cholesterol)) {
+                if (cholesterol > 200) return 'Hipercolesterolemia';
+              }
+              if (!isNaN(triglycerides)) {
+                if (triglycerides > 150) return 'Hipertrigliceridemia';
+              }
+            }
+          }
+          return '';
         default:
           return '';
       }
@@ -45,9 +76,13 @@ const VitalSign = ({
       case 'Taquicardia':
       case 'Hipoxemia':
       case 'Hiperglucemia':
+      case 'Hipertensión':
+      case 'Hipercolesterolemia':
+      case 'Hipertrigliceridemia':
         return 'text-[#ea384c]';
       case 'Bradicardia':
       case 'Hipoglucemia':
+      case 'Hipotensión':
         return 'text-[#F97316]';
       case 'Anemia':
         return 'text-[#FEF7CD]';
