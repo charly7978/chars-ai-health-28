@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -177,8 +176,9 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  font-size: 1.25rem !important;
-  height: 4rem !important;
+  font-size: 1.75rem !important;
+  height: 6rem !important;
+  padding: 1.5rem !important;
 }
 
 .soft-button:hover {

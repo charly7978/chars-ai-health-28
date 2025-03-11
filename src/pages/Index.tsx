@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -645,14 +644,14 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[100px] grid grid-cols-2 gap-0 mt-auto bg-transparent">
+          <div className="h-[120px] grid grid-cols-2 gap-0 mt-auto bg-transparent">
             <button 
               onClick={handleMonitoringButton}
-              className="w-full h-full text-2xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
+              className="w-full h-full text-3xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
             >
               {isMonitoring ? (
                 <>
-                  <Timer className="h-6 w-6" />
+                  <Timer className="h-8 w-8" />
                   <span>{30 - elapsedTime}s</span>
                 </>
               ) : (
@@ -661,7 +660,7 @@ const Index = () => {
             </button>
             <button 
               onClick={handleReset}
-              className="w-full h-full text-2xl font-bold text-white soft-button bg-red-500/20"
+              className="w-full h-full text-3xl font-bold text-white soft-button bg-red-500/20"
             >
               RESETEAR
             </button>

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -95,19 +94,16 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Create a very light gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, 'rgba(254, 247, 205, 0.2)');
     gradient.addColorStop(1, 'rgba(253, 225, 211, 0.2)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Draw grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.3)';
     ctx.lineWidth = 0.5;
 
-    // Horizontal grid lines
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
@@ -120,7 +116,6 @@ const PPGSignalMeter = ({
       }
     }
     
-    // Vertical grid lines
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
@@ -133,7 +128,6 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Draw more prominent grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.5)';
     ctx.lineWidth = 1;
@@ -149,7 +143,6 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Draw horizontal center line
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.7)';
     ctx.lineWidth = 1.5;
@@ -157,7 +150,6 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Display arrhythmia warning if needed
     if (arrhythmiaStatus) {
       const [status, _] = arrhythmiaStatus.split('|');
       
@@ -462,7 +454,7 @@ const PPGSignalMeter = ({
         />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 h-[100px] grid grid-cols-2 gap-px bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 h-[120px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
           className="bg-transparent soft-button text-white transition-colors duration-200 flex items-center justify-center"
@@ -470,10 +462,10 @@ const PPGSignalMeter = ({
           <div className="flex items-center justify-center gap-2">
             {isMonitoring ? (
               <>
-                <span className="text-xl font-semibold">{30 - elapsedTime}s</span>
+                <span className="text-3xl font-semibold">{30 - elapsedTime}s</span>
               </>
             ) : (
-              <span className="text-xl font-semibold">INICIAR</span>
+              <span className="text-3xl font-semibold">INICIAR</span>
             )}
           </div>
         </button>
@@ -482,7 +474,7 @@ const PPGSignalMeter = ({
           onClick={handleReset}
           className="bg-transparent soft-button text-white hover:bg-red-500/20 transition-colors duration-200"
         >
-          <span className="text-xl font-semibold">
+          <span className="text-3xl font-semibold">
             RESETEAR
           </span>
         </button>
