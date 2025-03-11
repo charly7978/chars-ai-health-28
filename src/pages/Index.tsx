@@ -6,7 +6,6 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
-import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -36,7 +35,6 @@ const Index = () => {
     rrVariation: number;
   } | null>(null);
   
-  const { toast } = useToast();
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
   const { 
@@ -163,14 +161,6 @@ const Index = () => {
     }
   }, [lastValidResults, isMonitoring]);
 
-  const toggleMonitoring = () => {
-    if (isMonitoring) {
-      finalizeMeasurement();
-    } else {
-      startMonitoring();
-    }
-  };
-
   const startMonitoring = () => {
     requestAnimationFrame(() => {
       try {
@@ -230,11 +220,43 @@ const Index = () => {
         return newTime;
       });
     }, 1000);
+  };
 
-    toast({
-      title: "Medición iniciada",
-      description: "Coloque su dedo sobre la cámara",
-    });
+  const finalizeMeasurement = () => {
+    console.log("Finalizando medición: manteniendo resultados");
+    
+    if (isCalibrating) {
+      console.log("Calibración en progreso al finalizar, forzando finalización");
+      forceCalibrationCompletion();
+    }
+    
+    setIsMonitoring(false);
+    setIsCameraOn(false);
+    setIsCalibrating(false);
+    stopProcessing();
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
+    
+    const savedResults = resetVitalSigns();
+    if (savedResults) {
+      setVitalSigns(savedResults);
+      setShowResults(true);
+    }
+    
+    setElapsedTime(0);
+    setSignalQuality(0);
+    setCalibrationProgress(undefined);
+  };
+
+  const handleMonitoringButton = () => {
+    if (isMonitoring) {
+      finalizeMeasurement();
+    } else {
+      startMonitoring();
+    }
   };
 
   const startAutoCalibration = () => {
@@ -319,35 +341,6 @@ const Index = () => {
         }
       }
     }, 800);
-  };
-
-  const finalizeMeasurement = () => {
-    console.log("Finalizando medición: manteniendo resultados");
-    
-    if (isCalibrating) {
-      console.log("Calibración en progreso al finalizar, forzando finalización");
-      forceCalibrationCompletion();
-    }
-    
-    setIsMonitoring(false);
-    setIsCameraOn(false);
-    setIsCalibrating(false);
-    stopProcessing();
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-      measurementTimerRef.current = null;
-    }
-    
-    const savedResults = resetVitalSigns();
-    if (savedResults) {
-      setVitalSigns(savedResults);
-      setShowResults(true);
-    }
-    
-    setElapsedTime(0);
-    setSignalQuality(0);
-    setCalibrationProgress(undefined);
   };
 
   const handleReset = () => {
@@ -611,11 +604,11 @@ const Index = () => {
 
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
-              onClick={toggleMonitoring}
+              onClick={handleMonitoringButton}
               className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
                 isMonitoring 
                   ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
-                  : 'bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 active:from-blue-800 active:to-blue-950'
+                  : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
               }`}
             >
               {isMonitoring ? 'DETENER' : 'INICIAR'}
