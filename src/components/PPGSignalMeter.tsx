@@ -137,14 +137,16 @@ const PPGSignalMeter = ({
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 65);
+        // Move down by approximately 6mm (updated vertical position)
+        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 95);
         setShowArrhythmiaAlert(true);
       } else if (status.includes("ARRITMIA") && Number(count) > 1) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
-        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 65);
+        // Move down by approximately 6mm (updated vertical position)
+        ctx.fillText(`Arritmias detectadas: ${count}`, 45, 95);
       }
     }
   }, [arrhythmiaStatus, showArrhythmiaAlert]);
