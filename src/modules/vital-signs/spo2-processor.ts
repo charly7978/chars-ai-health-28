@@ -6,24 +6,45 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
+  private readonly MIN_PERFUSION_INDEX = 0.15; // Increased threshold for finger detection
+  private readonly MIN_AC_VALUE = 3.0; // Minimum AC variation required
+  private readonly MIN_VALUES_LENGTH = 30; // Minimum sample size for calculation
 
   /**
    * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
    */
   public calculateSpO2(values: number[]): number {
-    if (values.length < 30) {
+    // First check: Minimum required data points
+    if (values.length < this.MIN_VALUES_LENGTH) {
       return 0; // Not enough data for reliable calculation
     }
 
+    // Calculate DC component
     const dc = calculateDC(values);
-    if (dc === 0) {
-      return 0; // No DC component detected
+    if (dc === 0 || dc < 20) { // Added minimum threshold for DC
+      return 0; // No DC component or too weak signal
     }
 
+    // Calculate AC component
     const ac = calculateAC(values);
+    if (ac < this.MIN_AC_VALUE) {
+      return 0; // AC component too small - indicates no pulsation
+    }
+
+    // Calculate standard deviation to check for signal variation
+    const stdDev = this.calculateStandardDeviation(values);
+    if (stdDev < 1.5) {
+      return 0; // Not enough variation in signal - likely no finger present
+    }
+
+    // Calculate and check perfusion index
     const perfusionIndex = calculatePerfusionIndex(values);
-    
-    if (perfusionIndex < 0.05) {
+    if (perfusionIndex < this.MIN_PERFUSION_INDEX) {
+      // Clear buffers when losing signal to prevent displaying old values
+      if (this.medianBuffer.length > 0) {
+        this.spo2Buffer = [];
+        this.medianBuffer = [];
+      }
       return 0; // Signal too weak for reliable measurement
     }
 
@@ -87,6 +108,16 @@ export class SpO2Processor {
       return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
     }
     return sorted[mid];
+  }
+
+  /**
+   * Calculate standard deviation of values to check for signal variation
+   */
+  private calculateStandardDeviation(values: number[]): number {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+    return Math.sqrt(variance);
   }
 
   /**
