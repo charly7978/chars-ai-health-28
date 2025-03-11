@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
+import ShareButton from "@/components/ShareButton";
 import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
@@ -19,7 +20,8 @@ const Index = () => {
   const [arrhythmiaCount, setArrhythmiaCount] = useState("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const measurementTimerRef = useRef(null);
-  
+  const [showResults, setShowResults] = useState(false);
+
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
   const { processSignal: processVitalSigns, reset: resetVitalSigns } = useVitalSignsProcessor();
@@ -152,17 +154,36 @@ const Index = () => {
     processImage();
   };
 
+  const handleShare = async () => {
+    try {
+      const text = `Resultados vitales:\n` +
+        `Frecuencia Cardíaca: ${heartRate || '--'} BPM\n` +
+        `SPO2: ${vitalSigns.spo2 || '--'}%\n` +
+        `Presión Arterial: ${vitalSigns.pressure}\n` +
+        `Estado Arritmias: ${vitalSigns.arrhythmiaStatus}`;
+
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Mis Signos Vitales',
+          text: text
+        });
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert('Resultados copiados al portapapeles');
+      }
+    } catch (error) {
+      console.error('Error al compartir:', error);
+    }
+  };
+
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
       setHeartRate(calculatedHeartRate);
       
-      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        // Solo actualizar cuando tengamos valores reales
         setVitalSigns({
           spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
           pressure: vitals.pressure || "--/--",
@@ -173,7 +194,6 @@ const Index = () => {
       
       setSignalQuality(lastSignal.quality);
     } else {
-      // Si no hay señal válida, resetear valores
       setHeartRate(0);
       setVitalSigns({ 
         spo2: 0, 
@@ -239,6 +259,12 @@ const Index = () => {
                   value={vitalSigns.arrhythmiaStatus}
                 />
               </div>
+              
+              {showResults && (
+                <div className="mt-4 flex justify-center">
+                  <ShareButton onShare={handleShare} />
+                </div>
+              )}
             </div>
           </div>
 
