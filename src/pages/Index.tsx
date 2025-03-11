@@ -50,23 +50,25 @@ const Index = () => {
   useEffect(() => {
     const activateFullscreen = async () => {
       try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if ((document.documentElement as any).webkitRequestFullscreen) {
-          await (document.documentElement as any).webkitRequestFullscreen();
-        } else if ((document.documentElement as any).mozRequestFullScreen) {
-          await (document.documentElement as any).mozRequestFullScreen();
-        } else if ((document.documentElement as any).msRequestFullscreen) {
-          await (document.documentElement as any).msRequestFullscreen();
-        }
-        
-        if (screen.orientation && screen.orientation.lock) {
-          try {
-            await screen.orientation.lock('portrait');
-          } catch (err) {
-            console.log('No se pudo bloquear la orientación:', err);
+        setTimeout(async () => {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          } else if ((document.documentElement as any).webkitRequestFullscreen) {
+            await (document.documentElement as any).webkitRequestFullscreen();
+          } else if ((document.documentElement as any).mozRequestFullScreen) {
+            await (document.documentElement as any).mozRequestFullScreen();
+          } else if ((document.documentElement as any).msRequestFullscreen) {
+            await (document.documentElement as any).msRequestFullscreen();
           }
-        }
+          
+          if (screen.orientation && screen.orientation.lock) {
+            try {
+              await screen.orientation.lock('portrait');
+            } catch (err) {
+              console.log('No se pudo bloquear la orientación:', err);
+            }
+          }
+        }, 300);
       } catch (err) {
         console.log('Error al entrar en pantalla completa:', err);
       }
@@ -425,10 +427,10 @@ const Index = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
-      height: '100vh',
+      height: '100dvh',
       width: '100vw',
       maxWidth: '100vw',
-      maxHeight: '100vh',
+      maxHeight: '100dvh',
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
@@ -464,8 +466,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px] px-3 py-3">
-            <div className="grid grid-cols-3 gap-2">
+          <div className="absolute inset-x-0 bottom-[60px] px-0">
+            <div className="grid grid-cols-3 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -505,14 +507,14 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[60px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+          <div className="h-[60px] grid grid-cols-2 gap-0 bg-blue-800 mt-auto">
             <MonitorButton 
               isMonitoring={isMonitoring}
               onClick={startMonitoring}
             />
             <button 
               onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-gray-600 to-gray-700 text-white hover:from-gray-700 hover:to-gray-800 active:from-gray-800 active:to-gray-900 transition-colors duration-200 shadow-md text-lg font-bold"
+              className="w-full h-full bg-gradient-to-b from-blue-700 to-blue-800 text-white hover:from-blue-800 hover:to-blue-900 active:from-blue-900 active:to-blue-950 transition-colors duration-200 shadow-md text-lg font-bold"
               style={{textShadow: '0 1px 2px rgba(0,0,0,0.3)'}}
             >
               RESETEAR
