@@ -634,7 +634,7 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
+          <div className="h-[40px] grid grid-cols-2 gap-0 mt-auto">
             <button 
               onClick={isMonitoring ? stopMonitoring : startMonitoring}
               className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
