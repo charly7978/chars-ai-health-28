@@ -111,9 +111,11 @@ const VitalSign: React.FC<VitalSignProps> = ({
       
       const [systolic, diastolic] = String(value).split('/').map(Number);
       
-      // Expanded blood pressure classification
-      if (systolic >= 230 || diastolic >= 130) {
-        return { text: String(value), color: "text-purple-600", status: "Crisis Extrema" };
+      // Expanded blood pressure classification with extended ranges
+      if (systolic >= 300 || diastolic >= 200) {
+        return { text: String(value), color: "text-purple-800", status: "Crisis Extrema" };
+      } else if (systolic >= 230 || diastolic >= 150) {
+        return { text: String(value), color: "text-purple-600", status: "Crisis Severa" };
       } else if (systolic >= 180 || diastolic >= 120) {
         return { text: String(value), color: "text-red-600", status: "Crisis Hipertensiva" };
       } else if (systolic >= 160 || diastolic >= 100) {
@@ -122,7 +124,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
         return { text: String(value), color: "text-orange-500", status: "Hipertensión Leve" };
       } else if (systolic >= 120 || diastolic >= 80) {
         return { text: String(value), color: "text-yellow-500", status: "Prehipertensión" };
-      } else if (systolic <= 70 || diastolic <= 40) {
+      } else if (systolic <= 60 || diastolic <= 30) {
         return { text: String(value), color: "text-purple-500", status: "Hipotensión Severa" };
       } else if (systolic < 90 || diastolic < 60) {
         return { text: String(value), color: "text-blue-500", status: "Hipotensión" };
