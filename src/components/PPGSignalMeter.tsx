@@ -91,26 +91,40 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = '#FDF5E6';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(75, 85, 99, 0.15)';
-    ctx.lineWidth = 0.3;
+    ctx.strokeStyle = 'rgba(100, 100, 100, 0.2)';
+    ctx.lineWidth = 0.4;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
+      
+      if (x % (GRID_SIZE_X * 2) === 0) {
+        ctx.fillStyle = 'rgba(80, 80, 80, 0.7)';
+        ctx.font = '10px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText(x.toString(), x, CANVAS_HEIGHT - 5);
+      }
     }
 
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
+      
+      if (y % (GRID_SIZE_Y * 2) === 0) {
+        ctx.fillStyle = 'rgba(80, 80, 80, 0.7)';
+        ctx.font = '10px Inter';
+        ctx.textAlign = 'right';
+        ctx.fillText(y.toString(), 15, y + 3);
+      }
     }
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(75, 85, 99, 0.3)';
+    ctx.strokeStyle = 'rgba(80, 80, 80, 0.4)';
     ctx.lineWidth = 1;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
@@ -353,7 +367,7 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-black/25 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/10 backdrop-blur-sm">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
@@ -361,9 +375,9 @@ const PPGSignalMeter = ({
         className="w-full h-[100vh] absolute inset-0 z-0"
       />
 
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent z-10 border-b border-white/5 shadow-sm pt-3">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent z-10 pt-3">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-white/90">PPG</span>
+          <span className="text-lg font-bold text-black/80">PPG</span>
           <div className="w-[180px]">
             <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
               <div
@@ -388,7 +402,7 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[8px] text-center font-medium text-white/70">
+          <span className="text-[8px] text-center font-medium text-black/80">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
@@ -397,14 +411,14 @@ const PPGSignalMeter = ({
       <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 bg-transparent z-10">
         <button 
           onClick={onStartMeasurement}
-          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
+          className="bg-transparent text-black/80 hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
         >
           INICIAR
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
+          className="bg-transparent text-black/80 hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
         >
           RESET
         </button>
