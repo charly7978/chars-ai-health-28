@@ -31,6 +31,53 @@ const CameraView = ({
   const startCameraTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const streamOperationInProgressRef = useRef<boolean>(false);
 
+  // Define enableTorch first so it can be used in other functions
+  const enableTorch = useCallback((videoTrack?: MediaStreamTrack) => {
+    const now = Date.now();
+    // Prevent torch toggling too frequently
+    if (now - lastTorchToggleRef.current < 2000) {
+      console.log("Skipping torch toggle - too soon since last toggle");
+      return;
+    }
+    
+    lastTorchToggleRef.current = now;
+    
+    const track = videoTrack || (stream?.getVideoTracks()[0]);
+    
+    if (!track) {
+      console.log("No video track available to enable torch");
+      return;
+    }
+    
+    try {
+      // Verify track is active and ready
+      if (track.readyState !== 'live') {
+        console.log("Track not in live state, can't enable torch");
+        return;
+      }
+      
+      const capabilities = track.getCapabilities();
+      console.log("Track capabilities:", capabilities);
+      
+      if (capabilities?.torch) {
+        console.log("Activando linterna para mejorar la señal PPG");
+        track.applyConstraints({
+          advanced: [{ torch: true }]
+        }).then(() => {
+          setTorchEnabled(true);
+          console.log("Torch enabled successfully");
+        }).catch(err => {
+          console.error("Error activando linterna:", err);
+          setTorchEnabled(false);
+        });
+      } else {
+        console.log("La linterna no está disponible en este dispositivo");
+      }
+    } catch (err) {
+      console.error("Error trying to enable torch:", err);
+    }
+  }, [stream]);
+
   const stopCamera = useCallback(async () => {
     console.log("Deteniendo cámara...");
     
@@ -260,7 +307,7 @@ const CameraView = ({
       if (!permissionDenied && isMonitoring) {
         // Use a ref to track the timeout so we can clear it if needed
         startCameraTimeoutRef.current = setTimeout(() => {
-          if (isMonitoring) {
+          if (isMonitoring && !streamOperationInProgressRef.current) {
             console.log(`Retry ${restartAttemptRef.current}: Restarting camera after failure...`);
             startCamera();
           }
@@ -269,52 +316,6 @@ const CameraView = ({
       }
     }
   }, [stopCamera, onStreamReady, isMonitoring, permissionDenied, isFingerDetected, enableTorch]);
-
-  const enableTorch = useCallback((videoTrack?: MediaStreamTrack) => {
-    const now = Date.now();
-    // Prevent torch toggling too frequently
-    if (now - lastTorchToggleRef.current < 2000) {
-      console.log("Skipping torch toggle - too soon since last toggle");
-      return;
-    }
-    
-    lastTorchToggleRef.current = now;
-    
-    const track = videoTrack || (stream?.getVideoTracks()[0]);
-    
-    if (!track) {
-      console.log("No video track available to enable torch");
-      return;
-    }
-    
-    try {
-      // Verify track is active and ready
-      if (track.readyState !== 'live') {
-        console.log("Track not in live state, can't enable torch");
-        return;
-      }
-      
-      const capabilities = track.getCapabilities();
-      console.log("Track capabilities:", capabilities);
-      
-      if (capabilities?.torch) {
-        console.log("Activando linterna para mejorar la señal PPG");
-        track.applyConstraints({
-          advanced: [{ torch: true }]
-        }).then(() => {
-          setTorchEnabled(true);
-          console.log("Torch enabled successfully");
-        }).catch(err => {
-          console.error("Error activando linterna:", err);
-          setTorchEnabled(false);
-        });
-      } else {
-        console.log("La linterna no está disponible en este dispositivo");
-      }
-    } catch (err) {
-      console.error("Error trying to enable torch:", err);
-    }
-  }, [stream]);
 
   const captureFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current || !contextRef.current || !stream) return;
@@ -554,3 +555,4 @@ const CameraView = ({
 };
 
 export default CameraView;
+
