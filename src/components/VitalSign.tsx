@@ -14,12 +14,20 @@ const VitalSign: React.FC<VitalSignProps> = ({
   unit, 
   highlighted = false 
 }) => {
+  const showValue = value !== 0 && value !== "--" && value !== "--/--";
+  
   return (
     <div className="vital-sign-panel rounded-lg p-3 flex flex-col items-center justify-center h-full text-center">
       <div className="text-xs text-gold-light font-semibold tracking-wider mb-1">
         {label}
       </div>
-      <div className={`font-mono text-xl md:text-2xl font-bold ${highlighted ? 'text-white animate-pulse-white' : 'text-white'}`}>
+      <div className={`font-mono text-xl md:text-2xl font-bold ${
+        showValue 
+          ? highlighted 
+            ? 'text-white animate-pulse-white' 
+            : 'text-white' 
+          : 'text-gray-600'
+      }`}>
         {value}
       </div>
       {unit && (
