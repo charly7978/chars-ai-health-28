@@ -58,13 +58,8 @@ const PPGSignalMeter = ({
   const MIN_PEAK_DISTANCE_MS = 250;
   
   const IMMEDIATE_RENDERING = true;
-  const MAX_PEAKS_TO_DISPLAY = 25;
-
-  useEffect(() => {
-    if (!dataBufferRef.current) {
-      dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
+  const MAX_P
     }
-    
     if (preserveResults && !isFingerDetected) {
       if (dataBufferRef.current) {
         dataBufferRef.current.clear();
