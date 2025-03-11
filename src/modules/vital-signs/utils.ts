@@ -147,3 +147,104 @@ export function calculateWeightedAverage(values: number[], weightBase: number = 
   
   return weightSum > 0 ? sum / weightSum : 0;
 }
+
+/**
+ * Removes outliers from an array using the IQR method
+ * @param values Array of numerical values
+ * @param factor IQR factor (default 1.5)
+ * @returns Array with outliers removed
+ */
+export function removeOutliers(values: number[], factor: number = 1.5): number[] {
+  if (values.length < 5) return [...values]; // Need enough data points
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1Idx = Math.floor(sorted.length * 0.25);
+  const q3Idx = Math.floor(sorted.length * 0.75);
+  const q1 = sorted[q1Idx];
+  const q3 = sorted[q3Idx];
+  const iqr = q3 - q1;
+  
+  const lowerBound = q1 - iqr * factor;
+  const upperBound = q3 + iqr * factor;
+  
+  return values.filter(val => val >= lowerBound && val <= upperBound);
+}
+
+/**
+ * Apply Hampel filter to remove outliers
+ * @param values Array of values
+ * @param windowSize Window size for median calculation
+ * @param threshold Threshold for outlier detection
+ * @returns Filtered array
+ */
+export function applyHampelFilter(values: number[], windowSize: number = 5, threshold: number = 3): number[] {
+  if (values.length < windowSize) return [...values];
+  
+  const result = [...values];
+  const halfWindow = Math.floor(windowSize / 2);
+  
+  for (let i = 0; i < values.length; i++) {
+    const windowStart = Math.max(0, i - halfWindow);
+    const windowEnd = Math.min(values.length, i + halfWindow + 1);
+    const window = values.slice(windowStart, windowEnd);
+    
+    const median = calculateMedian(window);
+    const deviation = Math.abs(values[i] - median);
+    
+    // Calculate MAD (Median Absolute Deviation)
+    const deviations = window.map(v => Math.abs(v - median));
+    const mad = calculateMedian(deviations);
+    
+    // Replace outliers
+    if (mad > 0 && deviation > threshold * mad) {
+      result[i] = median;
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Apply Savitzky-Golay filter for smoothing signal data
+ * @param values Input signal values
+ * @param windowSize Size of the window (must be odd)
+ * @returns Smoothed signal
+ */
+export function applySavitzkyGolayFilter(values: number[], windowSize: number = 9): number[] {
+  if (values.length < windowSize || windowSize % 2 === 0) {
+    return [...values];
+  }
+  
+  // Coefficients for quadratic S-G filter with different window sizes
+  const coefficients: {[key: number]: number[]} = {
+    5: [-3/35, 12/35, 17/35, 12/35, -3/35],
+    7: [-2/21, 3/21, 6/21, 7/21, 6/21, 3/21, -2/21],
+    9: [-21/231, 14/231, 39/231, 54/231, 59/231, 54/231, 39/231, 14/231, -21/231],
+    11: [-36/429, 9/429, 44/429, 69/429, 84/429, 89/429, 84/429, 69/429, 44/429, 9/429, -36/429]
+  };
+  
+  // Use closest supported window size
+  const supportedSizes = Object.keys(coefficients).map(Number);
+  const closestSize = supportedSizes.reduce((prev, curr) => 
+    Math.abs(curr - windowSize) < Math.abs(prev - windowSize) ? curr : prev
+  );
+  
+  const coefs = coefficients[closestSize];
+  const halfWindow = Math.floor(closestSize / 2);
+  
+  const result = new Array(values.length);
+  
+  // Apply filter
+  for (let i = 0; i < values.length; i++) {
+    let sum = 0;
+    
+    for (let j = -halfWindow; j <= halfWindow; j++) {
+      const idx = Math.min(Math.max(0, i + j), values.length - 1);
+      sum += values[idx] * coefs[j + halfWindow];
+    }
+    
+    result[i] = sum;
+  }
+  
+  return result;
+}
