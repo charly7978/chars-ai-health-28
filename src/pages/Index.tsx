@@ -603,7 +603,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[110px] top-[calc(50%+2px)] bg-transparent backdrop-blur-sm shadow-inner overflow-hidden">
+          {/* Move vital signs display over the graph */}
+          <div className="absolute inset-x-0 bottom-[150px] bg-transparent backdrop-blur-sm bg-opacity-50" style={{ height: '80px' }}>
             <div className="grid grid-cols-3 h-full w-full p-0.5 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -642,28 +643,6 @@ const Index = () => {
                 highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
             </div>
-          </div>
-
-          <div className="h-[120px] grid grid-cols-2 gap-0 mt-auto bg-transparent">
-            <button 
-              onClick={handleMonitoringButton}
-              className="w-full h-full text-3xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
-            >
-              {isMonitoring ? (
-                <>
-                  <Timer className="h-8 w-8" />
-                  <span>{30 - elapsedTime}s</span>
-                </>
-              ) : (
-                'INICIAR'
-              )}
-            </button>
-            <button 
-              onClick={handleReset}
-              className="w-full h-full text-3xl font-bold text-white soft-button bg-red-500/20"
-            >
-              RESETEAR
-            </button>
           </div>
         </div>
       </div>

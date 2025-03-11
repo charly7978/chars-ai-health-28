@@ -43,7 +43,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 800; // Increased height to extend the graph
+  const CANVAS_HEIGHT = 1000; // Increased height to make the graph fill the entire screen
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 20;
   const verticalScale = 28.0;
@@ -445,7 +445,7 @@ const PPGSignalMeter = ({
         </div>
       </div>
 
-      <div className="canvas-container">
+      <div className="canvas-container" style={{ height: 'calc(100vh - 120px)', width: '100%' }}>
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
@@ -458,14 +458,15 @@ const PPGSignalMeter = ({
         <button 
           onClick={onStartMeasurement}
           className="bg-transparent soft-button text-white transition-colors duration-200 flex items-center justify-center"
+          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
           <div className="flex items-center justify-center gap-2">
             {isMonitoring ? (
               <>
-                <span className="text-3xl font-semibold">{30 - elapsedTime}s</span>
+                <span className="text-4xl font-semibold">{30 - elapsedTime}s</span>
               </>
             ) : (
-              <span className="text-3xl font-semibold">INICIAR</span>
+              <span className="text-4xl font-semibold">INICIAR</span>
             )}
           </div>
         </button>
@@ -473,8 +474,9 @@ const PPGSignalMeter = ({
         <button 
           onClick={handleReset}
           className="bg-transparent soft-button text-white hover:bg-red-500/20 transition-colors duration-200"
+          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
-          <span className="text-3xl font-semibold">
+          <span className="text-4xl font-semibold">
             RESETEAR
           </span>
         </button>
