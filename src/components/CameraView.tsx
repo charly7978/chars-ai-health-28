@@ -17,25 +17,28 @@ const CameraView = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
-  const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
-  const lastFrameTimeRef = useRef<number>(0);
-  const animationFrameIdRef = useRef<number | null>(null);
+  const [hasActiveTrack, setHasActiveTrack] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const animationFrameIdRef = useRef<number | null>(null);
 
   const stopCamera = async () => {
     console.log("Deteniendo cámara...");
     if (stream) {
       stream.getTracks().forEach(track => {
-        // Turn off torch if it's available
-        if (track.kind === 'video' && track.getCapabilities()?.torch) {
-          track.applyConstraints({
-            advanced: [{ torch: false }]
-          }).catch(err => console.error("Error desactivando linterna:", err));
+        try {
+          // Turn off torch if it's available
+          if (track.kind === 'video' && track.getCapabilities()?.torch) {
+            track.applyConstraints({
+              advanced: [{ torch: false }]
+            }).catch(err => console.error("Error desactivando linterna:", err));
+          }
+          
+          // Stop the track
+          track.stop();
+        } catch (e) {
+          console.error("Error stopping track:", e);
         }
-        
-        // Stop the track
-        track.stop();
       });
       
       if (videoRef.current) {
@@ -44,6 +47,7 @@ const CameraView = ({
       
       setStream(null);
       setTorchEnabled(false);
+      setHasActiveTrack(false);
       console.log("Cámara detenida correctamente");
     }
 
@@ -143,6 +147,7 @@ const CameraView = ({
       }
 
       setStream(newStream);
+      setHasActiveTrack(true);
       
       if (onStreamReady) {
         onStreamReady(newStream);
@@ -158,55 +163,64 @@ const CameraView = ({
       startFrameProcessing();
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
+      setHasActiveTrack(false);
     }
   };
   
   const captureFrame = () => {
-    if (!videoRef.current || !canvasRef.current || !contextRef.current || !stream || !onStreamReady) return;
+    if (!videoRef.current || !canvasRef.current || !contextRef.current || !stream) return;
     
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = contextRef.current;
-    
-    // Only process if video is playing
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    try {
+      // Check if the video track is still active
       const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || !videoTrack.readyState || videoTrack.readyState !== 'live') {
+        console.log("Video track not active, restarting camera");
+        startCamera();
+        return;
+      }
+      
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = contextRef.current;
+      
+      // Only process if video is playing and has data
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      
       const { width, height } = videoTrack.getSettings();
       
-      if (width && height) {
-        canvas.width = width;
-        canvas.height = height;
+      if (!width || !height) return;
+      
+      // Set canvas dimensions to match video
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw the current video frame to the canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          
-          // Create a fake ImageCapture result to match what our processor expects
-          const frame = {
-            data: imageData.data,
-            width: imageData.width,
-            height: imageData.height
-          };
-          
-          // Push the frame data to any external processor
-          if (isMonitoring) {
-            // Processing happens in parent component
-          }
-        } catch (err) {
-          console.error("Error capturando frame:", err);
+        // Only send the frame data to external processor if monitoring
+        if (isMonitoring && onStreamReady && hasActiveTrack) {
+          // Processing happens in parent component
+          // We've already sent the stream to the parent via onStreamReady
         }
+      } catch (err) {
+        console.error("Error capturando frame:", err);
       }
+    } catch (error) {
+      console.error("Error en captureFrame:", error);
     }
   };
   
   const startFrameProcessing = () => {
     if (animationFrameIdRef.current !== null) {
       cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
     }
     
     const processFrame = () => {
-      if (!isMonitoring) {
+      if (!isMonitoring || !hasActiveTrack) {
         animationFrameIdRef.current = null;
         return;
       }
@@ -217,22 +231,6 @@ const CameraView = ({
     
     animationFrameIdRef.current = requestAnimationFrame(processFrame);
   };
-
-  useEffect(() => {
-    console.log("CameraView rendering - isMonitoring:", isMonitoring, "stream:", !!stream, "onFrame:", !!onStreamReady);
-    if (isMonitoring && !stream) {
-      console.log("Starting camera because isMonitoring=true");
-      startCamera();
-    } else if (!isMonitoring && stream) {
-      console.log("Stopping camera because isMonitoring=false");
-      stopCamera();
-    }
-    
-    return () => {
-      console.log("Componente CameraView desmontándose");
-      stopCamera();
-    };
-  }, [isMonitoring, onStreamReady]);
 
   // Asegurar que la linterna esté encendida cuando se detecta un dedo
   useEffect(() => {
@@ -250,6 +248,43 @@ const CameraView = ({
       }
     }
   }, [stream, isFingerDetected, torchEnabled]);
+
+  // Check if track is still valid and restart if needed
+  useEffect(() => {
+    const checkTrackStatus = () => {
+      if (stream && hasActiveTrack) {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack || videoTrack.readyState !== 'live') {
+          console.log("Video track no longer active, restarting camera");
+          setHasActiveTrack(false);
+          startCamera();
+        }
+      }
+    };
+    
+    const trackCheckInterval = setInterval(checkTrackStatus, 2000);
+    
+    return () => {
+      clearInterval(trackCheckInterval);
+    };
+  }, [stream, hasActiveTrack]);
+
+  // Main effect for controlling camera based on isMonitoring
+  useEffect(() => {
+    console.log("CameraView rendering - isMonitoring:", isMonitoring, "stream:", !!stream, "onFrame:", !!onStreamReady);
+    if (isMonitoring && (!stream || !hasActiveTrack)) {
+      console.log("Starting camera because isMonitoring=true");
+      startCamera();
+    } else if (!isMonitoring && stream) {
+      console.log("Stopping camera because isMonitoring=false");
+      stopCamera();
+    }
+    
+    return () => {
+      console.log("Componente CameraView desmontándose");
+      stopCamera();
+    };
+  }, [isMonitoring, onStreamReady, hasActiveTrack]);
 
   return (
     <>
@@ -271,6 +306,15 @@ const CameraView = ({
         width="320" 
         height="240"
       />
+      {isMonitoring && !hasActiveTrack && (
+        <div className="absolute inset-0 bg-black/90 flex items-center justify-center text-white p-4 z-10">
+          <p className="text-center">
+            Iniciando cámara...
+            <br/>
+            Por favor permita el acceso a la cámara si se le solicita.
+          </p>
+        </div>
+      )}
     </>
   );
 };
