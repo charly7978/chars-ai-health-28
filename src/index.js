@@ -5,6 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
+import MonitorButton from "@/components/MonitorButton";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -154,15 +155,12 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
       setHeartRate(calculatedHeartRate);
       
-      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        // Solo actualizar cuando tengamos valores reales
         setVitalSigns({
           spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
           pressure: vitals.pressure || "--/--",
@@ -173,7 +171,6 @@ const Index = () => {
       
       setSignalQuality(lastSignal.quality);
     } else {
-      // Si no hay señal válida, resetear valores
       setHeartRate(0);
       setVitalSigns({ 
         spo2: 0, 
@@ -184,6 +181,14 @@ const Index = () => {
       setSignalQuality(0);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
+
+  const toggleMonitoring = () => {
+    if (isMonitoring) {
+      stopMonitoring();
+    } else {
+      startMonitoring();
+    }
+  };
 
   return (
     <div 
@@ -249,12 +254,12 @@ const Index = () => {
           )}
 
           <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <button 
-              onClick={startMonitoring}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
-            >
-              INICIAR
-            </button>
+            <div className="w-full h-full bg-black/80">
+              <MonitorButton 
+                isMonitoring={isMonitoring} 
+                onClick={toggleMonitoring} 
+              />
+            </div>
             <button 
               onClick={stopMonitoring}
               className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
