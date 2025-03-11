@@ -61,40 +61,6 @@ const PPGSignalMeter = ({
   const IMMEDIATE_RENDERING = true;
   const MAX_PEAKS_TO_DISPLAY = 25;
 
-  useEffect(() => {
-    if (!dataBufferRef.current) {
-      dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
-    }
-    
-    if (preserveResults && !isFingerDetected) {
-      if (dataBufferRef.current) {
-        dataBufferRef.current.clear();
-      }
-      peaksRef.current = [];
-      baselineRef.current = null;
-      lastValueRef.current = null;
-    }
-  }, [preserveResults, isFingerDetected]);
-
-  const getQualityColor = useCallback((q: number) => {
-    if (!isFingerDetected) return 'from-gray-400 to-gray-500';
-    if (q > 75) return 'from-green-500 to-emerald-500';
-    if (q > 50) return 'from-yellow-500 to-orange-500';
-    return 'from-red-500 to-rose-500';
-  }, [isFingerDetected]);
-
-  const getQualityText = useCallback((q: number) => {
-    if (!isFingerDetected) return 'Sin detección';
-    if (q > 75) return 'Señal óptima';
-    if (q > 50) return 'Señal aceptable';
-    return 'Señal débil';
-  }, [isFingerDetected]);
-
-  const smoothValue = useCallback((currentValue: number, previousValue: number | null): number => {
-    if (previousValue === null) return currentValue;
-    return previousValue + SMOOTHING_FACTOR * (currentValue - previousValue);
-  }, []);
-
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, '#FEF7CD');
@@ -179,6 +145,60 @@ const PPGSignalMeter = ({
     ctx.stroke();
   }, [arrhythmiaStatus, showArrhythmiaAlert, arrhythmiaStats, rawArrhythmiaData]);
 
+  useEffect(() => {
+    if (!dataBufferRef.current) {
+      dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
+    }
+    
+    if (!preserveResults && !isFingerDetected) {
+      if (dataBufferRef.current) {
+        dataBufferRef.current.clear();
+      }
+      peaksRef.current = [];
+      baselineRef.current = null;
+      lastValueRef.current = null;
+    }
+
+    const initCanvas = () => {
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d', { alpha: false });
+        if (ctx) {
+          drawGrid(ctx);
+        }
+      }
+    };
+
+    initCanvas();
+    
+    const handleResize = () => {
+      requestAnimationFrame(initCanvas);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [preserveResults, isFingerDetected, drawGrid]);
+
+  const getQualityColor = useCallback((q: number) => {
+    if (!isFingerDetected) return 'from-gray-400 to-gray-500';
+    if (q > 75) return 'from-green-500 to-emerald-500';
+    if (q > 50) return 'from-yellow-500 to-orange-500';
+    return 'from-red-500 to-rose-500';
+  }, [isFingerDetected]);
+
+  const getQualityText = useCallback((q: number) => {
+    if (!isFingerDetected) return 'Sin detección';
+    if (q > 75) return 'Señal óptima';
+    if (q > 50) return 'Señal aceptable';
+    return 'Señal débil';
+  }, [isFingerDetected]);
+
+  const smoothValue = useCallback((currentValue: number, previousValue: number | null): number => {
+    if (previousValue === null) return currentValue;
+    return previousValue + SMOOTHING_FACTOR * (currentValue - previousValue);
+  }, []);
+
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
     
@@ -243,7 +263,13 @@ const PPGSignalMeter = ({
   }, []);
 
   const renderSignal = useCallback(() => {
-    if (!canvasRef.current || !dataBufferRef.current) {
+    if (!canvasRef.current) {
+      animationFrameRef.current = requestAnimationFrame(renderSignal);
+      return;
+    }
+
+    const ctx = canvasRef.current.getContext('2d', { alpha: false });
+    if (!ctx) {
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
     }
@@ -256,21 +282,18 @@ const PPGSignalMeter = ({
       return;
     }
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) {
-      animationFrameRef.current = requestAnimationFrame(renderSignal);
-      return;
-    }
-
     const now = Date.now();
     
     drawGrid(ctx);
     
-    if (preserveResults && !isFingerDetected) {
+    if (!isFingerDetected && preserveResults) {
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;
+    }
+    
+    if (!dataBufferRef.current) {
+      dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
     }
     
     if (baselineRef.current === null) {
@@ -317,10 +340,10 @@ const PPGSignalMeter = ({
         const prevPoint = points[i - 1];
         const point = points[i];
         
-        const x1 = canvas.width - ((now - prevPoint.time) * canvas.width / WINDOW_WIDTH_MS);
-        const y1 = canvas.height / 2 - prevPoint.value;
-        const x2 = canvas.width - ((now - point.time) * canvas.width / WINDOW_WIDTH_MS);
-        const y2 = canvas.height / 2 - point.value;
+        const x1 = canvasRef.current!.width - ((now - prevPoint.time) * canvasRef.current!.width / WINDOW_WIDTH_MS);
+        const y1 = canvasRef.current!.height / 2 - prevPoint.value;
+        const x2 = canvasRef.current!.width - ((now - point.time) * canvasRef.current!.width / WINDOW_WIDTH_MS);
+        const y2 = canvasRef.current!.height / 2 - point.value;
 
         if (firstPoint) {
           ctx.moveTo(x1, y1);
@@ -353,10 +376,10 @@ const PPGSignalMeter = ({
       }
 
       peaksRef.current.forEach(peak => {
-        const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);
-        const y = canvas.height / 2 - peak.value;
+        const x = canvasRef.current!.width - ((now - peak.time) * canvasRef.current!.width / WINDOW_WIDTH_MS);
+        const y = canvasRef.current!.height / 2 - peak.value;
         
-        if (x >= 0 && x <= canvas.width) {
+        if (x >= 0 && x <= canvasRef.current!.width) {
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
           ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
