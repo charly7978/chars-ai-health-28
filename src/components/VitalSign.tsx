@@ -67,6 +67,22 @@ const VitalSign = ({
             }
           }
           return '';
+        case 'ARRITMIAS':
+          // Handle the arrhythmia status which comes in format "STATUS|COUNT"
+          const parts = value.split('|');
+          if (parts.length === 2) {
+            const status = parts[0];
+            const count = parts[1];
+            
+            if (status === "ARRITMIA DETECTADA" && count !== "0") {
+              return `Arritmias: ${count}`;
+            } else if (status === "SIN ARRITMIAS") {
+              return 'Normal';
+            } else if (status === "CALIBRANDO...") {
+              return 'Calibrando';
+            }
+          }
+          return '';
         default:
           return '';
       }
@@ -97,8 +113,42 @@ const VitalSign = ({
     }
   };
 
+  // Handle arrhythmia display separately
+  const getArrhythmiaDisplay = (value: string | number) => {
+    if (typeof value !== 'string') return null;
+    
+    const parts = value.split('|');
+    if (parts.length !== 2) return null;
+    
+    const status = parts[0];
+    const count = parts[1];
+    
+    if (status === "ARRITMIA DETECTADA" && count !== "0") {
+      return (
+        <div className="text-xs font-medium mt-2 text-[#ea384c]">
+          Arritmias: {count}
+        </div>
+      );
+    } else if (status === "SIN ARRITMIAS") {
+      return (
+        <div className="text-xs font-medium mt-2 text-green-500">
+          Normal
+        </div>
+      );
+    } else if (status === "CALIBRANDO...") {
+      return (
+        <div className="text-xs font-medium mt-2 text-blue-400">
+          Calibrando...
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   const riskLabel = getRiskLabel(label, value);
   const riskColor = getRiskColor(riskLabel);
+  const isArrhytmia = label === 'ARRITMIAS';
 
   return (
     <div className="relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-500 text-center">
@@ -108,16 +158,18 @@ const VitalSign = ({
       
       <div className="font-bold text-lg sm:text-xl transition-all duration-300">
         <span className="text-white animate-value-glow">
-          {value}
+          {isArrhytmia && typeof value === 'string' ? value.split('|')[0] : value}
         </span>
         {unit && <span className="text-xs text-white/70 ml-1">{unit}</span>}
       </div>
 
-      {riskLabel && (
+      {!isArrhytmia && riskLabel && (
         <div className={`text-xs font-medium mt-1 ${riskColor}`}>
           {riskLabel}
         </div>
       )}
+      
+      {isArrhytmia && getArrhythmiaDisplay(value)}
       
       {calibrationProgress !== undefined && (
         <div className="absolute inset-0 bg-transparent overflow-hidden pointer-events-none border-0">
