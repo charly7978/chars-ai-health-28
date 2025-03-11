@@ -151,37 +151,37 @@ const VitalSign = ({
   const riskColor = getRiskColor(riskLabel);
   const isArrhytmia = label === 'ARRITMIAS';
 
-  // Size classes based on displaySize prop
+  // Size classes based on displaySize prop - ENHANCED SIGNIFICANTLY
   const labelSizeClasses = {
-    'normal': 'text-[11px]',
-    'large': 'text-sm',
-    'xlarge': 'text-base'
+    'normal': 'text-sm',
+    'large': 'text-base',
+    'xlarge': 'text-xl'
   };
 
   const valueSizeClasses = {
-    'normal': 'text-xl sm:text-2xl',
-    'large': 'text-3xl sm:text-4xl',
-    'xlarge': 'text-4xl sm:text-5xl'
+    'normal': 'text-2xl sm:text-3xl',
+    'large': 'text-4xl sm:text-5xl',
+    'xlarge': 'text-5xl sm:text-6xl'
   };
 
   const riskLabelSizeClasses = {
     'normal': 'text-sm',
     'large': 'text-base',
-    'xlarge': 'text-lg'
+    'xlarge': 'text-xl'
   };
 
   return (
     <div 
       className={cn(
         "relative flex flex-col justify-center items-center p-3 bg-transparent transition-all duration-300 text-center cursor-pointer",
-        highlighted && "bg-blue-500/10 rounded-lg",
+        highlighted && "bg-blue-500/10 rounded-lg shadow-lg",
         displaySize === 'large' && "p-4",
         displaySize === 'xlarge' && "p-5"
       )}
       onClick={onDetailClick}
     >
       <div className={cn(
-        "font-medium uppercase tracking-wider text-white/80 mb-2",
+        "font-bold uppercase tracking-wider text-white/90 mb-2",
         labelSizeClasses[displaySize]
       )}>
         {label}
@@ -191,20 +191,20 @@ const VitalSign = ({
         "font-bold transition-all duration-300",
         valueSizeClasses[displaySize]
       )}>
-        <span className="text-white animate-value-glow">
+        <span className="text-white animate-pulse">
           {isArrhytmia && typeof value === 'string' ? value.split('|')[0] : value}
         </span>
         {unit && <span className={cn(
-          "text-white/70 ml-1",
-          displaySize === 'normal' && "text-xs",
-          displaySize === 'large' && "text-sm",
-          displaySize === 'xlarge' && "text-base"
+          "text-white/80 ml-1",
+          displaySize === 'normal' && "text-sm",
+          displaySize === 'large' && "text-base",
+          displaySize === 'xlarge' && "text-lg"
         )}>{unit}</span>}
       </div>
 
       {!isArrhytmia && riskLabel && (
         <div className={cn(
-          `font-medium mt-1 ${riskColor}`,
+          `font-bold mt-2 ${riskColor}`,
           riskLabelSizeClasses[displaySize]
         )}>
           {riskLabel}
@@ -221,10 +221,10 @@ const VitalSign = ({
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <span className={cn(
-              "text-white/80",
-              displaySize === 'normal' && "text-xs",
-              displaySize === 'large' && "text-sm",
-              displaySize === 'xlarge' && "text-base"
+              "text-white/80 font-bold",
+              displaySize === 'normal' && "text-sm",
+              displaySize === 'large' && "text-base",
+              displaySize === 'xlarge' && "text-lg"
             )}>
               {calibrationProgress < 100 ? `${Math.round(calibrationProgress)}%` : '✓'}
             </span>
