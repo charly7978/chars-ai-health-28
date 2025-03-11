@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect } from 'react';
 
 interface GraphGridProps {
@@ -17,7 +18,8 @@ const GraphGrid: React.FC<GraphGridProps> = ({ width = 1000, height = 900, cellS
 			const ctx = canvas.getContext('2d');
 			if (ctx) {
 				ctx.clearRect(0, 0, width, height);
-				ctx.fillStyle = '#FDF5E6'; // fondo crema
+				// Fondo crema con un sutil tono azulado
+				ctx.fillStyle = '#F0F5FA'; // Crema con un muy sutil tono azulado
 				ctx.fillRect(0, 0, width, height);
 				ctx.beginPath();
 				ctx.strokeStyle = 'rgba(60,60,60,0.3)';
