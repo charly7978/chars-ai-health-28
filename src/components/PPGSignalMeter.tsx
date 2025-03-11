@@ -191,10 +191,7 @@ const PPGSignalMeter = ({
     }
     
     if (calibrationCompleted && !showArrhythmiaAlert) {
-      const gradient = ctx.createLinearGradient(10, 15, 160, 45);
-      gradient.addColorStop(0, '#D3E4FD');
-      gradient.addColorStop(1, '#E6F4FF');
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.8)';
       ctx.beginPath();
       ctx.roundRect(10, 15, 160, 30, 8);
       ctx.fill();
@@ -228,12 +225,16 @@ const PPGSignalMeter = ({
         setShowArrhythmiaAlert(false);
         setArrhythmiaAlertEndTime(null);
       } else {
-        ctx.fillStyle = 'rgba(254, 202, 202, 0.7)';
+        ctx.fillStyle = 'rgba(254, 202, 202, 0.85)';
         ctx.beginPath();
-        ctx.roundRect(10, 15, 180, 30, 5);
+        ctx.roundRect(10, 15, 200, 32, 8);
         ctx.fill();
         
-        ctx.fillStyle = '#ea384c';
+        ctx.strokeStyle = '#B91C1C';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        ctx.fillStyle = '#DC2626';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
         ctx.fillText('ARRITMIA DETECTADA', 45, 35);
