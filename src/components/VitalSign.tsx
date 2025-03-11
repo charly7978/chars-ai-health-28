@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -69,10 +68,10 @@ const VitalSign = ({
           }
           return '';
         case 'ARRITMIAS':
-          const parts = value.split('|');
-          if (parts.length === 2) {
-            const status = parts[0];
-            const count = parts[1];
+          const arrhythmiaParts = value.split('|');
+          if (arrhythmiaParts.length === 2) {
+            const status = arrhythmiaParts[0];
+            const count = arrhythmiaParts[1];
             
             if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
               return `Arritmias: ${count}`;
@@ -146,10 +145,8 @@ const VitalSign = ({
   };
 
   const getMedianAndAverageInfo = (label: string, value: string | number) => {
-    // Skip for SPO2 and glucose as requested
     if (label === 'SPO2' || label === 'GLUCOSA') return null;
 
-    // For demonstration purposes - in a real app these would come from actual calculations
     let median, average, interpretation;
 
     if (typeof value === 'number') {
