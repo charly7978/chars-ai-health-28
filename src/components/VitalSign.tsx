@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '../lib/utils';
 
 interface VitalSignProps {
   label: string;
@@ -139,21 +140,24 @@ const VitalSign: React.FC<VitalSignProps> = ({
         const displayCount = count ? `(${count})` : "";
         return {
           text: `ARRITMIA DETECTADA ${displayCount}`.trim(),
-          color: "text-red-500"
+          color: "text-red-500 animate-pulse",
+          status: "Requiere atención"
         };
       }
       
       if (status === "CALIBRANDO...") {
         return {
           text: status,
-          color: "text-yellow-500"
+          color: "text-yellow-500",
+          status: "En proceso"
         };
       }
       
       const noArrhythmiaCount = count ? `(${count})` : "";
       return {
-        text: `SIN ARRITMIAS ${noArrhythmiaCount}`.trim(),
-        color: "text-cyan-500"
+        text: `RITMO NORMAL ${noArrhythmiaCount}`.trim(),
+        color: "text-cyan-500",
+        status: "Estable"
       };
     }
     
@@ -174,12 +178,19 @@ const VitalSign: React.FC<VitalSignProps> = ({
         </h3>
         
         <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
-          <div className="flex items-center justify-center gap-1">
+          <div className={cn(
+            "flex items-center justify-center gap-1 transition-all duration-300",
+            isArrhythmiaDisplay && "relative"
+          )}>
             <span 
-              className={`font-bold ${color} transition-colors duration-300 
-                ${isArrhythmiaDisplay ? 'text-[15px]' : ''}
-                ${isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : ''}
-                ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : ''}`}
+              className={cn(
+                "font-bold transition-colors duration-300",
+                color,
+                isArrhythmiaDisplay ? 'text-[15px]' : '',
+                isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : '',
+                !isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : '',
+                isArrhythmiaDisplay && typeof text === 'string' && text.includes('ARRITMIA') && 'relative after:absolute after:inset-0 after:bg-red-500/10 after:animate-pulse after:rounded-full'
+              )}
             >
               {text}
             </span>
@@ -192,7 +203,11 @@ const VitalSign: React.FC<VitalSignProps> = ({
           </div>
           
           {status && (
-            <span className={`text-[12px] font-medium text-center ${color} mt-0.5`}>
+            <span className={cn(
+              "text-[12px] font-medium text-center mt-0.5 transition-all duration-300",
+              color,
+              isArrhythmiaDisplay && typeof text === 'string' && text.includes('ARRITMIA') && 'animate-pulse'
+            )}>
               {status}
             </span>
           )}

@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
+import { cn } from "@/lib/utils";
 
 interface PPGSignalMeterProps {
   value: number;
@@ -37,6 +38,7 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
+  const [startTime, setStartTime] = useState(Date.now());
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -56,6 +58,38 @@ const PPGSignalMeter = ({
   const IMMEDIATE_RENDERING = true;
   const MAX_PEAKS_TO_DISPLAY = 25;
 
+  // Memoize quality-related calculations
+  const qualityIndicators = useMemo(() => {
+    const getQualityColor = (q: number) => {
+      if (q > 90) return 'from-emerald-500/80 to-emerald-400/80';
+      if (q > 75) return 'from-sky-500/80 to-sky-400/80';
+      if (q > 60) return 'from-indigo-500/80 to-indigo-400/80';
+      if (q > 40) return 'from-amber-500/80 to-amber-400/80';
+      return 'from-red-500/80 to-red-400/80';
+    };
+
+    const getQualityText = (q: number) => {
+      if (q > 90) return 'Excellent';
+      if (q > 75) return 'Very Good';
+      if (q > 60) return 'Good';
+      if (q > 40) return 'Fair';
+      return 'Poor';
+    };
+
+    return {
+      color: getQualityColor(quality),
+      text: getQualityText(quality)
+    };
+  }, [quality]);
+
+  // Memoize canvas dimensions and settings
+  const canvasSettings = useMemo(() => ({
+    width: 1000,
+    height: 200,
+    windowWidth: 5000, // 5 seconds
+    verticalScale: 32.0
+  }), []);
+
   useEffect(() => {
     if (!dataBufferRef.current) {
       dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
@@ -70,20 +104,6 @@ const PPGSignalMeter = ({
       lastValueRef.current = null;
     }
   }, [preserveResults, isFingerDetected]);
-
-  const getQualityColor = useCallback((q: number) => {
-    if (!isFingerDetected) return 'from-gray-400 to-gray-500';
-    if (q > 75) return 'from-green-500 to-emerald-500';
-    if (q > 50) return 'from-yellow-500 to-orange-500';
-    return 'from-red-500 to-rose-500';
-  }, [isFingerDetected]);
-
-  const getQualityText = useCallback((q: number) => {
-    if (!isFingerDetected) return 'Sin detección';
-    if (q > 75) return 'Señal óptima';
-    if (q > 50) return 'Señal aceptable';
-    return 'Señal débil';
-  }, [isFingerDetected]);
 
   const smoothValue = useCallback((currentValue: number, previousValue: number | null): number => {
     if (previousValue === null) return currentValue;
@@ -379,90 +399,85 @@ const PPGSignalMeter = ({
     };
   }, [renderSignal]);
 
+  // Optimize reset handler
   const handleReset = useCallback(() => {
+    if (preserveResults) {
+      return;
+    }
     setShowArrhythmiaAlert(false);
     peaksRef.current = [];
+    dataBufferRef.current?.clear();
+    baselineRef.current = null;
+    lastValueRef.current = null;
+    setStartTime(Date.now());
     onReset();
-  }, [onReset]);
+  }, [onReset, preserveResults]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
-        <div className="flex items-center gap-2 mr-6">
-          <span className="text-lg font-bold text-slate-700">PPG</span>
-          <div className="ml-13 w-[180px] mt-1">
-            <div className="flex items-center space-x-1.5">
-              <Activity size={16} className="text-slate-600" />
-              <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
-                  style={{ 
-                    width: `${isFingerDetected ? quality : 0}%`,
-                    boxShadow: 'inset 0 0 6px rgba(255, 255, 255, 0.6)'
-                  }}
-                />
-              </div>
-              <span className="text-[10px] font-medium text-slate-600 w-12 text-right">
-                {isFingerDetected ? `${quality}%` : '--%'}
-              </span>
+      <div className="absolute top-0 left-0 right-0 p-2 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3 flex-1">
+          <span className="text-xl font-bold text-slate-700">PPG</span>
+          <div className="flex flex-col flex-1">
+            <div className={cn(
+              "h-1.5 w-[80%] mx-auto rounded-full bg-gradient-to-r transition-all duration-1000 ease-in-out",
+              qualityIndicators.color
+            )}>
+              <div
+                className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
+                style={{ width: `${quality}%` }}
+              />
             </div>
-            <div className="flex items-center justify-between mt-0.5">
-              <span className="text-[9px] font-medium text-slate-600">
-                {getQualityText(quality)}
-              </span>
-              {quality <= 50 && isFingerDetected && (
-                <span className="text-[8px] font-medium text-red-500 animate-pulse">
-                  Reposicione su dedo
-                </span>
+            <span className="text-[9px] text-center mt-0.5 font-medium transition-colors duration-700" 
+                  style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
+              {qualityIndicators.text}
+            </span>
+          </div>
+          
+          <div className="flex flex-col items-center">
+            <div className={cn(
+              "transition-all duration-700",
+              isFingerDetected ? "scale-100" : "scale-95"
+            )}>
+              {isFingerDetected ? (
+                <div className="text-emerald-500 drop-shadow-md">
+                  <span className="text-xs">Dedo detectado</span>
+                </div>
+              ) : (
+                <div className="text-slate-300">
+                  <span className="text-xs">Ubique su dedo en el lente</span>
+                </div>
               )}
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-col items-center">
-          <Fingerprint
-            className={`h-8 w-8 transition-colors duration-300 ${
-              !isFingerDetected ? 'text-gray-400' :
-              quality > 75 ? 'text-green-500' :
-              quality > 50 ? 'text-yellow-500' :
-              'text-red-500'
-            }`}
-            strokeWidth={1.5}
-          />
-          <span className="text-[8px] text-center font-medium text-slate-600">
-            {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
-          </span>
         </div>
       </div>
 
       <canvas
         ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="w-full h-[calc(55vh)] mt-0"
+        width={canvasSettings.width}
+        height={canvasSettings.height}
+        className="w-full h-[calc(40vh)] mt-20"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 gap-px bg-white/80 backdrop-blur-sm border-t border-slate-100">
         <button 
           onClick={onStartMeasurement}
-          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
+          className="w-full h-full bg-white/80 hover:bg-slate-50/80 text-xl font-bold text-slate-700 transition-all duration-300"
+          disabled={preserveResults}
         >
-          <span className="text-base font-semibold">
-            INICIAR/DETENER
-          </span>
+          INICIAR
         </button>
-
         <button 
           onClick={handleReset}
-          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+          className="w-full h-full bg-white/80 hover:bg-slate-50/80 text-xl font-bold text-slate-700 transition-all duration-300"
+          disabled={preserveResults}
         >
-          <span className="text-base font-semibold">
-            RESETEAR
-          </span>
+          RESET
         </button>
       </div>
     </div>
   );
 };
 
-export default PPGSignalMeter;
+export default React.memo(PPGSignalMeter);
