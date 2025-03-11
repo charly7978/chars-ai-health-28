@@ -19,7 +19,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       <div className="text-xs text-gold-light font-semibold tracking-wider mb-1">
         {label}
       </div>
-      <div className={`font-mono text-xl md:text-2xl font-bold ${highlighted ? 'text-white animate-pulse-white' : 'text-gold-medium'}`}>
+      <div className={`font-mono text-xl md:text-2xl font-bold ${highlighted ? 'text-white animate-pulse-white' : 'text-white'}`}>
         {value}
       </div>
       {unit && (
