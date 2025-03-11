@@ -1,3 +1,4 @@
+
 import { calculateAC, calculateDC, calculatePerfusionIndex } from './utils';
 
 export class SpO2Processor {
@@ -9,8 +10,20 @@ export class SpO2Processor {
   private readonly MIN_AC_VALUE = 5.0;
   private readonly MIN_VALUES_LENGTH = 30;
   private readonly MIN_SIGNAL_INTENSITY = 50;
+  private fingerDetected: boolean = false;
 
-  public calculateSpO2(values: number[]): number {
+  public calculateSpO2(values: number[], isFingerDetected?: boolean): number {
+    // First, update finger detection state
+    if (isFingerDetected !== undefined) {
+      this.fingerDetected = isFingerDetected;
+    }
+    
+    // If no finger is detected, immediately return 0
+    if (!this.fingerDetected) {
+      this.resetBuffers();
+      return 0;
+    }
+
     if (values.length < this.MIN_VALUES_LENGTH) {
       this.resetBuffers();
       return 0;
@@ -117,5 +130,13 @@ export class SpO2Processor {
 
   public reset(): void {
     this.resetBuffers();
+    this.fingerDetected = false;
+  }
+  
+  public setFingerDetection(detected: boolean): void {
+    this.fingerDetected = detected;
+    if (!detected) {
+      this.resetBuffers();
+    }
   }
 }
