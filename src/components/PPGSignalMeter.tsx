@@ -38,13 +38,13 @@ const PPGSignalMeter = ({
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
 
-  const WINDOW_WIDTH_MS = 3000;
-  const CANVAS_WIDTH = 800;
-  const CANVAS_HEIGHT = 1000;
+  const WINDOW_WIDTH_MS = 2800;
+  const CANVAS_WIDTH = 900;
+  const CANVAS_HEIGHT = 1200;
   const GRID_SIZE_X = 5;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
-  const SMOOTHING_FACTOR = 1.3;
+  const SMOOTHING_FACTOR = 1.5;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
