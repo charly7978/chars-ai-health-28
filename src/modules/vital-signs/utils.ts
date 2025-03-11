@@ -88,3 +88,62 @@ export function calculateAmplitude(
   const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
   return mean;
 }
+
+/**
+ * Calculates the perfusion index of a PPG signal
+ * @param values Array of PPG signal values
+ * @returns Perfusion index as a percentage
+ */
+export function calculatePerfusionIndex(values: number[]): number {
+  if (values.length < 10) return 0;
+  
+  const ac = calculateAC(values);
+  const dc = calculateDC(values);
+  
+  if (dc === 0) return 0;
+  
+  // PI is typically expressed as a percentage (AC/DC * 100)
+  const perfusionIndex = (ac / Math.abs(dc)) * 100;
+  
+  return Math.min(20, perfusionIndex); // Cap at 20% which is excellent perfusion
+}
+
+/**
+ * Calculates the median of an array of values
+ * @param values Array of numeric values
+ * @returns Median value
+ */
+export function calculateMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  } else {
+    return sorted[mid];
+  }
+}
+
+/**
+ * Calculates weighted average with more weight to recent values
+ * @param values Array of values to average
+ * @param weightBase Base for exponential weighting (>1 gives more weight to recent values)
+ * @returns Weighted average
+ */
+export function calculateWeightedAverage(values: number[], weightBase: number = 1.3): number {
+  if (values.length === 0) return 0;
+  
+  let sum = 0;
+  let weightSum = 0;
+  
+  // Apply exponential weights (more weight to recent values)
+  for (let i = 0; i < values.length; i++) {
+    const weight = Math.pow(weightBase, i);
+    sum += values[values.length - 1 - i] * weight;
+    weightSum += weight;
+  }
+  
+  return weightSum > 0 ? sum / weightSum : 0;
+}

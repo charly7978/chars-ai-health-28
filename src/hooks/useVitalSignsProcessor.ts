@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -178,6 +177,9 @@ export const useVitalSignsProcessor = () => {
           rmssd,
           rrVariation,
           rrSD,
+          lastRR,
+          avgRR,
+          intervals: lastThreeIntervals,
           condición1: rmssd > 50 && rrVariation > 0.20,
           condición2: rrSD > 35 && rrVariation > 0.18,
           condición3: lastRR > 1.4 * avgRR,
@@ -254,7 +256,7 @@ export const useVitalSignsProcessor = () => {
     
     console.log("useVitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
-    // Aplicar el procesamiento final para la glucosa
+    // Aplicar el procesamiento final para la presión arterial y glucosa
     const finalResults = processor.completeMeasurement();
     
     measurementActive.current = false;
@@ -268,6 +270,7 @@ export const useVitalSignsProcessor = () => {
     if (finalResults && lastValidResults) {
       const updatedResults = {
         ...lastValidResults,
+        pressure: finalResults.pressure,
         glucose: finalResults.glucose
       };
       

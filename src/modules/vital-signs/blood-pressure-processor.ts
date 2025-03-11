@@ -1,10 +1,17 @@
 
 /**
  * Procesador avanzado de presión arterial basado en señales PPG
- * Implementa técnicas de procesamiento de señal con énfasis en mediciones reales
- * con filtrado de mediana durante la medición y promedio ponderado al final.
+ * Implementa técnicas avanzadas de procesamiento de señal con índices de perfusión
+ * y filtrado de mediana durante la medición y promedio ponderado al final.
  */
-import { calculateAmplitude, findPeaksAndValleys, calculateStandardDeviation } from './utils';
+import { 
+  calculateAmplitude, 
+  findPeaksAndValleys, 
+  calculateStandardDeviation, 
+  calculatePerfusionIndex,
+  calculateMedian,
+  calculateWeightedAverage
+} from './utils';
 
 export class BloodPressureProcessor {
   // Constantes de configuración
@@ -21,6 +28,10 @@ export class BloodPressureProcessor {
   private readonly MIN_PULSE_PRESSURE = 30;
   private readonly MAX_PULSE_PRESSURE = 60;
   
+  // Umbrales de perfusión
+  private readonly MIN_PERFUSION_INDEX = 0.4; // Mínimo índice de perfusión aceptable
+  private readonly GOOD_PERFUSION_INDEX = 1.5; // Buen índice de perfusión
+  
   // Buffers para procesamiento en tiempo real
   private systolicBuffer: number[] = [];
   private diastolicBuffer: number[] = [];
@@ -33,6 +44,7 @@ export class BloodPressureProcessor {
   private measurementActive: boolean = false;
   private measurementEndTime: number | null = null;
   private signalQuality: number = 0;
+  private perfusionIndex: number = 0;
   private lastValidTime: number = 0;
   private lastValidValues: { systolic: number, diastolic: number } | null = null;
 
@@ -65,14 +77,24 @@ export class BloodPressureProcessor {
       return { systolic: 0, diastolic: 0 };
     }
     
-    // Calcular la calidad de la señal
+    // Calcular la calidad de la señal y el índice de perfusión
     this.signalQuality = this.calculateSignalQuality(values);
+    this.perfusionIndex = calculatePerfusionIndex(values);
     
-    // Si la señal es de baja calidad, devolver el último valor válido o 0
-    if (this.signalQuality < 0.4) {
-      console.log("[BP Processor] Calidad de señal insuficiente", {
+    console.log("[BP Processor] Calidad de señal e índice de perfusión", {
+      calidad: this.signalQuality.toFixed(2),
+      perfusión: this.perfusionIndex.toFixed(2)
+    });
+    
+    // Si la señal es de baja calidad o perfusión inadecuada, devolver el último valor válido o 0
+    if (this.signalQuality < 0.4 || this.perfusionIndex < this.MIN_PERFUSION_INDEX) {
+      console.log("[BP Processor] Calidad de señal o perfusión insuficiente", {
         calidad: this.signalQuality.toFixed(2),
-        umbraMínimo: 0.4
+        perfusión: this.perfusionIndex.toFixed(2),
+        umbrales: {
+          calidadMínima: 0.4,
+          perfusiónMínima: this.MIN_PERFUSION_INDEX
+        }
       });
       return this.lastValidValues || { systolic: 0, diastolic: 0 };
     }
@@ -92,8 +114,8 @@ export class BloodPressureProcessor {
       // Actualizar último valor válido
       this.lastValidTime = Date.now();
       this.lastValidValues = { 
-        systolic: this.calculateMedian(this.systolicBuffer), 
-        diastolic: this.calculateMedian(this.diastolicBuffer) 
+        systolic: Math.round(calculateMedian(this.systolicBuffer)), 
+        diastolic: Math.round(calculateMedian(this.diastolicBuffer)) 
       };
       
       // Actualizar buffer para cálculo final (después del delay)
@@ -108,8 +130,8 @@ export class BloodPressureProcessor {
     
     // Devolver la mediana de los valores en el buffer (más estable que valores instantáneos)
     return {
-      systolic: this.calculateMedian(this.systolicBuffer),
-      diastolic: this.calculateMedian(this.diastolicBuffer)
+      systolic: Math.round(calculateMedian(this.systolicBuffer)),
+      diastolic: Math.round(calculateMedian(this.diastolicBuffer))
     };
   }
   
@@ -150,13 +172,14 @@ export class BloodPressureProcessor {
     // Si llegamos aquí, el delay ha finalizado y podemos calcular el valor final
     
     // Aplicar promedio ponderado al buffer final (dando más peso a los valores más recientes)
-    const finalSystolic = this.calculateWeightedAverage(this.finalSystolicBuffer);
-    const finalDiastolic = this.calculateWeightedAverage(this.finalDiastolicBuffer);
+    const finalSystolic = calculateWeightedAverage(this.finalSystolicBuffer);
+    const finalDiastolic = calculateWeightedAverage(this.finalDiastolicBuffer);
     
     console.log("[BP Processor] Procesamiento final completado", {
       sistólicaFinal: finalSystolic,
       diastólicaFinal: finalDiastolic,
-      muestrasProcesadas: this.finalSystolicBuffer.length
+      muestrasProcesadas: this.finalSystolicBuffer.length,
+      índicePerfusión: this.perfusionIndex
     });
     
     // Reiniciar el estado para futuras mediciones
@@ -184,7 +207,8 @@ export class BloodPressureProcessor {
         pulseTransitTime: 0,
         dicroticNotchRatio: 0,
         peakValleyRatio: 0,
-        waveformWidth: 0
+        waveformWidth: 0,
+        perfusionIndex: 0
       };
     }
     
@@ -290,7 +314,8 @@ export class BloodPressureProcessor {
       pulseTransitTime,
       dicroticNotchRatio,
       peakValleyRatio,
-      waveformWidth
+      waveformWidth,
+      perfusionIndex: this.perfusionIndex
     };
   }
   
@@ -345,6 +370,16 @@ export class BloodPressureProcessor {
       const notchFactor = (0.7 - features.dicroticNotchRatio) * 15; // 0.7 como referencia
       systolic += notchFactor;
       diastolic += notchFactor * 0.8;
+    }
+    
+    // Factor de índice de perfusión (mejor perfusión = lecturas más precisas)
+    if (features.perfusionIndex > this.MIN_PERFUSION_INDEX) {
+      // Ajustar basado en la calidad de perfusión
+      if (features.perfusionIndex > this.GOOD_PERFUSION_INDEX) {
+        // Con buena perfusión, ajustar menos los valores estimados
+        systolic = systolic * 0.95 + 120 * 0.05;
+        diastolic = diastolic * 0.95 + 80 * 0.05;
+      }
     }
     
     // Aplicar restricciones fisiológicas
@@ -426,11 +461,14 @@ export class BloodPressureProcessor {
       periodicityScore = Math.max(0, 1 - intervalVariation * 2);
     }
     
+    // Evaluar índice de perfusión
+    const perfusionScore = Math.min(1, this.perfusionIndex / 10); // Normalizar a 0-1
+    
     // Combinar factores en un score de calidad
     const cvScore = Math.max(0, 1 - Math.min(cv, 0.5) * 2);
     
     // El score final es una combinación ponderada
-    const qualityScore = cvScore * 0.4 + periodicityScore * 0.6;
+    const qualityScore = cvScore * 0.3 + periodicityScore * 0.4 + perfusionScore * 0.3;
     
     return Math.max(0, Math.min(1, qualityScore));
   }
@@ -446,42 +484,6 @@ export class BloodPressureProcessor {
     if (buffer.length > maxSize) {
       buffer.shift();
     }
-  }
-  
-  /**
-   * Calcula la mediana de un array de valores
-   */
-  private calculateMedian(values: number[]): number {
-    if (values.length === 0) return 0;
-    
-    const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    
-    if (sorted.length % 2 === 0) {
-      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-    } else {
-      return Math.round(sorted[mid]);
-    }
-  }
-  
-  /**
-   * Calcula el promedio ponderado de un array de valores,
-   * dando más peso a los valores más recientes
-   */
-  private calculateWeightedAverage(values: number[]): number {
-    if (values.length === 0) return 0;
-    
-    let sum = 0;
-    let weightSum = 0;
-    
-    // Aplicar pesos exponenciales (más peso a valores recientes)
-    for (let i = 0; i < values.length; i++) {
-      const weight = Math.pow(1.3, i); // Base > 1 para dar más peso a elementos más recientes
-      sum += values[values.length - 1 - i] * weight;
-      weightSum += weight;
-    }
-    
-    return weightSum > 0 ? sum / weightSum : 0;
   }
   
   /**
@@ -522,6 +524,7 @@ export class BloodPressureProcessor {
     this.measurementActive = false;
     this.measurementEndTime = null;
     this.signalQuality = 0;
+    this.perfusionIndex = 0;
   }
   
   /**
@@ -529,5 +532,12 @@ export class BloodPressureProcessor {
    */
   public getSignalQuality(): number {
     return this.signalQuality;
+  }
+  
+  /**
+   * Devuelve el índice de perfusión actual
+   */
+  public getPerfusionIndex(): number {
+    return this.perfusionIndex;
   }
 }
