@@ -6,11 +6,13 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5;
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = [];
-  private readonly MIN_PERFUSION_INDEX = 0.4;
-  private readonly MIN_AC_VALUE = 5.0;
-  private readonly MIN_VALUES_LENGTH = 30;
-  private readonly MIN_SIGNAL_INTENSITY = 50;
+  private readonly MIN_PERFUSION_INDEX = 0.2; // Reduced from 0.4
+  private readonly MIN_AC_VALUE = 3.0; // Reduced from 5.0
+  private readonly MIN_VALUES_LENGTH = 20; // Reduced from 30
+  private readonly MIN_SIGNAL_INTENSITY = 30; // Reduced from 50
   private fingerDetected: boolean = false;
+  private consecutiveValidReadings: number = 0;
+  private readonly MIN_CONSECUTIVE_READINGS = 2;
 
   public calculateSpO2(values: number[], isFingerDetected?: boolean): number {
     // First, update finger detection state
@@ -21,44 +23,43 @@ export class SpO2Processor {
     // If no finger is detected, immediately return 0
     if (!this.fingerDetected) {
       this.resetBuffers();
+      this.consecutiveValidReadings = 0;
       return 0;
     }
 
     if (values.length < this.MIN_VALUES_LENGTH) {
-      this.resetBuffers();
-      return 0;
+      return this.handleInvalidReading("Insufficient data points");
     }
 
     const dc = calculateDC(values);
     if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { 
-      this.resetBuffers();
-      return 0;
+      return this.handleInvalidReading("Signal intensity too low");
     }
 
     const ac = calculateAC(values);
     if (ac < this.MIN_AC_VALUE) {
-      this.resetBuffers();
-      return 0;
+      return this.handleInvalidReading("AC value too low");
     }
 
     const stdDev = this.calculateStandardDeviation(values);
     const cv = stdDev / Math.abs(dc);
     
-    if (stdDev < 3.0 || cv < 0.08) {
-      this.resetBuffers();
-      return 0;
+    // Make this check more lenient
+    if (stdDev < 2.0 || cv < 0.05) {
+      return this.handleInvalidReading("Signal variation too low");
     }
 
     const perfusionIndex = calculatePerfusionIndex(values);
     if (perfusionIndex < this.MIN_PERFUSION_INDEX) {
-      this.resetBuffers();
-      return 0;
+      return this.handleInvalidReading("Perfusion index too low");
     }
     
     if (!this.checkSignalStability(values)) {
-      this.resetBuffers();
-      return 0;
+      return this.handleInvalidReading("Signal not stable");
     }
+
+    // Valid reading detected, increment consecutive counter
+    this.consecutiveValidReadings++;
 
     const R = ac / dc;
     const spO2 = Math.round(110 - (25 * R));
@@ -69,6 +70,19 @@ export class SpO2Processor {
     }
 
     return this.getMedianValue();
+  }
+
+  private handleInvalidReading(reason: string): number {
+    // Only reset buffers if we've had multiple invalid readings
+    this.consecutiveValidReadings = 0;
+    console.log(`Invalid SpO2 reading: ${reason}`);
+    
+    // Return the last known good value if we have one
+    if (this.medianBuffer.length > 0) {
+      return this.getMedianValue();
+    }
+    
+    return 0;
   }
 
   private checkSignalStability(values: number[]): boolean {
@@ -87,7 +101,8 @@ export class SpO2Processor {
       }
     }
     
-    if (zeroCrossings < 6 || zeroCrossings > 35) {
+    // Make this check more lenient (was 6-35, now 4-40)
+    if (zeroCrossings < 4 || zeroCrossings > 40) {
       return false;
     }
     
@@ -125,18 +140,28 @@ export class SpO2Processor {
 
   private resetBuffers(): void {
     this.spo2Buffer = [];
-    this.medianBuffer = [];
+    // Don't clear the median buffer immediately to maintain some stability
+    // in case of momentary finger removal
   }
 
   public reset(): void {
     this.resetBuffers();
+    this.medianBuffer = []; // Only clear median buffer on explicit reset
     this.fingerDetected = false;
+    this.consecutiveValidReadings = 0;
   }
   
   public setFingerDetection(detected: boolean): void {
     this.fingerDetected = detected;
     if (!detected) {
-      this.resetBuffers();
+      // Give some grace period before clearing all data
+      setTimeout(() => {
+        if (!this.fingerDetected) {
+          this.resetBuffers();
+          this.medianBuffer = [];
+          this.consecutiveValidReadings = 0;
+        }
+      }, 1000);
     }
   }
 }
