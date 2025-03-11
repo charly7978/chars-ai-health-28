@@ -11,29 +11,48 @@ const ShareButton: React.FC = () => {
     try {
       setIsSharing(true);
       
-      // Usar la API Web Share si está disponible
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Biochars - Monitor Cardíaco',
-          text: 'Revisar mi ritmo cardíaco con esta aplicación',
-          url: window.location.href,
-        });
-        toast({
-          title: "Compartido con éxito",
-          description: "El enlace ha sido compartido correctamente",
-          duration: 3000,
-        });
-      } else {
-        // Fallback para navegadores que no soportan Web Share API
+      // Validar si estamos en un contexto seguro
+      const isSecureContext = window.isSecureContext;
+      
+      // Usar la API Web Share solo si está disponible y estamos en un contexto seguro
+      if (navigator.share && isSecureContext) {
+        try {
+          await navigator.share({
+            title: 'Biochars - Monitor Cardíaco',
+            text: 'Revisar mi ritmo cardíaco con esta aplicación',
+            url: window.location.href,
+          });
+          toast({
+            title: "Compartido con éxito",
+            description: "El enlace ha sido compartido correctamente",
+            duration: 3000,
+          });
+          return; // Terminar si fue exitoso
+        } catch (shareError) {
+          console.log("Web Share API falló, usando clipboard:", shareError);
+          // Continúa al método de portapapeles si falla el Web Share API
+        }
+      }
+      
+      // Fallback: siempre usar portapapeles si Web Share no está disponible o falló
+      try {
         await navigator.clipboard.writeText(window.location.href);
         toast({
           title: "Enlace copiado",
           description: "El enlace ha sido copiado al portapapeles",
           duration: 3000,
         });
+      } catch (clipboardError) {
+        console.error('Error al copiar al portapapeles:', clipboardError);
+        toast({
+          title: "Error al compartir",
+          description: "No se pudo copiar el enlace. Intente copiar la URL manualmente.",
+          variant: "destructive",
+          duration: 3000,
+        });
       }
     } catch (error) {
-      console.error('Error al compartir:', error);
+      console.error('Error general al compartir:', error);
       toast({
         title: "Error al compartir",
         description: "No se pudo compartir el enlace",
