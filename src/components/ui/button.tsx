@@ -19,14 +19,16 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        share: "bg-blue-600 text-white hover:bg-blue-700 shadow-md", // Nuevo variante para el botón de compartir
+        share: "bg-blue-600 text-white hover:bg-blue-700 shadow-md", // Variante para el botón de compartir
+        start: "bg-blue-600 text-white hover:bg-blue-700 shadow-md", // Nueva variante para el botón de iniciar
+        reset: "bg-red-600 text-white hover:bg-red-700 shadow-md", // Nueva variante para el botón de reset
       },
       size: {
         default: "h-10 px-4 py-2",
         sm: "h-9 rounded-md px-3",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
-        share: "h-8 w-8 rounded-full p-1", // Nuevo tamaño para el botón de compartir
+        share: "h-8 w-8 rounded-full p-1", // Tamaño para el botón de compartir
       },
     },
     defaultVariants: {
