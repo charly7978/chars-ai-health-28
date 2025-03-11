@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -176,9 +177,8 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  font-size: 2rem !important;
-  height: 8rem !important;
-  padding: 2rem !important;
+  font-size: 1.25rem !important;
+  height: 4rem !important;
 }
 
 .soft-button:hover {
@@ -199,12 +199,7 @@
 
 /* Canvas container */
 .canvas-container {
-  height: 100vh !important;
+  height: calc(100vh - 120px);
   width: 100%;
   overflow: hidden;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 120px;
 }

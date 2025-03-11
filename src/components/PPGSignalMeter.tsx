@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -43,7 +44,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 1000; // Increased height to make the graph fill the entire screen
+  const CANVAS_HEIGHT = 800; // Increased height to extend the graph
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 20;
   const verticalScale = 28.0;
@@ -94,16 +95,19 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
+    // Create a very light gradient background
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, 'rgba(254, 247, 205, 0.2)');
     gradient.addColorStop(1, 'rgba(253, 225, 211, 0.2)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Draw grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.3)';
     ctx.lineWidth = 0.5;
 
+    // Horizontal grid lines
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
@@ -116,6 +120,7 @@ const PPGSignalMeter = ({
       }
     }
     
+    // Vertical grid lines
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
@@ -128,6 +133,7 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
+    // Draw more prominent grid lines
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.5)';
     ctx.lineWidth = 1;
@@ -143,6 +149,7 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
+    // Draw horizontal center line
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(159, 142, 106, 0.7)';
     ctx.lineWidth = 1.5;
@@ -150,6 +157,7 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
+    // Display arrhythmia warning if needed
     if (arrhythmiaStatus) {
       const [status, _] = arrhythmiaStatus.split('|');
       
@@ -445,7 +453,7 @@ const PPGSignalMeter = ({
         </div>
       </div>
 
-      <div className="canvas-container" style={{ height: 'calc(100vh - 120px)', width: '100%' }}>
+      <div className="canvas-container">
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
@@ -454,19 +462,18 @@ const PPGSignalMeter = ({
         />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 h-[120px] grid grid-cols-2 gap-px bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 h-[100px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
           className="bg-transparent soft-button text-white transition-colors duration-200 flex items-center justify-center"
-          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
           <div className="flex items-center justify-center gap-2">
             {isMonitoring ? (
               <>
-                <span className="text-4xl font-semibold">{30 - elapsedTime}s</span>
+                <span className="text-xl font-semibold">{30 - elapsedTime}s</span>
               </>
             ) : (
-              <span className="text-4xl font-semibold">INICIAR</span>
+              <span className="text-xl font-semibold">INICIAR</span>
             )}
           </div>
         </button>
@@ -474,9 +481,8 @@ const PPGSignalMeter = ({
         <button 
           onClick={handleReset}
           className="bg-transparent soft-button text-white hover:bg-red-500/20 transition-colors duration-200"
-          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
-          <span className="text-4xl font-semibold">
+          <span className="text-xl font-semibold">
             RESETEAR
           </span>
         </button>
