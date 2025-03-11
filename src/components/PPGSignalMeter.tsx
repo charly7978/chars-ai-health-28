@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -445,7 +446,7 @@ const PPGSignalMeter = ({
       <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
-          className="bg-transparent backdrop-blur-sm border border-white/10 text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
+          className="bg-transparent border-none text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
           <span className="text-base font-semibold">
             INICIAR/DETENER
@@ -454,7 +455,7 @@ const PPGSignalMeter = ({
 
         <button 
           onClick={handleReset}
-          className="bg-transparent backdrop-blur-sm border border-white/10 text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
+          className="bg-transparent border-none text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
           <span className="text-base font-semibold">
             RESETEAR
