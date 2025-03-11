@@ -17,9 +17,9 @@ const VitalSign = ({
   calibrationProgress 
 }: VitalSignProps) => {
   return (
-    <div className={`relative flex flex-col justify-center items-center p-2 rounded-lg ${
+    <div className={`relative flex flex-col justify-center items-center p-2 ${
       highlighted ? 'bg-black/20' : 'bg-black/20'
-    } backdrop-blur-sm border-0 transition-all duration-500`}>
+    } backdrop-blur-sm transition-all duration-500`}>
       <div className="text-[10px] font-medium text-white/70 uppercase tracking-tight mb-1">
         {label}
       </div>
@@ -30,7 +30,7 @@ const VitalSign = ({
       </div>
       
       {calibrationProgress !== undefined && (
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-blue-400/10 rounded-lg overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-blue-400/10 overflow-hidden">
           <div 
             className="h-full bg-blue-500/10 transition-all duration-300 ease-out"
             style={{ width: `${calibrationProgress}%` }}

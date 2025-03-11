@@ -91,14 +91,11 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(5, 8, 12, 0.9)');
-    gradient.addColorStop(1, 'rgba(3, 5, 10, 0.95)');
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.02)';
+    ctx.strokeStyle = 'rgba(75, 85, 99, 0.15)';
     ctx.lineWidth = 0.3;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
@@ -113,7 +110,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.06)';
+    ctx.strokeStyle = 'rgba(75, 85, 99, 0.3)';
     ctx.lineWidth = 1;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
