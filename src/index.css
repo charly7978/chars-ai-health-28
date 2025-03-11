@@ -97,6 +97,7 @@
   box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05);
   overflow: hidden;
   backdrop-filter: blur(1px);
+  border: none;
 }
 
 .background-grid {
@@ -126,4 +127,23 @@
 
 .stop-button:active {
   background: linear-gradient(to bottom, #991B1B, #7F1D1D);
+}
+
+/* Updating the vital sign display style for better visual appearance */
+.vital-sign-value {
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(226, 209, 181, 0.7));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: bold;
+}
+
+.vital-sign-inactive {
+  opacity: 0.5;
+  color: #94a3b8;
+  text-shadow: none;
+  background: none;
+  -webkit-text-fill-color: #94a3b8;
 }
