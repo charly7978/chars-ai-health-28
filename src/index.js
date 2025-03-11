@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -225,31 +224,35 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute bottom-[200px] left-0 right-0 px-4">
-            <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 shadow-lg">
-              <div className="grid grid-cols-4 gap-2">
+          <div className="absolute bottom-[170px] left-0 right-0 px-4">
+            <div className="bg-gray-900/70 backdrop-blur-sm rounded-xl p-5 shadow-lg">
+              <div className="grid grid-cols-4 gap-4">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
                   calibrationProgress={vitalSigns.calibration?.progress.heartRate}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
                   calibrationProgress={vitalSigns.calibration?.progress.spo2}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
                   calibrationProgress={vitalSigns.calibration?.progress.pressure}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
                   calibrationProgress={vitalSigns.calibration?.progress.arrhythmia}
+                  displaySize="large"
                 />
               </div>
             </div>
@@ -257,21 +260,21 @@ const Index = () => {
 
           {isMonitoring && (
             <div className="absolute bottom-40 left-0 right-0 text-center">
-              <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
+              <span className="text-2xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
             </div>
           )}
 
-          <div className="h-[80px] grid grid-cols-3 gap-px bg-gray-900 mt-auto">
+          <div className="h-[100px] grid grid-cols-3 gap-px bg-gray-900 mt-auto">
             <button 
               onClick={startMonitoring}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
             >
               INICIAR
             </button>
             <ShareButton onShare={handleShare} />
             <button 
               onClick={resetAll}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
             >
               RESET
             </button>
