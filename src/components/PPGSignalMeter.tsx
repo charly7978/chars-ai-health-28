@@ -250,7 +250,14 @@ const PPGSignalMeter = ({
     
     drawGrid(ctx);
     
-    if (preserveResults && !isFingerDetected) {
+    if ((preserveResults && !isFingerDetected) || !isFingerDetected) {
+      if (!isFingerDetected) {
+        ctx.fillStyle = '#888888';
+        ctx.font = 'bold 24px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('COLOQUE SU DEDO EN LA CÁMARA', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      }
+      
       lastRenderTimeRef.current = currentTime;
       animationFrameRef.current = requestAnimationFrame(renderSignal);
       return;

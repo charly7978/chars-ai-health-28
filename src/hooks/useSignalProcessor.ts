@@ -28,12 +28,19 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      setLastSignal(signal);
+      const qualityThreshold = 20; // Minimum quality required to consider finger detected
+      const enhancedFingerDetected = signal.fingerDetected && signal.quality >= qualityThreshold;
+      
+      const validatedSignal = {
+        ...signal,
+        fingerDetected: enhancedFingerDetected
+      };
+      
+      setLastSignal(validatedSignal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      // Actualizar estadísticas solo cada 50 frames
-      if ((framesProcessed + 1) % 50 === 0) {
+      if ((framesProcessed + 1) % 50 === 0 && enhancedFingerDetected) {
         setSignalStats(prev => {
           const newStats = {
             minValue: Math.min(prev.minValue, signal.filteredValue),
