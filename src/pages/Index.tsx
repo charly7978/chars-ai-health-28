@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -587,7 +586,7 @@ const Index = () => {
               />
             </div>
             
-            <div className="absolute bottom-0 left-0 right-0 top-1/2 bg-gold-darkest shadow-lg border-t border-gold-medium/20">
+            <div className="absolute bottom-0 left-0 right-0 top-1/2 vital-signs-panel-container">
               {isCalibrating && (
                 <div className="absolute top-2 left-0 right-0 text-center z-10">
                   <span className="text-sm font-medium text-gold-medium">
@@ -596,7 +595,7 @@ const Index = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-0 h-full pt-10 pb-16">
+              <div className="grid grid-cols-3 gap-0 h-full">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
