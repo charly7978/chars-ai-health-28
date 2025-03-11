@@ -6,9 +6,10 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
-  private readonly MIN_PERFUSION_INDEX = 0.15; // Increased threshold for finger detection
-  private readonly MIN_AC_VALUE = 3.0; // Minimum AC variation required
+  private readonly MIN_PERFUSION_INDEX = 0.25; // Significantly increased threshold for finger detection
+  private readonly MIN_AC_VALUE = 5.0; // Increased minimum AC variation required for real signal
   private readonly MIN_VALUES_LENGTH = 30; // Minimum sample size for calculation
+  private readonly MIN_SIGNAL_INTENSITY = 40; // Minimum signal intensity
 
   /**
    * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
@@ -21,7 +22,7 @@ export class SpO2Processor {
 
     // Calculate DC component
     const dc = calculateDC(values);
-    if (dc === 0 || dc < 20) { // Added minimum threshold for DC
+    if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { // Increased minimum threshold for DC
       return 0; // No DC component or too weak signal
     }
 
@@ -31,9 +32,15 @@ export class SpO2Processor {
       return 0; // AC component too small - indicates no pulsation
     }
 
-    // Calculate standard deviation to check for signal variation
+    // Calculate coefficient of variation to check for signal consistency
     const stdDev = this.calculateStandardDeviation(values);
-    if (stdDev < 1.5) {
+    const cv = stdDev / Math.abs(dc); // Coefficient of variation
+    
+    // Check if there's actual pulsatile variation representative of a real finger
+    if (stdDev < 2.5 || cv < 0.03) {
+      // Clear all buffers when there's no valid signal
+      this.spo2Buffer = [];
+      this.medianBuffer = [];
       return 0; // Not enough variation in signal - likely no finger present
     }
 
@@ -41,11 +48,17 @@ export class SpO2Processor {
     const perfusionIndex = calculatePerfusionIndex(values);
     if (perfusionIndex < this.MIN_PERFUSION_INDEX) {
       // Clear buffers when losing signal to prevent displaying old values
-      if (this.medianBuffer.length > 0) {
-        this.spo2Buffer = [];
-        this.medianBuffer = [];
-      }
+      this.spo2Buffer = [];
+      this.medianBuffer = [];
       return 0; // Signal too weak for reliable measurement
+    }
+    
+    // Check for signal stability - real PPG should not be completely flat or too erratic
+    const isStableSignal = this.checkSignalStability(values);
+    if (!isStableSignal) {
+      this.spo2Buffer = [];
+      this.medianBuffer = [];
+      return 0; // Signal not stable enough for reading
     }
 
     // Calculate real SpO2 using Beer-Lambert law and empirical calibration
@@ -77,6 +90,37 @@ export class SpO2Processor {
     
     // Return median-filtered result for maximum stability
     return this.getMedianValue();
+  }
+  
+  /**
+   * Check if the signal is stable enough for reliable measurement
+   * Real PPG signals have characteristic patterns that random noise doesn't
+   */
+  private checkSignalStability(values: number[]): boolean {
+    if (values.length < 20) return false;
+    
+    // Calculate first derivative to check for pulsatile pattern
+    const derivatives = [];
+    for (let i = 1; i < values.length; i++) {
+      derivatives.push(values[i] - values[i-1]);
+    }
+    
+    // Count zero crossings - real PPG should have regular zero crossings
+    let zeroCrossings = 0;
+    for (let i = 1; i < derivatives.length; i++) {
+      if ((derivatives[i-1] < 0 && derivatives[i] >= 0) || 
+          (derivatives[i-1] >= 0 && derivatives[i] < 0)) {
+        zeroCrossings++;
+      }
+    }
+    
+    // Real PPG should have between 6-30 zero crossings in this length of signal
+    // (representing heart beats and their harmonics)
+    if (zeroCrossings < 6 || zeroCrossings > 30) {
+      return false;
+    }
+    
+    return true;
   }
   
   /**

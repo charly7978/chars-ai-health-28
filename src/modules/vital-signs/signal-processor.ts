@@ -13,28 +13,29 @@ export class SignalProcessor {
   private readonly BASELINE_FACTOR = 0.92;
   private baselineValue: number = 0;
 
-  // Improved finger detection parameters with stricter thresholds
-  private readonly MIN_RED_THRESHOLD = 60;      // Increased for better signal strength
-  private readonly MAX_RED_THRESHOLD = 230;     // Reduced to avoid saturation
-  private readonly RED_DOMINANCE_RATIO = 1.35;  // Increased for clearer red channel isolation
-  private readonly MIN_SIGNAL_AMPLITUDE = 4;    // Increased minimum variation threshold
-  private readonly MIN_VALID_PIXELS = 100;      // Increased required pixels for detection
-  private readonly ROI_SCALE = 0.20;           // Smaller ROI for more focused detection
-  private readonly SIGNAL_MEMORY = 5;          // Increased frames to remember signal
-  private readonly HYSTERESIS = 12;            // Increased hysteresis for better stability
+  // Significantly stronger finger detection parameters
+  private readonly MIN_RED_THRESHOLD = 80;      // Increased minimum threshold
+  private readonly MAX_RED_THRESHOLD = 220;     // Reduced to avoid saturation
+  private readonly RED_DOMINANCE_RATIO = 1.50;  // Much higher ratio required
+  private readonly MIN_SIGNAL_AMPLITUDE = 8;    // Much higher variation required
+  private readonly MIN_VALID_PIXELS = 150;      // More valid pixels required
+  private readonly ROI_SCALE = 0.15;           // Smaller, more focused ROI
+  private readonly SIGNAL_MEMORY = 3;          // Reduced memory for faster signal loss
+  private readonly HYSTERESIS = 8;             // Reduced hysteresis
 
-  // Signal quality and stability parameters
-  private readonly STABILITY_THRESHOLD = 0.75;  // Increased for better signal quality
-  private readonly MIN_PERFUSION_INDEX = 0.08;  // Higher threshold for perfusion detection
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 50; // Reduced allowed variation
+  // Signal quality parameters
+  private readonly STABILITY_THRESHOLD = 0.85;  // Higher stability required
+  private readonly MIN_PERFUSION_INDEX = 0.20;  // Much higher perfusion threshold
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 30; // Lower allowed variation
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
-  private readonly MIN_CONSECUTIVE_FRAMES = 4;  // Increased minimum frames for validation
-  private lastStableValue: number = 0;         // Added missing property
+  private readonly MIN_CONSECUTIVE_FRAMES = 6;  // More frames required for validation
+  private lastStableValue: number = 0;
   private stableSignalCount: number = 0;
-  private readonly MIN_STABLE_SIGNAL_COUNT = 10;
+  private readonly MIN_STABLE_SIGNAL_COUNT = 15; // More stable signals required
   private signalBuffer: number[] = [];
   private readonly SIGNAL_BUFFER_SIZE = 30;
+  private fingerDetectedState: boolean = false; // Explicit finger detection state
 
   /**
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
@@ -42,6 +43,12 @@ export class SignalProcessor {
   public applySMAFilter(value: number): number {
     if (typeof value !== 'number' || isNaN(value)) {
       console.warn('SignalProcessor: Invalid input value', value);
+      return 0;
+    }
+
+    // If value is effectively zero, we're not getting real signal
+    if (Math.abs(value) < 0.1) {
+      this.handleSignalLoss();
       return 0;
     }
 
@@ -63,6 +70,16 @@ export class SignalProcessor {
     const smaBuffer = this.ppgValues.slice(-this.SMA_WINDOW);
     const smaValue = smaBuffer.reduce((a, b) => a + b, 0) / smaBuffer.length;
     
+    // Check if this is just noise (should have some variation in real PPG)
+    if (this.ppgValues.length > 10) {
+      const lastTen = this.ppgValues.slice(-10);
+      const stdDev = this.calculateStandardDeviation(lastTen);
+      if (stdDev < 1.0 && value > 1.0) {
+        this.handleSignalLoss();
+        return 0;
+      }
+    }
+    
     // Apply denoising and SG filter
     const denoised = this.waveletDenoise(smaValue);
     
@@ -74,131 +91,23 @@ export class SignalProcessor {
   }
 
   /**
-   * Extracts red channel with improved finger detection and stability checks
+   * Handle loss of signal by resetting state
    */
-  private extractRedChannel(imageData: ImageData): number {
-    if (!imageData || !imageData.data || imageData.data.length === 0) {
-      console.warn('SignalProcessor: Invalid image data');
-      return 0;
-    }
-
-    const data = imageData.data;
-    let redSum = 0;
-    let greenSum = 0;
-    let blueSum = 0;
-    let pixelCount = 0;
-    
-    // Calculate ROI dimensions with strict center focus
-    const centerX = Math.floor(imageData.width / 2);
-    const centerY = Math.floor(imageData.height / 2);
-    const roiSize = Math.min(imageData.width, imageData.height) * this.ROI_SCALE;
-    
-    const startX = Math.max(0, Math.floor(centerX - roiSize / 2));
-    const endX = Math.min(imageData.width, Math.floor(centerX + roiSize / 2));
-    const startY = Math.max(0, Math.floor(centerY - roiSize / 2));
-    const endY = Math.min(imageData.height, Math.floor(centerY + roiSize / 2));
-    
-    let maxRed = 0;
-    let minRed = 255;
-    let validRegionCount = 0;
-    
-    // Process ROI pixels with enhanced validation
-    for (let y = startY; y < endY; y++) {
-      for (let x = startX; x < endX; x++) {
-        const i = (y * imageData.width + x) * 4;
-        if (i >= 0 && i < data.length - 3) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          // Stricter red channel validation
-          if (r > g * this.RED_DOMINANCE_RATIO && 
-              r > b * this.RED_DOMINANCE_RATIO && 
-              r >= this.MIN_RED_THRESHOLD && 
-              r <= this.MAX_RED_THRESHOLD) {
-            
-            redSum += r;
-            greenSum += g;
-            blueSum += b;
-            pixelCount++;
-            
-            maxRed = Math.max(maxRed, r);
-            minRed = Math.min(minRed, r);
-            
-            // Enhanced regional validation
-            if (Math.abs(r - this.lastStableValue) < this.HYSTERESIS) {
-              validRegionCount++;
-            }
-          }
-        }
-      }
-    }
-    
-    // Advanced validation with temporal consistency
-    if (pixelCount < this.MIN_VALID_PIXELS) {
-      this.consecutiveValidFrames = 0;
-      this.stableSignalCount = 0;
-      return 0;
-    }
-    
-    const currentTime = Date.now();
-    const avgRed = redSum / pixelCount;
-    const signalAmplitude = maxRed - minRed;
-    const avgGreen = greenSum / pixelCount;
-    const avgBlue = blueSum / pixelCount;
-    
-    // Enhanced signal validation with stability checks
-    const isValidSignal = 
-      avgRed >= this.MIN_RED_THRESHOLD &&
-      avgRed <= this.MAX_RED_THRESHOLD &&
-      signalAmplitude >= this.MIN_SIGNAL_AMPLITUDE &&
-      avgRed > (avgGreen * this.RED_DOMINANCE_RATIO) &&
-      avgRed > (avgBlue * this.RED_DOMINANCE_RATIO) &&
-      validRegionCount >= (pixelCount * 0.4); // Increased required consistent regions to 40%
-
-    // Buffer management for signal stability analysis
-    this.signalBuffer.push(avgRed);
-    if (this.signalBuffer.length > this.SIGNAL_BUFFER_SIZE) {
-      this.signalBuffer.shift();
-    }
-
-    // Calculate signal stability
-    const isStableSignal = this.signalBuffer.length >= 5 && this.calculateSignalStability();
-
-    if (isValidSignal && isStableSignal) {
-      this.consecutiveValidFrames++;
-      this.lastValidDetectionTime = currentTime;
-      this.stableSignalCount++;
-      
-      // Only return signal after consistent stable detection
-      if (this.consecutiveValidFrames >= this.MIN_CONSECUTIVE_FRAMES && 
-          this.stableSignalCount >= this.MIN_STABLE_SIGNAL_COUNT) {
-        this.lastStableValue = avgRed;
-        return avgRed;
-      }
-    } else {
-      // Reset stability counter but maintain brief signal memory
-      if (currentTime - this.lastValidDetectionTime < 500) {
-        return this.lastStableValue;
-      }
-      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 1);
-      this.stableSignalCount = Math.max(0, this.stableSignalCount - 1);
-    }
-    
-    return 0;
+  private handleSignalLoss(): void {
+    this.fingerDetectedState = false;
+    this.consecutiveValidFrames = 0;
+    this.stableSignalCount = 0;
+    this.lastStableValue = 0;
   }
 
-  private calculateStability(): number {
-    if (this.ppgValues.length < 2) return 0;
-    
-    const variations = this.ppgValues.slice(1).map((val, i) => 
-      Math.abs(val - this.ppgValues[i])
-    );
-    
-    const avgVariation = variations.reduce((sum, val) => sum + val, 0) / variations.length;
-    const normalizedStability = Math.max(0, Math.min(1, 1 - (avgVariation / this.MAX_FRAME_TO_FRAME_VARIATION)));
-    
-    return normalizedStability > this.STABILITY_THRESHOLD ? normalizedStability : 0;
+  /**
+   * Calculate standard deviation for a set of values
+   */
+  private calculateStandardDeviation(values: number[]): number {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
+    return Math.sqrt(variance);
   }
 
   /**
@@ -244,10 +153,22 @@ export class SignalProcessor {
   public reset(): void {
     this.ppgValues = [];
     this.baselineValue = 0;
+    this.fingerDetectedState = false;
+    this.consecutiveValidFrames = 0;
+    this.stableSignalCount = 0;
+    this.signalBuffer = [];
+    this.lastStableValue = 0;
   }
 
   public getPPGValues(): number[] {
     return [...this.ppgValues];
+  }
+
+  /**
+   * Explicitly check if finger is detected based on current signal quality
+   */
+  public isFingerDetected(): boolean {
+    return this.fingerDetectedState && this.consecutiveValidFrames >= this.MIN_CONSECUTIVE_FRAMES;
   }
 
   /**
