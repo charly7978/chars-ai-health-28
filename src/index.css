@@ -93,9 +93,10 @@
 }
 
 .vital-sign-panel {
-  background: transparent;
-  border: 1px solid #9F8E6A25;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(159, 142, 106, 0.3);
   overflow: hidden;
+  backdrop-filter: blur(4px);
 }
 
 .start-button {
