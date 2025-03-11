@@ -1,4 +1,3 @@
-
 import type { Config } from "tailwindcss";
 
 export default {
@@ -28,13 +27,6 @@ export default {
         medical: {
           red: "#FF2E2E",
           blue: "#2E5BFF",
-        },
-        gold: {
-          light: "#FEF7CD",
-          medium: "#E2D1B5",
-          dark: "#9F8E6A",
-          darkest: "#403E43",
-          black: "#221F26",
         },
         primary: {
           DEFAULT: "hsl(var(--primary))",

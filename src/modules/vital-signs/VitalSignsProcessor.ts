@@ -67,15 +67,6 @@ export class VitalSignsProcessor {
   
   private forceCompleteCalibration: boolean = false;
   private calibrationTimer: any = null;
-  
-  private readonly MEDIAN_WINDOW_SIZE = 5; // Últimas 5 mediciones para calcular mediana
-  private spo2Buffer: number[] = [];
-  private systolicBuffer: number[] = [];
-  private diastolicBuffer: number[] = [];
-  private glucoseBuffer: number[] = [];
-  private cholesterolBuffer: number[] = [];
-  private triglyceridesBuffer: number[] = [];
-  private hemoglobinBuffer: number[] = [];
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -205,48 +196,6 @@ export class VitalSignsProcessor {
     });
   }
 
-  /**
-   * Calcula la mediana de un array de números
-   * @param values Array de valores numéricos
-   * @returns Valor de la mediana
-   */
-  private calculateMedian(values: number[]): number {
-    if (values.length === 0) return 0;
-    
-    // Crear una copia y ordenarla para no modificar el original
-    const sortedValues = [...values].sort((a, b) => a - b);
-    
-    const mid = Math.floor(sortedValues.length / 2);
-    
-    // Si hay un número impar de elementos, la mediana es el valor central
-    if (sortedValues.length % 2 === 1) {
-      return sortedValues[mid];
-    }
-    
-    // Si hay un número par de elementos, la mediana es el promedio de los dos centrales
-    return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
-  }
-  
-  /**
-   * Añade un valor al buffer de mediana y mantiene el tamaño máximo
-   * @param buffer Buffer donde se almacenan los valores
-   * @param value Nuevo valor a añadir
-   */
-  private addToMedianBuffer(buffer: number[], value: number): void {
-    // Solo añadir valores válidos (mayores que cero)
-    if (value > 0) {
-      buffer.push(value);
-      
-      // Mantener el tamaño del buffer limitado
-      if (buffer.length > this.MEDIAN_WINDOW_SIZE) {
-        buffer.shift();
-      }
-    }
-  }
-  
-  /**
-   * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
-   */
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null }
@@ -264,11 +213,6 @@ export class VitalSignsProcessor {
     
     // Calculate SpO2 using real signal data
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
-    console.log("[VITAL_SIGNS] SpO2 calculado:", {
-      valor: spo2,
-      muestras: ppgValues.length,
-      filtrado: filtered
-    });
     
     // Calculate blood pressure using real waveform analysis
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
@@ -282,42 +226,17 @@ export class VitalSignsProcessor {
     
     // Calculate real hemoglobin using optimized algorithm
     const hemoglobin = this.calculateHemoglobin(ppgValues);
-    
-    // Añadir valores recién calculados a los buffers de mediana
-    this.addToMedianBuffer(this.spo2Buffer, spo2);
-    this.addToMedianBuffer(this.systolicBuffer, bp.systolic);
-    this.addToMedianBuffer(this.diastolicBuffer, bp.diastolic);
-    this.addToMedianBuffer(this.glucoseBuffer, glucose);
-    this.addToMedianBuffer(this.cholesterolBuffer, lipids.totalCholesterol);
-    this.addToMedianBuffer(this.triglyceridesBuffer, lipids.triglycerides);
-    this.addToMedianBuffer(this.hemoglobinBuffer, hemoglobin);
-    
-    // Calcular medianas para resultados estables
-    const medianSpo2 = this.calculateMedian(this.spo2Buffer);
-    const medianSystolic = this.calculateMedian(this.systolicBuffer);
-    const medianDiastolic = this.calculateMedian(this.diastolicBuffer);
-    const medianGlucose = this.calculateMedian(this.glucoseBuffer);
-    const medianCholesterol = this.calculateMedian(this.cholesterolBuffer);
-    const medianTriglycerides = this.calculateMedian(this.triglyceridesBuffer);
-    const medianHemoglobin = this.calculateMedian(this.hemoglobinBuffer);
-    
-    // Construir el resultado con valores medianos
-    const medianPressure = `${Math.round(medianSystolic)}/${Math.round(medianDiastolic)}`;
-    
+
     const result: VitalSignsResult = {
-      spo2: Math.round(medianSpo2),
-      pressure: medianPressure,
+      spo2,
+      pressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
       lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
-      glucose: Math.round(medianGlucose),
-      lipids: {
-        totalCholesterol: Math.round(medianCholesterol),
-        triglycerides: Math.round(medianTriglycerides)
-      },
-      hemoglobin: Number(medianHemoglobin.toFixed(1))
+      glucose,
+      lipids,
+      hemoglobin
     };
     
-    // Incluir información de calibración si está en proceso
     if (this.isCalibrating) {
       result.calibration = {
         isCalibrating: true,
@@ -325,21 +244,10 @@ export class VitalSignsProcessor {
       };
     }
     
-    // Guardar resultados válidos
-    if (medianSpo2 > 0 && medianSystolic > 0 && medianDiastolic > 0 && 
-        medianGlucose > 0 && medianCholesterol > 0) {
+    if (spo2 > 0 && bp.systolic > 0 && bp.diastolic > 0 && glucose > 0 && lipids.totalCholesterol > 0) {
       this.lastValidResults = { ...result };
-      
-      // Logging opcional para debug
-      console.log("VitalSignsProcessor: Nuevos resultados medianos:", {
-        spo2: { actual: spo2, mediana: medianSpo2 },
-        sistólica: { actual: bp.systolic, mediana: medianSystolic },
-        diastólica: { actual: bp.diastolic, mediana: medianDiastolic },
-        glucosa: { actual: glucose, mediana: medianGlucose },
-        colesterol: { actual: lipids.totalCholesterol, mediana: medianCholesterol }
-      });
     }
-    
+
     return result;
   }
 
@@ -381,31 +289,13 @@ export class VitalSignsProcessor {
     this.forceCompleteCalibration = true;
   }
 
-  /**
-   * Resetea el procesador de signos vitales
-   */
   public reset(): VitalSignsResult | null {
-    // Guardar resultados válidos antes de resetear
-    const savedResults = this.lastValidResults;
-    
-    // Resetear procesadores individuales
     this.spo2Processor.reset();
     this.bpProcessor.reset();
     this.arrhythmiaProcessor.reset();
     this.signalProcessor.reset();
     this.glucoseProcessor.reset();
     this.lipidProcessor.reset();
-    
-    // Resetear buffers de mediana
-    this.spo2Buffer = [];
-    this.systolicBuffer = [];
-    this.diastolicBuffer = [];
-    this.glucoseBuffer = [];
-    this.cholesterolBuffer = [];
-    this.triglyceridesBuffer = [];
-    this.hemoglobinBuffer = [];
-    
-    // Resetear estado de calibración
     this.isCalibrating = false;
     
     if (this.calibrationTimer) {
@@ -413,21 +303,22 @@ export class VitalSignsProcessor {
       this.calibrationTimer = null;
     }
     
-    return savedResults;
+    return this.lastValidResults;
   }
   
-  /**
-   * Obtener los últimos resultados válidos
-   */
   public getLastValidResults(): VitalSignsResult | null {
     return this.lastValidResults;
   }
   
-  /**
-   * Reseteo completo incluyendo resultados guardados
-   */
   public fullReset(): void {
-    this.reset();
     this.lastValidResults = null;
+    this.isCalibrating = false;
+    
+    if (this.calibrationTimer) {
+      clearTimeout(this.calibrationTimer);
+      this.calibrationTimer = null;
+    }
+    
+    this.reset();
   }
 }

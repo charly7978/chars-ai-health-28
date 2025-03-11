@@ -5,6 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
+import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
 const Index = () => {
@@ -46,111 +47,22 @@ const Index = () => {
     forceCalibrationCompletion
   } = useVitalSignsProcessor();
 
-  useEffect(() => {
-    let fullscreenChangeCount = 0;
-    const maxAttempts = 10;
-    
-    const requestFullscreen = () => {
-      try {
-        const element = document.documentElement;
-        
-        const isFullscreen = Boolean(
-          document.fullscreenElement || 
-          document.webkitFullscreenElement || 
-          document.mozFullScreenElement || 
-          document.msFullscreenElement
-        );
-        
-        if (!isFullscreen) {
-          console.log("Attempting fullscreen entry");
-          
-          if (element.requestFullscreen) {
-            element.requestFullscreen();
-          } else if (element.webkitRequestFullscreen) {
-            element.webkitRequestFullscreen();
-          } else if (element.mozRequestFullScreen) {
-            element.mozRequestFullScreen();
-          } else if (element.msRequestFullscreen) {
-            element.msRequestFullscreen();
-          }
-          
-          setTimeout(() => {
-            if (screen.orientation && screen.orientation.lock) {
-              screen.orientation.lock('portrait')
-                .catch(err => console.warn('Orientation lock failed:', err));
-            }
-          }, 500);
-        }
-      } catch (err) {
-        console.error("Fullscreen request failed:", err);
-      }
-    };
-    
-    const checkFullscreen = () => {
-      fullscreenChangeCount++;
-      
-      const isFullscreen = Boolean(
-        document.fullscreenElement || 
-        document.webkitFullscreenElement || 
-        document.mozFullScreenElement || 
-        document.msFullscreenElement
-      );
-      
-      if (!isFullscreen) {
-        console.log(`Not in fullscreen, attempt ${fullscreenChangeCount}/${maxAttempts}`);
-        
-        if (fullscreenChangeCount < maxAttempts) {
-          setTimeout(requestFullscreen, 300);
-        }
-      } else {
-        console.log("Successfully entered fullscreen mode");
-      }
-    };
-    
-    requestFullscreen();
-    
-    document.addEventListener('fullscreenchange', checkFullscreen);
-    document.addEventListener('webkitfullscreenchange', checkFullscreen);
-    document.addEventListener('mozfullscreenchange', checkFullscreen);
-    document.addEventListener('MSFullscreenChange', checkFullscreen);
-    
-    const handleUserInteraction = () => {
-      requestFullscreen();
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-    };
-    
-    document.addEventListener('click', handleUserInteraction);
-    document.addEventListener('touchstart', handleUserInteraction);
-    
-    return () => {
-      document.removeEventListener('fullscreenchange', checkFullscreen);
-      document.removeEventListener('webkitfullscreenchange', checkFullscreen);
-      document.removeEventListener('mozfullscreenchange', checkFullscreen);
-      document.removeEventListener('MSFullscreenChange', checkFullscreen);
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-    };
-  }, []);
+  const enterFullScreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (err) {
+      console.log('Error al entrar en pantalla completa:', err);
+    }
+  };
 
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
-    
     document.body.addEventListener('touchmove', preventScroll, { passive: false });
     document.body.addEventListener('scroll', preventScroll, { passive: false });
-    
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.height = '100%';
-    document.body.style.overflow = 'hidden';
-    
+
     return () => {
       document.body.removeEventListener('touchmove', preventScroll);
       document.body.removeEventListener('scroll', preventScroll);
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.height = '';
-      document.body.style.overflow = '';
     };
   }, []);
 
@@ -162,94 +74,158 @@ const Index = () => {
   }, [lastValidResults, isMonitoring]);
 
   const startMonitoring = () => {
-    console.log("Iniciando monitoreo");
-    requestAnimationFrame(() => {
-      try {
-        const element = document.documentElement;
-        
-        const isFullscreen = Boolean(
-          document.fullscreenElement || 
-          document.webkitFullscreenElement || 
-          document.mozFullScreenElement || 
-          document.msFullscreenElement
-        );
-        
-        if (!isFullscreen) {
-          if (element.requestFullscreen) {
-            element.requestFullscreen();
-          } else if (element.webkitRequestFullscreen) {
-            element.webkitRequestFullscreen();
-          } else if (element.mozRequestFullScreen) {
-            element.mozRequestFullScreen();
-          } else if (element.msRequestFullscreen) {
-            element.msRequestFullscreen();
+    if (isMonitoring) {
+      finalizeMeasurement();
+    } else {
+      enterFullScreen();
+      setIsMonitoring(true);
+      setIsCameraOn(true);
+      setShowResults(false);
+      
+      // Iniciar procesamiento de señal
+      startProcessing();
+      
+      // Resetear valores
+      setElapsedTime(0);
+      setVitalSigns(prev => ({
+        ...prev,
+        arrhythmiaStatus: "SIN ARRITMIAS|0"
+      }));
+      
+      // Iniciar calibración automática
+      // Importante: esto debe establecer correctamente el estado de calibración
+      console.log("Iniciando fase de calibración automática");
+      startAutoCalibration();
+      
+      // Iniciar temporizador para medición
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+      }
+      
+      measurementTimerRef.current = window.setInterval(() => {
+        setElapsedTime(prev => {
+          const newTime = prev + 1;
+          console.log(`Tiempo transcurrido: ${newTime}s`);
+          
+          // Finalizar medición después de 30 segundos
+          if (newTime >= 30) {
+            finalizeMeasurement();
+            return 30;
           }
-        }
-      } catch (e) {
-        console.error("Error forcing fullscreen on start:", e);
+          return newTime;
+        });
+      }, 1000);
+    }
+  };
+
+  const startAutoCalibration = () => {
+    console.log("Iniciando auto-calibración real con indicadores visuales");
+    setIsCalibrating(true);
+    
+    // Iniciar la calibración en el procesador
+    startCalibration();
+    
+    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
+    // Esto garantiza que el estado comience correctamente
+    console.log("Estableciendo valores iniciales de calibración");
+    setCalibrationProgress({
+      isCalibrating: true,
+      progress: {
+        heartRate: 0,
+        spo2: 0,
+        pressure: 0,
+        arrhythmia: 0,
+        glucose: 0,
+        lipids: 0,
+        hemoglobin: 0
       }
     });
     
-    setIsMonitoring(true);
-    setIsCameraOn(true);
-    setShowResults(false);
+    // Logear para verificar que el estado se estableció
+    setTimeout(() => {
+      console.log("Estado de calibración establecido:", calibrationProgress);
+    }, 100);
     
-    startProcessing();
-    
-    setElapsedTime(0);
-    setVitalSigns(prev => ({
-      ...prev,
-      arrhythmiaStatus: "SIN ARRITMIAS|0"
-    }));
-    
-    console.log("Iniciando fase de calibración automática");
-    startAutoCalibration();
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-    }
-    
-    measurementTimerRef.current = window.setInterval(() => {
-      setElapsedTime(prev => {
-        const newTime = prev + 1;
-        console.log(`Tiempo transcurrido: ${newTime}s`);
+    // Actualizar el progreso visualmente en intervalos regulares
+    let step = 0;
+    const calibrationInterval = setInterval(() => {
+      step += 1;
+      
+      // Actualizar progreso visual (10 pasos en total)
+      if (step <= 10) {
+        const progressPercent = step * 10; // 0-100%
+        console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        if (newTime >= 30) {
-          stopMonitoring();
-          return 30;
+        // Actualizar cada valor individualmente para asegurar que se renderice
+        setCalibrationProgress({
+          isCalibrating: true,
+          progress: {
+            heartRate: progressPercent,
+            spo2: Math.max(0, progressPercent - 10),
+            pressure: Math.max(0, progressPercent - 20),
+            arrhythmia: Math.max(0, progressPercent - 15),
+            glucose: Math.max(0, progressPercent - 5),
+            lipids: Math.max(0, progressPercent - 25),
+            hemoglobin: Math.max(0, progressPercent - 30)
+          }
+        });
+      } else {
+        // Al finalizar, detener el intervalo
+        console.log("Finalizando animación de calibración");
+        clearInterval(calibrationInterval);
+        
+        // Completar calibración
+        if (isCalibrating) {
+          console.log("Completando calibración");
+          forceCalibrationCompletion();
+          setIsCalibrating(false);
+          
+          // Importante: Establecer calibrationProgress a undefined o con valores 100
+          // para que la UI refleje que ya no está calibrando
+          setCalibrationProgress({
+            isCalibrating: false,
+            progress: {
+              heartRate: 100,
+              spo2: 100,
+              pressure: 100,
+              arrhythmia: 100,
+              glucose: 100,
+              lipids: 100,
+              hemoglobin: 100
+            }
+          });
+          
+          // Opcional: vibración si está disponible
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]);
+          }
         }
-        return newTime;
-      });
-    }, 1000);
-  };
-
-  const stopMonitoring = () => {
-    console.log("Deteniendo monitoreo");
+      }
+    }, 800); // Cada paso dura 800ms (8 segundos en total)
     
-    if (isCalibrating) {
-      console.log("Calibración en progreso al finalizar, forzando finalización");
-      forceCalibrationCompletion();
-    }
-    
-    setIsMonitoring(false);
-    setIsCameraOn(false);
-    setIsCalibrating(false);
-    stopProcessing();
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-      measurementTimerRef.current = null;
-    }
-    
-    const savedResults = resetVitalSigns();
-    if (savedResults) {
-      setVitalSigns(savedResults);
-      setShowResults(true);
-    }
-    
-    setElapsedTime(0);
-    setSignalQuality(0);
-    setCalibrationProgress(undefined);
+    // Temporizador de seguridad
+    setTimeout(() => {
+      if (isCalibrating) {
+        console.log("Forzando finalización de calibración por tiempo límite");
+        clearInterval(calibrationInterval);
+        forceCalibrationCompletion();
+        setIsCalibrating(false);
+        
+        // Asegurar que se limpie el estado de calibración
+        setCalibrationProgress({
+          isCalibrating: false,
+          progress: {
+            heartRate: 100,
+            spo2: 100,
+            pressure: 100,
+            arrhythmia: 100,
+            glucose: 100,
+            lipids: 100,
+            hemoglobin: 100
+          }
+        });
+      }
+    }, 10000); // 10 segundos como máximo
   };
 
   const finalizeMeasurement = () => {
@@ -279,98 +255,6 @@ const Index = () => {
     setElapsedTime(0);
     setSignalQuality(0);
     setCalibrationProgress(undefined);
-  };
-
-  const handleMonitoringButton = () => {
-    if (isMonitoring) {
-      finalizeMeasurement();
-    } else {
-      startMonitoring();
-    }
-  };
-
-  const startAutoCalibration = () => {
-    if (isCalibrating) {
-      console.log("Ya hay una calibración en progreso, ignorando nueva solicitud");
-      return;
-    }
-
-    console.log("Iniciando auto-calibración real con indicadores visuales");
-    setIsCalibrating(true);
-    
-    startCalibration();
-    
-    console.log("Estableciendo valores iniciales de calibración");
-    setCalibrationProgress({
-      isCalibrating: true,
-      progress: {
-        heartRate: 0,
-        spo2: 0,
-        pressure: 0,
-        arrhythmia: 0,
-        glucose: 0,
-        lipids: 0,
-        hemoglobin: 0
-      }
-    });
-    
-    let step = 0;
-    const calibrationInterval = setInterval(() => {
-      if (!isCalibrating) {
-        console.log("Calibración cancelada externamente");
-        clearInterval(calibrationInterval);
-        return;
-      }
-
-      step += 1;
-      
-      if (step <= 10) {
-        const progressPercent = step * 10;
-        console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
-        
-        setCalibrationProgress(prev => {
-          if (!prev?.isCalibrating) return prev;
-          return {
-            isCalibrating: true,
-            progress: {
-              heartRate: progressPercent,
-              spo2: Math.max(0, progressPercent - 10),
-              pressure: Math.max(0, progressPercent - 20),
-              arrhythmia: Math.max(0, progressPercent - 15),
-              glucose: Math.max(0, progressPercent - 5),
-              lipids: Math.max(0, progressPercent - 25),
-              hemoglobin: Math.max(0, progressPercent - 30)
-            }
-          };
-        });
-      } else {
-        console.log("Finalizando animación de calibración");
-        clearInterval(calibrationInterval);
-        
-        if (isCalibrating) {
-          console.log("Completando calibración");
-          forceCalibrationCompletion();
-          setIsCalibrating(false);
-          
-          setCalibrationProgress({
-            isCalibrating: false,
-            progress: {
-              heartRate: 100,
-              spo2: 100,
-              pressure: 100,
-              arrhythmia: 100,
-              glucose: 100,
-              lipids: 100,
-              hemoglobin: 100
-            }
-          });
-          
-          if (navigator.vibrate) {
-            navigator.vibrate([100, 50, 100]);
-          }
-        }
-      }
-    }, 800);
   };
 
   const handleReset = () => {
@@ -412,6 +296,7 @@ const Index = () => {
     const videoTrack = stream.getVideoTracks()[0];
     const imageCapture = new ImageCapture(videoTrack);
     
+    // Asegurar que la linterna esté encendida para mediciones de PPG
     if (videoTrack.getCapabilities()?.torch) {
       console.log("Activando linterna para mejorar la señal PPG");
       videoTrack.applyConstraints({
@@ -421,6 +306,7 @@ const Index = () => {
       console.warn("Esta cámara no tiene linterna disponible, la medición puede ser menos precisa");
     }
     
+    // Crear un canvas de tamaño óptimo para el procesamiento
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d', {willReadFrequently: true});
     if (!tempCtx) {
@@ -428,15 +314,17 @@ const Index = () => {
       return;
     }
     
+    // Variables para controlar el rendimiento y la tasa de frames
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/30;
+    const targetFrameInterval = 1000/30; // Apuntar a 30 FPS para precisión
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
     
+    // Crearemos un contexto dedicado para el procesamiento de imagen
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
-    enhanceCanvas.width = 320;
+    enhanceCanvas.width = 320;  // Tamaño óptimo para procesamiento PPG
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
@@ -445,41 +333,56 @@ const Index = () => {
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
+      // Control de tasa de frames para no sobrecargar el dispositivo
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
+          // Capturar frame 
           const frame = await imageCapture.grabFrame();
           
+          // Configurar tamaño adecuado del canvas para procesamiento
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
           
           tempCanvas.width = targetWidth;
           tempCanvas.height = targetHeight;
           
+          // Dibujar el frame en el canvas
           tempCtx.drawImage(
             frame, 
             0, 0, frame.width, frame.height, 
             0, 0, targetWidth, targetHeight
           );
           
+          // Mejorar la imagen para detección PPG
           if (enhanceCtx) {
+            // Resetear canvas
             enhanceCtx.clearRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+            
+            // Dibujar en el canvas de mejora
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
+            // Opcionales: Ajustes para mejorar la señal roja
             enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';
+            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
             enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             enhanceCtx.globalCompositeOperation = 'source-over';
-            
+          
+            // Obtener datos de la imagen mejorada
             const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+            
+            // Procesar el frame mejorado
             processFrame(imageData);
           } else {
+            // Fallback a procesamiento normal
             const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
             processFrame(imageData);
           }
           
+          // Actualizar contadores para monitoreo de rendimiento
           frameCount++;
           lastProcessTime = now;
           
+          // Calcular FPS cada segundo
           if (now - lastFpsUpdateTime > 1000) {
             processingFps = frameCount;
             frameCount = 0;
@@ -491,6 +394,7 @@ const Index = () => {
         }
       }
       
+      // Programar el siguiente frame
       if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
@@ -506,40 +410,7 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        setVitalSigns(prevState => {
-          const newState = { ...prevState };
-          
-          if (vitals.spo2 && vitals.spo2 > 0) {
-            newState.spo2 = vitals.spo2;
-          }
-          
-          if (vitals.pressure && vitals.pressure !== "--/--") {
-            newState.pressure = vitals.pressure;
-          }
-          
-          if (vitals.arrhythmiaStatus) {
-            newState.arrhythmiaStatus = vitals.arrhythmiaStatus;
-          }
-          
-          if (vitals.glucose && vitals.glucose > 0) {
-            newState.glucose = vitals.glucose;
-          }
-          
-          if (vitals.lipids) {
-            if (vitals.lipids.totalCholesterol > 0) {
-              newState.lipids.totalCholesterol = vitals.lipids.totalCholesterol;
-            }
-            if (vitals.lipids.triglycerides > 0) {
-              newState.lipids.triglycerides = vitals.lipids.triglycerides;
-            }
-          }
-          
-          if (vitals.hemoglobin && vitals.hemoglobin > 0) {
-            newState.hemoglobin = vitals.hemoglobin;
-          }
-          
-          return newState;
-        });
+        setVitalSigns(vitals);
         
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
@@ -553,11 +424,8 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gold-black" style={{ 
-      height: '100dvh',
-      width: '100vw',
-      maxWidth: '100vw',
-      maxHeight: '100dvh',
+    <div className="fixed inset-0 flex flex-col bg-black" style={{ 
+      height: 'calc(100vh + env(safe-area-inset-bottom))',
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
@@ -572,84 +440,77 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1">
-              <PPGSignalMeter 
-                value={lastSignal?.filteredValue || 0}
-                quality={lastSignal?.quality || 0}
-                isFingerDetected={lastSignal?.fingerDetected || false}
-                onStartMeasurement={startMonitoring}
-                onReset={handleReset}
-                arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-                rawArrhythmiaData={lastArrhythmiaData}
-                preserveResults={showResults}
-              />
-            </div>
-            
-            <div className="absolute bottom-0 left-0 right-0 top-1/2 vital-signs-panel-container">
-              {isCalibrating && (
-                <div className="absolute top-2 left-0 right-0 text-center z-10">
-                  <span className="text-sm font-medium text-gold-medium">
-                    Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
-                  </span>
-                </div>
-              )}
+          <div className="flex-1">
+            <PPGSignalMeter 
+              value={lastSignal?.filteredValue || 0}
+              quality={lastSignal?.quality || 0}
+              isFingerDetected={lastSignal?.fingerDetected || false}
+              onStartMeasurement={startMonitoring}
+              onReset={handleReset}
+              arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
+              rawArrhythmiaData={lastArrhythmiaData}
+              preserveResults={showResults}
+            />
+          </div>
 
-              <div className="grid grid-cols-3 gap-0 h-full">
-                <VitalSign 
-                  label="FRECUENCIA CARDÍACA"
-                  value={heartRate || "--"}
-                  unit="BPM"
-                  highlighted={showResults}
-                />
-                <VitalSign 
-                  label="SPO2"
-                  value={vitalSigns.spo2 || "--"}
-                  unit="%"
-                  highlighted={showResults}
-                />
-                <VitalSign 
-                  label="PRESIÓN ARTERIAL"
-                  value={vitalSigns.pressure}
-                  unit="mmHg"
-                  highlighted={showResults}
-                />
-                <VitalSign 
-                  label="HEMOGLOBINA"
-                  value={vitalSigns.hemoglobin || "--"}
-                  unit="g/dL"
-                  highlighted={showResults}
-                />
-                <VitalSign 
-                  label="GLUCOSA"
-                  value={vitalSigns.glucose || "--"}
-                  unit="mg/dL"
-                  highlighted={showResults}
-                />
-                <VitalSign 
-                  label="COLESTEROL/TRIGL."
-                  value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                  unit="mg/dL"
-                  highlighted={showResults}
-                />
-              </div>
+          {isCalibrating && (
+            <div className="absolute bottom-[55%] left-0 right-0 text-center">
+              <span className="text-sm font-medium text-gray-400">
+                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
+              </span>
+            </div>
+          )}
+
+          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
+            <div className="grid grid-cols-3 gap-3 h-full">
+              <VitalSign 
+                label="FRECUENCIA CARDÍACA"
+                value={heartRate || "--"}
+                unit="BPM"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="SPO2"
+                value={vitalSigns.spo2 || "--"}
+                unit="%"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="PRESIÓN ARTERIAL"
+                value={vitalSigns.pressure}
+                unit="mmHg"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
             </div>
           </div>
 
-          <div className="h-[40px] grid grid-cols-2 gap-0 mt-auto">
-            <button 
-              onClick={isMonitoring ? stopMonitoring : startMonitoring}
-              className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
-                isMonitoring 
-                  ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
-                  : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
-              }`}
-            >
-              {isMonitoring ? 'DETENER' : 'INICIAR'}
-            </button>
+          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+            <MonitorButton 
+              isMonitoring={isMonitoring}
+              onClick={startMonitoring}
+            />
             <button 
               onClick={handleReset}
-              className="w-full h-full gold-button text-lg font-bold text-white"
+              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
             >
               RESETEAR
             </button>

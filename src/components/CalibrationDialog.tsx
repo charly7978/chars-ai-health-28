@@ -21,7 +21,6 @@ const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
 }) => {
   const [systolic, setSystolic] = React.useState<string>("");
   const [diastolic, setDiastolic] = React.useState<string>("");
-  const [glucose, setGlucose] = React.useState<string>("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleCalibration = async () => {
@@ -99,28 +98,17 @@ const CalibrationDialog: React.FC<CalibrationDialogProps> = ({
                 className="w-full"
               />
             </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nivel de Glucosa (mg/dL)</label>
-              <Input
-                type="number"
-                placeholder="100"
-                value={glucose}
-                onChange={(e) => setGlucose(e.target.value)}
-                className="w-full"
-              />
-            </div>
 
             <Button
               className="w-full"
               onClick={handleCalibration}
-              disabled={(!systolic || !diastolic) && !glucose || isSubmitting}
+              disabled={!systolic || !diastolic || isSubmitting}
             >
               {isSubmitting ? "Calibrando..." : "Calibrar"}
             </Button>
 
             <p className="text-sm text-gray-500 text-center">
-              Ingrese los valores de su última medición para calibrar el sistema
+              Ingrese los valores de su última medición de presión arterial para calibrar el sistema
             </p>
           </div>
         </motion.div>

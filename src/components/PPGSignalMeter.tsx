@@ -92,8 +92,8 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#FEF7CD');
-    gradient.addColorStop(1, '#FDE1D3');
+    gradient.addColorStop(0, '#f1f5f9');
+    gradient.addColorStop(1, '#e2e8f0');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -147,16 +147,24 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
+    // Solo mostrar alertas de arritmia
     if (arrhythmiaStatus) {
-      const [status, _] = arrhythmiaStatus.split('|');
+      const [status, count] = arrhythmiaStatus.split('|');
       
-      if (status.includes("ARRITMIA") && !showArrhythmiaAlert) {
+      if (status.includes("ARRITMIA") && count === "1" && !showArrhythmiaAlert) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 16px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText('¡ARRITMIA DETECTADA!', 45, 35);
+        ctx.fillText('¡PRIMERA ARRITMIA DETECTADA!', 45, 35);
         setShowArrhythmiaAlert(true);
       } 
+      else if (status.includes("ARRITMIA") && Number(count) > 1) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 16px Inter';
+        ctx.textAlign = 'left';
+        const redPeaksCount = peaksRef.current.filter(peak => peak.isArrhythmia).length;
+        ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
+      }
     }
     
     ctx.stroke();
@@ -271,9 +279,9 @@ const PPGSignalMeter = ({
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
         arrhythmiaStatus?.includes("ARRITMIA") && 
-        now - rawArrhythmiaData.timestamp < 500) {
+        now - rawArrhythmiaData.timestamp < 1000) {
       isArrhythmia = true;
-      lastArrhythmiaTime.current = rawArrhythmiaData.timestamp;
+      lastArrhythmiaTime.current = now;
     }
 
     const dataPoint: PPGDataPoint = {
@@ -309,31 +317,22 @@ const PPGSignalMeter = ({
           ctx.moveTo(x1, y1);
           firstPoint = false;
         }
+        ctx.lineTo(x2, y2);
         
-        if (point.isArrhythmia && !firstPoint) {
-          ctx.lineTo(x1, y1);
+        if (point.isArrhythmia) {
           ctx.stroke();
-          
           ctx.beginPath();
           ctx.strokeStyle = '#DC2626';
-          ctx.lineWidth = 3;
           ctx.moveTo(x1, y1);
           ctx.lineTo(x2, y2);
           ctx.stroke();
-          
           ctx.beginPath();
           ctx.strokeStyle = '#0EA5E9';
-          ctx.lineWidth = 2;
           ctx.moveTo(x2, y2);
           firstPoint = true;
-        } else {
-          ctx.lineTo(x2, y2);
         }
       }
-      
-      if (!firstPoint) {
-        ctx.stroke();
-      }
+      ctx.stroke();
 
       peaksRef.current.forEach(peak => {
         const x = canvas.width - ((now - peak.time) * canvas.width / WINDOW_WIDTH_MS);

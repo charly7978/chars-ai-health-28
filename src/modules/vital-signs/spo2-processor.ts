@@ -5,9 +5,7 @@ export class SpO2Processor {
   private readonly SPO2_CALIBRATION_FACTOR = 1.02;
   private readonly PERFUSION_INDEX_THRESHOLD = 0.05;
   private readonly SPO2_BUFFER_SIZE = 10;
-  private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
-  private medianBuffer: number[] = []; // Buffer for median filtering
 
   /**
    * Calculates the oxygen saturation (SpO2) from PPG values
@@ -64,42 +62,7 @@ export class SpO2Processor {
       spO2 = Math.round(sum / this.spo2Buffer.length);
     }
 
-    // Add to median buffer for final filtering
-    this.addToMedianBuffer(spO2);
-    
-    // Return median-filtered result
-    return this.getMedianValue();
-  }
-  
-  /**
-   * Add value to median buffer and maintain buffer size
-   */
-  private addToMedianBuffer(value: number): void {
-    if (value > 0) {
-      this.medianBuffer.push(value);
-      if (this.medianBuffer.length > this.MEDIAN_BUFFER_SIZE) {
-        this.medianBuffer.shift();
-      }
-    }
-  }
-  
-  /**
-   * Calculate median value from buffer
-   */
-  private getMedianValue(): number {
-    if (this.medianBuffer.length === 0) {
-      return 0;
-    }
-    
-    // Create sorted copy of the buffer
-    const sorted = [...this.medianBuffer].sort((a, b) => a - b);
-    
-    // Calculate median
-    const mid = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) {
-      return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-    }
-    return sorted[mid];
+    return spO2;
   }
 
   /**
@@ -107,6 +70,5 @@ export class SpO2Processor {
    */
   public reset(): void {
     this.spo2Buffer = [];
-    this.medianBuffer = [];
   }
 }

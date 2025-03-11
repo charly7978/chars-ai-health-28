@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface MonitorButtonProps {
   isMonitoring: boolean;
@@ -7,14 +7,30 @@ interface MonitorButtonProps {
 }
 
 const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
+  useEffect(() => {
+    console.log('MonitorButton: Estado actualizado', { isMonitoring, timestamp: new Date().toISOString() });
+  }, [isMonitoring]);
+
+  const handleClick = () => {
+    console.log('MonitorButton: Botón presionado', { 
+      acción: isMonitoring ? 'Detener monitoreo' : 'Iniciar monitoreo', 
+      estadoActual: isMonitoring,
+      timestamp: new Date().toISOString()
+    });
+    onClick();
+  };
+
   return (
     <button 
-      onClick={onClick}
-      className={`w-full p-3 text-xl font-bold text-white rounded-md transition-colors duration-200 ${
+      onClick={handleClick}
+      className={`w-full h-full text-lg font-bold shadow-md text-white transition-colors duration-200 ${
         isMonitoring 
-          ? 'bg-red-600 hover:bg-red-700 active:bg-red-800' 
-          : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+        ? 'bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800' 
+        : 'bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800'
       }`}
+      style={{
+        textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+      }}
     >
       {isMonitoring ? 'DETENER' : 'INICIAR'}
     </button>
