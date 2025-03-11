@@ -29,18 +29,20 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Cambios para reducir drásticamente los falsos positivos
-      // pero mantener fácil detección del dedo real
+      // Enhanced logic to prevent false positives in finger detection
+      // Requirements:
+      // 1. Higher threshold for what counts as a finger
+      // 2. More stable signal quality assessment
       
-      // Evaluar mejor la señal para asegurar que realmente es un dedo
-      const isStrongStableSignal = signal.rawValue > 50 && signal.quality > 25;
+      // A real finger should have high contrast (raw value) and stability (quality)
+      // The threshold for stability needs to be higher
+      const isSignalStrong = signal.rawValue > 80; // Higher raw value threshold
+      const isSignalStable = signal.quality > 40; // Higher quality threshold
       
-      // Un dedo real de contacto completo tiene alto contraste y alta calidad
-      // Menos estricto en la calidad para dedos reales, pero más estricto en la confirmación
-      // de la detección para evitar falsos positivos
-      const enhancedFingerDetected = signal.fingerDetected && isStrongStableSignal;
+      // A real finger will have both components
+      const enhancedFingerDetected = signal.fingerDetected && isSignalStrong && isSignalStable;
       
-      // Crear versión validada de la señal
+      // Create validated signal with stricter criteria
       const validatedSignal = {
         ...signal,
         fingerDetected: enhancedFingerDetected
@@ -176,6 +178,7 @@ export const useSignalProcessor = () => {
     startProcessing,
     stopProcessing,
     calibrate,
-    processFrame
+    processFrame,
+    setLastSignal // Export this to allow external reset
   };
 };
