@@ -254,7 +254,7 @@ export const useVitalSignsProcessor = () => {
     
     console.log("useVitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
-    // Aplicar el procesamiento final para la glucosa
+    // Aplicar el procesamiento final para la glucosa y presión arterial
     const finalResults = processor.completeMeasurement();
     
     measurementActive.current = false;
@@ -268,7 +268,8 @@ export const useVitalSignsProcessor = () => {
     if (finalResults && lastValidResults) {
       const updatedResults = {
         ...lastValidResults,
-        glucose: finalResults.glucose
+        glucose: finalResults.glucose,
+        pressure: finalResults.pressure
       };
       
       setLastValidResults(updatedResults);

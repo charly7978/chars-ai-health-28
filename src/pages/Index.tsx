@@ -270,10 +270,29 @@ const Index = () => {
       measurementTimerRef.current = null;
     }
     
-    const savedResults = resetVitalSigns();
-    if (savedResults) {
-      setVitalSigns(savedResults);
+    console.log("Aplicando procesamiento estadístico final para glucosa y presión arterial");
+    const finalResults = useVitalSignsProcessor().completeMeasurement();
+    console.log("Resultados finales obtenidos:", finalResults);
+    
+    if (finalResults) {
+      console.log("Aplicando resultados finales a la UI:", {
+        pressure: finalResults.pressure,
+        glucose: finalResults.glucose
+      });
+      
+      setVitalSigns(finalResults);
       setShowResults(true);
+      console.log("Medición finalizada con resultados procesados:", {
+        glucosa: finalResults.glucose,
+        presión: finalResults.pressure
+      });
+    } else {
+      console.warn("No se obtuvieron resultados finales, usando último valor válido");
+      const savedResults = resetVitalSigns();
+      if (savedResults) {
+        setVitalSigns(savedResults);
+        setShowResults(true);
+      }
     }
     
     setElapsedTime(0);
@@ -514,6 +533,7 @@ const Index = () => {
           }
           
           if (vitals.pressure && vitals.pressure !== "--/--") {
+            console.log("Actualizando presión arterial:", vitals.pressure);
             newState.pressure = vitals.pressure;
           }
           
