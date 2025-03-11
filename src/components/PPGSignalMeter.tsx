@@ -40,7 +40,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = window.innerHeight - 74;
+  const CANVAS_HEIGHT = window.innerHeight;
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
@@ -439,8 +439,28 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(100vh-74px)] mt-0"
+        className="w-full h-screen mt-0"
       />
+
+      <div className="fixed bottom-0 left-0 right-0 grid grid-cols-2 gap-px bg-transparent">
+        <button 
+          onClick={onStartMeasurement}
+          className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
+        >
+          <span className="text-base font-semibold">
+            INICIAR/DETENER
+          </span>
+        </button>
+
+        <button 
+          onClick={handleReset}
+          className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
+        >
+          <span className="text-base font-semibold">
+            RESETEAR
+          </span>
+        </button>
+      </div>
     </div>
   );
 };
