@@ -27,15 +27,33 @@ const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({
   const prevXRef = useRef<number>(0);
   const prevYRef = useRef<number>(0);
 
+  // Add a debug effect to log values when they change
+  useEffect(() => {
+    console.log("PPGSignalMeter rendering with:", { 
+      value, 
+      quality, 
+      isFingerDetected, 
+      preserveResults,
+      canvasExists: !!canvasRef.current
+    });
+  }, [value, quality, isFingerDetected, preserveResults]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.warn("Canvas reference is null");
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.warn("Unable to get 2D context");
+      return;
+    }
 
     // Set canvas dimensions only if they've changed
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+      console.log(`Resizing canvas from ${canvas.width}x${canvas.height} to ${canvas.clientWidth}x${canvas.clientHeight}`);
       canvas.width = canvas.clientWidth;
       canvas.height = canvas.clientHeight;
     }
@@ -80,6 +98,11 @@ const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({
     // Update position references for next frame
     prevXRef.current = x;
     prevYRef.current = y;
+    
+    // Debug: Log every 50 frames to avoid console spam
+    if (Math.random() < 0.02) {
+      console.log(`Drawing line from (${prevXRef.current}, ${prevYRef.current}) to (${x}, ${y})`);
+    }
   }, [value, isFingerDetected, preserveResults]);
 
   return (
