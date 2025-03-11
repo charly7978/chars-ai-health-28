@@ -26,8 +26,8 @@ const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
       onClick={handleClick}
       className={`w-full h-full text-xl font-bold shadow-md text-white transition-colors duration-200 ${
         isMonitoring 
-        ? 'bg-red-600 hover:bg-red-700 active:bg-red-800' // Rojo sólido para DETENER
-        : 'bg-green-600 hover:bg-green-700 active:bg-green-800' // Verde sólido para INICIAR
+        ? 'bg-red-600 hover:bg-red-700 active:bg-red-800' // Rojo para DETENER
+        : 'bg-green-600 hover:bg-green-700 active:bg-green-800' // Verde para INICIAR
       }`}
       style={{
         textShadow: '0 1px 2px rgba(0,0,0,0.2)'
