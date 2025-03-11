@@ -165,11 +165,14 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden bg-blue-600 rounded-lg p-3 transition-all duration-300 flex flex-col h-full"
+    <div className="relative overflow-hidden flex flex-col h-full transition-all duration-300"
          style={{
-           background: 'linear-gradient(135deg, #1E40AF 0%, #1E3A8A 100%)',
+           background: 'linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%)',
+           borderRadius: '0.5rem',
+           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 1px 3px rgba(0,0,0,0.1)',
+           border: 'none'
          }}>
-      <div className="flex flex-col items-center justify-center flex-1 gap-2">
+      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-3">
         <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
@@ -186,7 +189,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gray-400/90 text-[13px] font-medium">
+              <span className="text-gray-300/90 text-[13px] font-medium">
                 {unit}
               </span>
             )}

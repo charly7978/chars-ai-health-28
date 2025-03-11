@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -193,8 +194,9 @@ const Index = () => {
 
   return (
     <div 
-      className="fixed inset-0 flex flex-col bg-black" 
+      className="fixed inset-0 flex flex-col" 
       style={{ 
+        background: 'linear-gradient(180deg, #000000 0%, #0F172A 100%)',
         height: 'calc(100vh + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)'
@@ -223,7 +225,11 @@ const Index = () => {
           </div>
 
           <div className="absolute bottom-[200px] left-0 right-0 px-4">
-            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
+            <div className="rounded-xl p-4" style={{
+              background: 'rgba(15, 23, 42, 0.7)',
+              backdropFilter: 'blur(8px)',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+            }}>
               <div className="grid grid-cols-4 gap-2">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
@@ -254,8 +260,10 @@ const Index = () => {
             </div>
           )}
 
-          <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <div className="w-full h-full bg-black/80">
+          <div className="h-[80px] grid grid-cols-2 mt-auto" style={{
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(15, 23, 42, 1) 100%)'
+          }}>
+            <div className="w-full h-full">
               <MonitorButton 
                 isMonitoring={isMonitoring} 
                 onClick={toggleMonitoring} 
@@ -263,7 +271,13 @@ const Index = () => {
             </div>
             <button 
               onClick={stopMonitoring}
-              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full text-2xl font-bold text-white active:bg-gray-800 transition-colors duration-200"
+              style={{
+                background: 'linear-gradient(to bottom, rgba(75, 85, 99, 0.9), rgba(55, 65, 81, 1))',
+                borderRadius: '0',
+                border: 'none',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)'
+              }}
             >
               RESET
             </button>
