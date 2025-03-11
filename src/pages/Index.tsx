@@ -577,7 +577,7 @@ const Index = () => {
         <div className="relative z-10 h-full flex flex-col">
           {/* Nueva alerta de arritmia */}
           { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
-            <div className="alert-banner bg-red-700/70 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
+            <div className="alert-banner bg-red-700 text-white p-2 text-center font-bold mb-2">
                ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
             </div>
           )}
@@ -603,8 +603,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)] bg-gradient-to-b from-[rgba(30,41,59,0.6)] to-[rgba(15,23,42,0.6)] backdrop-blur-md shadow-inner overflow-hidden">
-            <div className="grid grid-cols-3 h-full w-full p-0.5">
+          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)] bg-gradient-to-b from-[#1E293B] to-[#0F172A] shadow-inner overflow-hidden vital-sign-panel">
+            <div className="grid grid-cols-3 gap-0 h-full w-full p-0.5">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -644,10 +644,10 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto bg-opacity-40">
+          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
               onClick={handleMonitoringButton}
-              className="w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
+              className="w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 start-button"
             >
               {isMonitoring ? (
                 <>
@@ -660,7 +660,7 @@ const Index = () => {
             </button>
             <button 
               onClick={handleReset}
-              className="w-full h-full text-xl font-bold text-white soft-button bg-red-500/30"
+              className="w-full h-full text-xl font-bold text-white stop-button"
             >
               RESETEAR
             </button>
