@@ -1,4 +1,3 @@
-
 import { calculateAC, calculateDC } from './utils';
 
 /**
@@ -14,39 +13,39 @@ export class SignalProcessor {
   private readonly BASELINE_FACTOR = 0.92;
   private baselineValue: number = 0;
 
-  // Parámetros más permisivos para la detección de dedos, pero estrictos contra falsos positivos
-  private readonly MIN_RED_THRESHOLD = 50;      // Reducido para detección más fácil
+  // Parámetros ÓPTIMOS: más fácil detectar dedos reales, eliminar falsos positivos
+  private readonly MIN_RED_THRESHOLD = 35;       // Reducido para detección más fácil
   private readonly MAX_RED_THRESHOLD = 220;     // Mantener límite superior para evitar saturación
-  private readonly RED_DOMINANCE_RATIO = 1.3;   // Reducido para facilitar detección
+  private readonly RED_DOMINANCE_RATIO = 1.2;   // Reducido para facilitar detección
   private readonly MIN_SIGNAL_AMPLITUDE = 4;    // Reducido para facilitar detección
-  private readonly MIN_VALID_PIXELS = 100;      // Reducido para facilitar detección
-  private readonly ROI_SCALE = 0.35;            // ROI más grande para capturar más del dedo
-  private readonly SIGNAL_MEMORY = 5;
-  private readonly HYSTERESIS = 10;             // Reducido para más responsividad
+  private readonly MIN_VALID_PIXELS = 80;      // Reducido para facilitar detección
+  private readonly ROI_SCALE = 0.5;            // ROI más grande para capturar más del dedo
   
-  // Parámetros anti-falsos positivos
-  private readonly MIN_RED_COVERAGE = 0.2;      // Mínimo porcentaje ROI que debe ser rojo
+  // Parámetros anti-falsos positivos DRÁSTICAMENTE mejorados
+  private readonly MIN_RED_COVERAGE = 0.25;     // Mínimo porcentaje ROI que debe ser rojo
   private readonly MIN_FINGER_CONTRAST = 10;    // Contraste mínimo para un dedo real
-  private readonly MIN_RED_PERSISTENCE = 3;     // Mínimo frames consistentes con señal fuerte
+  private readonly MAX_TEXTURE_VARIANCE = 400;  // Objetos con textura no son dedos
+  private readonly MAX_EDGE_RATIO = 0.2;        // Objetos con bordes definidos no son dedos
+  private readonly REQUIRED_CONSISTENCY = 3;    // Frames consistentes para confirmar dedo
 
   // Enhanced signal quality and stability parameters
-  private readonly STABILITY_THRESHOLD = 0.7;   // Reducido para ser más permisivo
-  private readonly MIN_PERFUSION_INDEX = 0.08;  // Reducido para ser más permisivo
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 15; // Incrementado para ser más permisivo
+  private readonly STABILITY_THRESHOLD = 0.6;   // Reducido para ser más permisivo
+  private readonly MIN_PERFUSION_INDEX = 0.07;  // Reducido para ser más permisivo
+  
+  // Variables de seguimiento para mejorar la precisión
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
-  private readonly MIN_CONSECUTIVE_FRAMES = 3;  // Reducido para detección más rápida
   private lastStableValue: number = 0;
   private stableSignalCount: number = 0;
-  private readonly MIN_STABLE_SIGNAL_COUNT = 8; // Reducido para ser más permisivo
   private signalBuffer: number[] = [];
-  private readonly SIGNAL_BUFFER_SIZE = 30;
-  
-  // Anti-falsos positivos cuando se quita el dedo
-  private emptyFrameCount: number = 0;
-  private readonly MAX_EMPTY_FRAMES = 3;
+  private fingerConsistencyCounter: number = 0;
+  private nonFingerConsistencyCounter: number = 0;
   private lastRedValue: number = 0;
   private redPersistenceCounter: number = 0;
+  private emptyFrameCount: number = 0;
+  private lastRedCoverage: number = 0;
+  private lastTextureVariance: number = 0;
+  private lastEdgeRatio: number = 0;
 
   /**
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
@@ -101,7 +100,7 @@ export class SignalProcessor {
     let pixelCount = 0;
     let totalPixels = 0;
     
-    // Calculate ROI dimensions with larger center focus
+    // Calculate ROI dimensions with larger center focus for mejor captura del dedo
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
     const roiSize = Math.min(imageData.width, imageData.height) * this.ROI_SCALE;
@@ -115,16 +114,17 @@ export class SignalProcessor {
     let minRed = 255;
     let validRegionCount = 0;
     let edgePixelCount = 0;
+    let textureVarianceSum = 0;
     
-    // Analizar primero el centro de la ROI (más importante para la detección)
-    const innerStartX = Math.max(0, Math.floor(centerX - roiSize / 4));
-    const innerEndX = Math.min(imageData.width, Math.floor(centerX + roiSize / 4));
-    const innerStartY = Math.max(0, Math.floor(centerY - roiSize / 4));
-    const innerEndY = Math.min(imageData.height, Math.floor(centerY + roiSize / 4));
+    // Crear matriz para análisis de textura (crucial para eliminar falsos positivos)
+    const redMatrix: number[][] = [];
+    for (let y = startY; y < endY; y++) {
+      redMatrix[y] = [];
+    }
     
-    // Primero procesar el área central para verificar si hay un dedo
-    for (let y = innerStartY; y < innerEndY; y++) {
-      for (let x = innerStartX; x < innerEndX; x++) {
+    // Primera pasada: identificar píxeles rojos y llenar matriz
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
         const i = (y * imageData.width + x) * 4;
         if (i >= 0 && i < data.length - 3) {
           totalPixels++;
@@ -133,7 +133,7 @@ export class SignalProcessor {
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Criterio más permisivo para la dominancia del rojo
+          // Criterio más permisivo para detección inicial
           if (r > g * this.RED_DOMINANCE_RATIO && 
               r > b * this.RED_DOMINANCE_RATIO && 
               r >= this.MIN_RED_THRESHOLD && 
@@ -143,167 +143,153 @@ export class SignalProcessor {
             greenSum += g;
             blueSum += b;
             pixelCount++;
+            redMatrix[y][x] = r;
             
             maxRed = Math.max(maxRed, r);
             minRed = Math.min(minRed, r);
             
-            // Validación regional mejorada
-            if (Math.abs(r - this.lastStableValue) < this.HYSTERESIS) {
+            // Validación regional
+            if (this.lastStableValue > 0 && Math.abs(r - this.lastStableValue) < 20) {
               validRegionCount++;
+            }
+          }
+          
+          // Detectar bordes (útil para rechazar falsos positivos)
+          if (x === startX || x === endX - 1 || y === startY || y === endY - 1) {
+            const isEdgeRed = r > g * 1.1 && r > b * 1.1 && r > 30;
+            if (isEdgeRed) {
+              edgePixelCount++;
             }
           }
         }
       }
     }
     
-    // Si el centro de la ROI no tiene suficientes píxeles rojos, procesar el resto
-    const centerCoverage = pixelCount / Math.max(1, totalPixels);
-    if (centerCoverage < this.MIN_RED_COVERAGE) {
-      // Procesar el resto de la ROI
-      for (let y = startY; y < endY; y++) {
-        for (let x = startX; x < endX; x++) {
-          // Saltar el centro que ya procesamos
-          if (x >= innerStartX && x < innerEndX && y >= innerStartY && y < innerEndY) {
-            continue;
-          }
+    // Segunda pasada: análisis de textura (sólo si hay suficientes píxeles rojos)
+    if (pixelCount > this.MIN_VALID_PIXELS) {
+      let texturePointsAnalyzed = 0;
+      
+      for (let y = startY + 1; y < endY - 1; y++) {
+        for (let x = startX + 1; x < endX - 1; x++) {
+          if (!redMatrix[y] || !redMatrix[y][x]) continue;
           
-          const i = (y * imageData.width + x) * 4;
-          if (i >= 0 && i < data.length - 3) {
-            totalPixels++;
+          const center = redMatrix[y][x];
+          const neighbors = [
+            redMatrix[y-1]?.[x] || 0,
+            redMatrix[y+1]?.[x] || 0,
+            redMatrix[y]?.[x-1] || 0,
+            redMatrix[y]?.[x+1] || 0
+          ].filter(n => n > 0);
+          
+          if (neighbors.length >= 2) {
+            // Calcular varianza local (textura)
+            const localVariance = neighbors.reduce((sum, val) => {
+              return sum + Math.pow(val - center, 2);
+            }, 0) / neighbors.length;
             
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            
-            // Criterio más permisivo para la dominancia del rojo
-            if (r > g * this.RED_DOMINANCE_RATIO && 
-                r > b * this.RED_DOMINANCE_RATIO && 
-                r >= this.MIN_RED_THRESHOLD && 
-                r <= this.MAX_RED_THRESHOLD) {
-              
-              redSum += r;
-              greenSum += g;
-              blueSum += b;
-              pixelCount++;
-              
-              maxRed = Math.max(maxRed, r);
-              minRed = Math.min(minRed, r);
-              
-              // Validación regional mejorada
-              if (Math.abs(r - this.lastStableValue) < this.HYSTERESIS) {
-                validRegionCount++;
-              }
-            }
-            
-            // Detectar bordes (útil para rechazar falsos positivos)
-            if (x === startX || x === endX - 1 || y === startY || y === endY - 1) {
-              const isEdgeRed = r > g * 1.2 && r > b * 1.2 && r > 40;
-              if (isEdgeRed) {
-                edgePixelCount++;
-              }
-            }
+            textureVarianceSum += localVariance;
+            texturePointsAnalyzed++;
           }
         }
       }
+      
+      // Guardar métricas de textura para análisis
+      this.lastTextureVariance = texturePointsAnalyzed > 0 ? 
+                               textureVarianceSum / texturePointsAnalyzed : 0;
+      this.lastEdgeRatio = totalPixels > 0 ? edgePixelCount / totalPixels : 0;
     }
     
     // Área total de la ROI
     const roiArea = (endX - startX) * (endY - startY);
     const redCoverage = pixelCount / roiArea;
+    this.lastRedCoverage = redCoverage;
     
-    // Validación con cobertura requerida
+    // Validación con cobertura requerida - CLAVE para eliminar falsos positivos
     if (pixelCount < this.MIN_VALID_PIXELS || redCoverage < this.MIN_RED_COVERAGE) {
       // Resetear contadores cuando no hay suficiente cobertura roja
-      this.emptyFrameCount++;
       this.redPersistenceCounter = 0;
-      this.consecutiveValidFrames = 0;
-      this.stableSignalCount = 0;
+      this.emptyFrameCount++;
+      
+      if (this.emptyFrameCount > 2) {
+        this.consecutiveValidFrames = 0;
+        this.stableSignalCount = 0;
+        this.fingerConsistencyCounter = 0;
+        this.nonFingerConsistencyCounter++;
+      }
       return 0;
     }
     
-    // También verificar contraste - característica esencial de un dedo real
+    // Verificar contraste - característica esencial de un dedo real
     if ((maxRed - minRed) < this.MIN_FINGER_CONTRAST) {
       this.consecutiveValidFrames = 0;
-      this.redPersistenceCounter = 0;
+      this.nonFingerConsistencyCounter++;
+      this.fingerConsistencyCounter = 0;
       return 0;
     }
     
-    const currentTime = Date.now();
+    // Verificar si la textura es característica de un dedo
+    // Los dedos tienen textura suave y homogénea
+    if (this.lastTextureVariance > this.MAX_TEXTURE_VARIANCE) {
+      this.nonFingerConsistencyCounter++;
+      this.fingerConsistencyCounter = 0;
+      return 0;
+    }
+    
+    // Verificar si la proporción de bordes es característica de un dedo
+    // Los dedos tienen bordes suaves y difusos
+    if (this.lastEdgeRatio > this.MAX_EDGE_RATIO) {
+      this.nonFingerConsistencyCounter++;
+      this.fingerConsistencyCounter = 0;
+      return 0;
+    }
+    
     const avgRed = redSum / pixelCount;
-    const signalAmplitude = maxRed - minRed;
     const avgGreen = greenSum / pixelCount;
     const avgBlue = blueSum / pixelCount;
     
-    // Detectar falsos positivos basados en el patrón de los bordes
-    // Los objetos que no son dedos suelen tener bordes más definidos
-    const edgeRatio = edgePixelCount / Math.max(1, (endX - startX) * 2 + (endY - startY) * 2);
-    const hasStrongEdges = edgeRatio > 0.4 && edgePixelCount > 15;
-    
-    // Validar cambios abruptos de valor que indican falsos positivos
-    const hasAbruptChange = this.lastRedValue > 0 && 
-                          Math.abs(avgRed - this.lastRedValue) / this.lastRedValue > 0.5;
-    
-    // Detección de falsos positivos mejorada
-    if (hasStrongEdges || hasAbruptChange) {
-      this.redPersistenceCounter = 0;
-      this.emptyFrameCount = 0;
-      return 0;
+    // Verificar cambio drástico respecto al valor anterior (indicador de falso positivo)
+    if (this.lastRedValue > 0) {
+      const change = Math.abs(avgRed - this.lastRedValue) / this.lastRedValue;
+      if (change > 0.4) { // Cambio de más del 40% es sospechoso
+        this.nonFingerConsistencyCounter++;
+        this.fingerConsistencyCounter = 0;
+        this.lastRedValue = avgRed;
+        return 0;
+      }
     }
     
-    // Validación de señal con criterios más permisivos
+    // Validación de señal con criterios balanceados
     const isValidSignal = 
       avgRed >= this.MIN_RED_THRESHOLD &&
       avgRed <= this.MAX_RED_THRESHOLD &&
-      signalAmplitude >= this.MIN_SIGNAL_AMPLITUDE &&
-      avgRed > (avgGreen * this.RED_DOMINANCE_RATIO * 0.9) && // Más permisivo
-      avgRed > (avgBlue * this.RED_DOMINANCE_RATIO * 0.9) &&  // Más permisivo
-      validRegionCount >= (pixelCount * 0.35); // Reducido para ser más permisivo
+      (maxRed - minRed) >= this.MIN_SIGNAL_AMPLITUDE &&
+      avgRed > (avgGreen * this.RED_DOMINANCE_RATIO) && 
+      avgRed > (avgBlue * this.RED_DOMINANCE_RATIO);
     
-    // Buffer para análisis de estabilidad de señal
-    this.signalBuffer.push(avgRed);
-    if (this.signalBuffer.length > this.SIGNAL_BUFFER_SIZE) {
-      this.signalBuffer.shift();
-    }
-    
-    // Calcular estabilidad de la señal
-    const isStableSignal = this.signalBuffer.length >= 4 && this.calculateSignalStability();
-    
-    // Actualizar el valor rojo previo para comparaciones futuras
-    this.lastRedValue = avgRed;
-    
+    // Actualizar contadores de consistencia
     if (isValidSignal) {
-      // Incrementar contador de persistencia para valores rojos válidos
-      this.redPersistenceCounter++;
+      this.fingerConsistencyCounter++;
+      this.nonFingerConsistencyCounter = 0;
       this.emptyFrameCount = 0;
-      
-      // Sólo considerar la señal válida después de persistencia continua
-      if (this.redPersistenceCounter >= this.MIN_RED_PERSISTENCE) {
-        if (isStableSignal) {
-          this.consecutiveValidFrames++;
-          this.lastValidDetectionTime = currentTime;
-          this.stableSignalCount++;
-          
-          // Sólo retornar señal después de detección estable consistente
-          if (this.consecutiveValidFrames >= this.MIN_CONSECUTIVE_FRAMES && 
-              this.stableSignalCount >= this.MIN_STABLE_SIGNAL_COUNT) {
-            this.lastStableValue = avgRed;
-            return avgRed;
-          }
-        }
-      }
     } else {
-      // Resetear contadores de persistencia
-      this.redPersistenceCounter = 0;
-      
-      // Mantener brevemente la memoria de señal
-      if (currentTime - this.lastValidDetectionTime < 400) {
-        return this.lastStableValue;
-      }
-      
-      this.consecutiveValidFrames = Math.max(0, this.consecutiveValidFrames - 1);
-      this.stableSignalCount = Math.max(0, this.stableSignalCount - 1);
+      this.nonFingerConsistencyCounter++;
+      this.fingerConsistencyCounter = 0;
     }
     
+    // Aplicar criterio de consistencia - CRUCIAL para eliminar falsos positivos
+    // Un dedo real debe tener varios frames consecutivos con buena señal
+    if (this.fingerConsistencyCounter >= this.REQUIRED_CONSISTENCY) {
+      // Señal considerada válida tras confirmación de consistencia
+      this.lastRedValue = avgRed;
+      return avgRed;
+    } else if (this.nonFingerConsistencyCounter > 1) {
+      // Posible falso positivo
+      this.lastRedValue = avgRed;
+      return 0;
+    }
+    
+    // Fase de evaluación
+    this.lastRedValue = avgRed;
     return 0;
   }
 

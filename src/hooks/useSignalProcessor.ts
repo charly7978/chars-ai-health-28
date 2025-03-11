@@ -29,15 +29,18 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Más permisivo con la detección de dedos pero más estricto con falsos positivos
-      const qualityThreshold = 20; // Reducido de 35 a 20 para facilitar la detección
+      // Cambios para reducir drásticamente los falsos positivos
+      // pero mantener fácil detección del dedo real
       
-      // Validación más balanceada: más fácil detectar dedos, mejor rechazo de falsos positivos
-      const hasMinimumSignal = signal.rawValue > 50; // Reducido de 80 a 50 para una detección más permisiva
-      const enhancedFingerDetected = signal.fingerDetected && 
-                                    signal.quality >= qualityThreshold &&
-                                    hasMinimumSignal;
+      // Evaluar mejor la señal para asegurar que realmente es un dedo
+      const isStrongStableSignal = signal.rawValue > 50 && signal.quality > 25;
       
+      // Un dedo real de contacto completo tiene alto contraste y alta calidad
+      // Menos estricto en la calidad para dedos reales, pero más estricto en la confirmación
+      // de la detección para evitar falsos positivos
+      const enhancedFingerDetected = signal.fingerDetected && isStrongStableSignal;
+      
+      // Crear versión validada de la señal
       const validatedSignal = {
         ...signal,
         fingerDetected: enhancedFingerDetected
