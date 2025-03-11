@@ -116,11 +116,11 @@ const VitalSign = ({
   const getArrhythmiaDisplay = (value: string | number) => {
     if (typeof value !== 'string') return null;
     
-    const parts = value.split('|');
-    if (parts.length !== 2) return null;
+    const arrhythmiaParts = value.split('|');
+    if (arrhythmiaParts.length !== 2) return null;
     
-    const status = parts[0];
-    const count = parts[1];
+    const status = arrhythmiaParts[0];
+    const count = arrhythmiaParts[1];
     
     if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
       return (
@@ -180,10 +180,10 @@ const VitalSign = ({
         case 'PRESIÓN ARTERIAL':
           median = "120/80";
           average = "118/78";
-          const parts = value.split('/');
-          if (parts.length === 2) {
-            const systolic = parseInt(parts[0], 10);
-            const diastolic = parseInt(parts[1], 10);
+          const pressureParts = value.split('/');
+          if (pressureParts.length === 2) {
+            const systolic = parseInt(pressureParts[0], 10);
+            const diastolic = parseInt(pressureParts[1], 10);
             interpretation = (systolic >= 140 || diastolic >= 90)
               ? "Su presión está por encima del rango normal (<140/90 mmHg)."
               : (systolic < 90 || diastolic < 60)
@@ -211,10 +211,10 @@ const VitalSign = ({
           }
           break;
         case 'ARRITMIAS':
-          const parts = value.split('|');
-          if (parts.length === 2) {
-            const status = parts[0];
-            const count = parts[1];
+          const arrhythmiaParts = value.split('|');
+          if (arrhythmiaParts.length === 2) {
+            const status = arrhythmiaParts[0];
+            const count = arrhythmiaParts[1];
             
             if (status === "ARRITMIA DETECTADA") {
               median = "0";
