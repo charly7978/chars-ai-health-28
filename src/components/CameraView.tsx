@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -20,6 +19,7 @@ const CameraView = ({
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [hasActiveTrack, setHasActiveTrack] = useState(false);
   const [isCameraInitializing, setIsCameraInitializing] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
@@ -80,6 +80,7 @@ const CameraView = ({
   const startCamera = useCallback(async () => {
     try {
       setIsCameraInitializing(true);
+      setPermissionDenied(false);
       console.log("Iniciando cámara...");
       
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -89,25 +90,31 @@ const CameraView = ({
       // Stop any existing stream first to prevent resource conflicts
       await stopCamera();
       
+      // Check for permissions first
+      try {
+        // Try querying camera status first to detect denied permissions
+        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        console.log(`Camera permission status: ${permissionStatus.state}`);
+        
+        if (permissionStatus.state === 'denied') {
+          setPermissionDenied(true);
+          throw new Error("Permiso de cámara denegado");
+        }
+      } catch (err) {
+        console.log("Permissions API not supported or other error:", err);
+        // Continue anyway since this might fail on some browsers
+      }
+      
       const isAndroid = /android/i.test(navigator.userAgent);
       console.log(`Detected platform: ${isAndroid ? 'Android' : 'Other'}`);
 
-      const baseVideoConstraints: MediaTrackConstraints = {
-        facingMode: 'environment',
-        width: { ideal: 720 },
-        height: { ideal: 480 }
-      };
-
-      if (isAndroid) {
-        // Optimizations for Android
-        Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30, max: 30 },
-          resizeMode: 'crop-and-scale'
-        });
-      }
-
+      // Base constraints - keeping simpler for broader compatibility
       const constraints: MediaStreamConstraints = {
-        video: baseVideoConstraints
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 640 }, // Reduced from 720 for better compatibility
+          height: { ideal: 480 }
+        }
       };
 
       console.log("Requesting camera access with constraints:", JSON.stringify(constraints));
@@ -121,55 +128,35 @@ const CameraView = ({
       }
       
       console.log(`Video track obtained: ID: ${videoTrack.id}, label: ${videoTrack.label}`);
-      console.log(`Track capabilities:`, videoTrack.getCapabilities());
-
-      if (videoTrack && isAndroid) {
-        try {
-          const capabilities = videoTrack.getCapabilities();
-          const advancedConstraints: MediaTrackConstraintSet[] = [];
-          
-          if (capabilities.exposureMode) {
-            advancedConstraints.push({ exposureMode: 'continuous' });
-          }
-          if (capabilities.focusMode) {
-            advancedConstraints.push({ focusMode: 'continuous' });
-          }
-          if (capabilities.whiteBalanceMode) {
-            advancedConstraints.push({ whiteBalanceMode: 'continuous' });
-          }
-
-          if (advancedConstraints.length > 0) {
-            console.log("Applying advanced camera constraints:", JSON.stringify(advancedConstraints));
-            await videoTrack.applyConstraints({
-              advanced: advancedConstraints
-            });
-          }
-          
-          // Apply hardware acceleration hints to video element
-          if (videoRef.current) {
-            videoRef.current.style.transform = 'translateZ(0)';
-            videoRef.current.style.backfaceVisibility = 'hidden';
-          }
-        } catch (err) {
-          console.log("No se pudieron aplicar algunas optimizaciones:", err);
-        }
+      
+      // Make video element visible
+      if (videoRef.current) {
+        videoRef.current.style.display = 'block';
       }
 
       // Setup video playback with the new stream
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
         
+        // Ensure it will autoplay
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.autoplay = true;
+        
         // Promise-based playback to handle autoplay issues
-        videoRef.current.play().then(() => {
+        try {
+          await videoRef.current.play();
           console.log("Video playback started successfully");
-        }).catch(e => {
+        } catch (e) {
           console.error("Error al reproducir video:", e);
           toast.error("Error al iniciar reproducción de video");
-        });
-        
-        if (isAndroid) {
-          videoRef.current.style.willChange = 'transform';
-          videoRef.current.style.transform = 'translateZ(0)';
+          // Try playing on user interaction
+          document.addEventListener('click', function playVideoOnce() {
+            if (videoRef.current) {
+              videoRef.current.play().catch(e => console.error("Error en reproducción en click:", e));
+              document.removeEventListener('click', playVideoOnce);
+            }
+          });
         }
       }
 
@@ -185,8 +172,9 @@ const CameraView = ({
       
       // Enable the torch after a delay to ensure camera is ready
       setTimeout(() => {
+        console.log("Attempting to enable torch after camera start");
         enableTorch(videoTrack);
-      }, 500);
+      }, 1000); // Increased delay
       
       // Initialize canvas for frame capture
       if (canvasRef.current) {
@@ -197,7 +185,15 @@ const CameraView = ({
       setIsCameraInitializing(false);
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
-      toast.error("Error al iniciar la cámara");
+      
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        console.log("Camera permission denied by user");
+        setPermissionDenied(true);
+        toast.error("Permiso de cámara denegado. Por favor, recargue la página y permita el acceso.");
+      } else {
+        toast.error("Error al iniciar la cámara");
+      }
+      
       setHasActiveTrack(false);
       setIsCameraInitializing(false);
       restartAttemptRef.current++;
@@ -205,15 +201,17 @@ const CameraView = ({
       // If we've tried restarting a few times without success, wait longer
       const restartDelay = restartAttemptRef.current > 3 ? 3000 : 1000;
       
-      // Try again after a delay
-      setTimeout(() => {
-        if (isMonitoring) {
-          console.log(`Retry ${restartAttemptRef.current}: Restarting camera after failure...`);
-          startCamera();
-        }
-      }, restartDelay);
+      // Try again after a delay (but not if permission denied)
+      if (!permissionDenied && isMonitoring) {
+        setTimeout(() => {
+          if (isMonitoring) {
+            console.log(`Retry ${restartAttemptRef.current}: Restarting camera after failure...`);
+            startCamera();
+          }
+        }, restartDelay);
+      }
     }
-  }, [stopCamera, onStreamReady, isMonitoring]);
+  }, [stopCamera, onStreamReady, isMonitoring, permissionDenied]);
 
   const enableTorch = useCallback((videoTrack?: MediaStreamTrack) => {
     const now = Date.now();
@@ -227,19 +225,37 @@ const CameraView = ({
     
     const track = videoTrack || (stream?.getVideoTracks()[0]);
     
-    if (track && track.getCapabilities()?.torch) {
-      console.log("Activando linterna para mejorar la señal PPG");
-      track.applyConstraints({
-        advanced: [{ torch: true }]
-      }).then(() => {
-        setTorchEnabled(true);
-        console.log("Torch enabled successfully");
-      }).catch(err => {
-        console.error("Error activando linterna:", err);
-        setTorchEnabled(false);
-      });
-    } else {
-      console.log("La linterna no está disponible en este dispositivo");
+    if (!track) {
+      console.log("No video track available to enable torch");
+      return;
+    }
+    
+    try {
+      // Verify track is active and ready
+      if (track.readyState !== 'live') {
+        console.log("Track not in live state, can't enable torch");
+        return;
+      }
+      
+      const capabilities = track.getCapabilities();
+      console.log("Track capabilities:", capabilities);
+      
+      if (capabilities?.torch) {
+        console.log("Activando linterna para mejorar la señal PPG");
+        track.applyConstraints({
+          advanced: [{ torch: true }]
+        }).then(() => {
+          setTorchEnabled(true);
+          console.log("Torch enabled successfully");
+        }).catch(err => {
+          console.error("Error activando linterna:", err);
+          setTorchEnabled(false);
+        });
+      } else {
+        console.log("La linterna no está disponible en este dispositivo");
+      }
+    } catch (err) {
+      console.error("Error trying to enable torch:", err);
     }
   }, [stream]);
 
@@ -308,25 +324,34 @@ const CameraView = ({
 
   // Implement safeguard to ensure torch stays on when needed
   useEffect(() => {
-    // If monitoring with a finger detected, ensure torch is on
+    // Only run this effect if we're monitoring and have a finger detected
     if (isMonitoring && isFingerDetected && stream) {
       // Clear any existing interval
       if (torchIntervalRef.current) {
         clearInterval(torchIntervalRef.current);
       }
       
-      // Check and re-enable torch every 3 seconds if needed
-      torchIntervalRef.current = window.setInterval(() => {
-        if (!torchEnabled && stream) {
-          console.log("Torch check: re-enabling torch");
-          enableTorch();
-        }
-      }, 3000);
-      
-      // Immediate check
+      // Check torch status and try to enable if needed
       if (!torchEnabled) {
+        console.log("Finger detected but torch not enabled, attempting to enable");
         enableTorch();
       }
+      
+      // Set up interval to periodically check torch status
+      torchIntervalRef.current = window.setInterval(() => {
+        // Check track is still valid
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack && videoTrack.readyState === 'live') {
+          // Only try to enable torch if it's not already enabled
+          if (!torchEnabled) {
+            console.log("Torch check: re-enabling torch");
+            enableTorch(videoTrack);
+          }
+        } else {
+          console.log("Track not live during torch check, may need restart");
+          setHasActiveTrack(false);
+        }
+      }, 3000);
     }
     
     return () => {
@@ -401,7 +426,7 @@ const CameraView = ({
         width="320" 
         height="240"
       />
-      {isMonitoring && (isCameraInitializing || !hasActiveTrack) && (
+      {isMonitoring && (isCameraInitializing || !hasActiveTrack) && !permissionDenied && (
         <div className="absolute inset-0 bg-black/90 flex items-center justify-center text-white p-4 z-10">
           <div className="text-center">
             <p className="mb-2">
@@ -413,6 +438,29 @@ const CameraView = ({
             <div className="mt-4 h-1 w-48 mx-auto bg-gray-800 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 animate-pulse rounded-full w-1/3"></div>
             </div>
+          </div>
+        </div>
+      )}
+      {permissionDenied && (
+        <div className="absolute inset-0 bg-black/90 flex items-center justify-center text-white p-4 z-10">
+          <div className="text-center">
+            <p className="text-xl mb-3">
+              Acceso a la cámara denegado
+            </p>
+            <p className="mb-4">
+              Esta aplicación necesita acceso a la cámara para funcionar.
+            </p>
+            <p className="text-sm opacity-75 mb-4">
+              Por favor, recargue la página y permita el acceso cuando se le solicite.
+            </p>
+            <button 
+              onClick={() => {
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-blue-600 rounded-md font-medium"
+            >
+              Recargar página
+            </button>
           </div>
         </div>
       )}
