@@ -464,7 +464,7 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/20 backdrop-blur-sm px-3 py-4">
+          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/10 backdrop-blur-sm px-3 py-4">
             <div className="grid grid-cols-3 gap-3 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -511,3 +511,4 @@ const Index = () => {
 };
 
 export default Index;
+

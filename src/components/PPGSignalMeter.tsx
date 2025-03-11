@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -92,42 +91,32 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
+    // Create a darker but semi-transparent gradient for the canvas background
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, '#f1f5f9');
-    gradient.addColorStop(1, '#e2e8f0');
+    gradient.addColorStop(0, 'rgba(10, 15, 20, 0.8)');
+    gradient.addColorStop(1, 'rgba(5, 10, 15, 0.85)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Very subtle grid lines, almost invisible
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.1)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.05)';
     ctx.lineWidth = 0.5;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
-      if (x % (GRID_SIZE_X * 4) === 0) {
-        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
-        ctx.font = '10px Inter';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${x / 10}ms`, x, CANVAS_HEIGHT - 5);
-      }
     }
 
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
-      if (y % (GRID_SIZE_Y * 4) === 0) {
-        const amplitude = ((CANVAS_HEIGHT / 2) - y) / verticalScale;
-        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
-        ctx.font = '10px Inter';
-        ctx.textAlign = 'right';
-        ctx.fillText(amplitude.toFixed(1), 25, y + 4);
-      }
     }
     ctx.stroke();
 
+    // Slightly more visible for the main grid lines
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.2)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.08)';
     ctx.lineWidth = 1;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X * 4) {
@@ -141,14 +130,15 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
+    // Center line
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
     ctx.lineWidth = 1.5;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Solo mostrar alertas de arritmia
+    // Arrhythmia alerts if needed
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
@@ -386,8 +376,8 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-black/80 to-black/70">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-black/20 backdrop-blur-sm border-b border-white/5 shadow-sm pt-3">
+    <div className="fixed inset-0 bg-black/25 backdrop-blur-sm">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-black/10 backdrop-blur-sm border-b border-white/5 shadow-sm pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-white/90">PPG</span>
           <div className="w-[180px]">
@@ -424,26 +414,22 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(85vh)] mt-14"
+        className="w-full h-[100vh] mt-14"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 gap-px bg-gray-800/30">
+      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 bg-transparent">
         <button 
           onClick={onStartMeasurement}
-          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
+          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
         >
-          <span className="text-sm font-semibold">
-            INICIAR
-          </span>
+          INICIAR
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
+          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
         >
-          <span className="text-sm font-semibold">
-            RESET
-          </span>
+          RESET
         </button>
       </div>
     </div>
