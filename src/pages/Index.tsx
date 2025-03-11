@@ -528,12 +528,6 @@ const Index = () => {
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
-      <MonitorButton 
-        isMonitoring={isMonitoring}
-        onClick={startMonitoring}
-        position="top"
-      />
-      
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
