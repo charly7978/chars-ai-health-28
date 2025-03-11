@@ -593,7 +593,7 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px] top-[50%]">
+          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)]">
             <div className="grid grid-cols-3 gap-0 h-full w-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
