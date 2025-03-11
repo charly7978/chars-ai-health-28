@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -434,6 +433,8 @@ const Index = () => {
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
     
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
@@ -448,7 +449,28 @@ const Index = () => {
       
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
+          if (!videoTrack || !videoTrack.readyState || videoTrack.readyState === 'ended') {
+            console.error("Video track is no longer available or active");
+            consecutiveErrors++;
+            
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              console.error("Too many consecutive camera errors, restarting camera");
+              setIsCameraOn(false);
+              setTimeout(() => {
+                if (isMonitoring) {
+                  setIsCameraOn(true);
+                }
+              }, 1000);
+              return;
+            }
+            
+            requestAnimationFrame(processImage);
+            return;
+          }
+          
           const frame = await imageCapture.grabFrame();
+          
+          consecutiveErrors = 0;
           
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
@@ -489,6 +511,18 @@ const Index = () => {
           }
         } catch (error) {
           console.error("Error capturando frame:", error);
+          consecutiveErrors++;
+          
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            console.error("Demasiados errores consecutivos, reiniciando cámara...");
+            setIsCameraOn(false);
+            setTimeout(() => {
+              if (isMonitoring) {
+                setIsCameraOn(true);
+              }
+            }, 1000);
+            return;
+          }
         }
       }
       
@@ -498,6 +532,21 @@ const Index = () => {
     };
 
     processImage();
+    
+    return () => {
+      console.log("Cleaning up stream processing resources");
+      if (videoTrack && videoTrack.readyState !== 'ended') {
+        try {
+          if (videoTrack.getCapabilities()?.torch) {
+            videoTrack.applyConstraints({
+              advanced: [{ torch: false }]
+            }).catch(err => console.error("Error desactivando linterna:", err));
+          }
+        } catch (e) {
+          console.error("Error during video track cleanup:", e);
+        }
+      }
+    };
   };
 
   useEffect(() => {
@@ -563,7 +612,6 @@ const Index = () => {
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
       <div className="flex-1 relative">
-        {/* Camera view stays in the background */}
         <div className="absolute inset-0 z-0">
           <CameraView 
             onStreamReady={handleStreamReady}
@@ -573,7 +621,6 @@ const Index = () => {
           />
         </div>
 
-        {/* Signal meter only in the top half */}
         <div className="relative z-10 h-1/2">
           <PPGSignalMeter 
             value={lastSignal?.filteredValue || 0}
@@ -587,7 +634,6 @@ const Index = () => {
           />
         </div>
             
-        {/* Vital signs panel - completely covers bottom half */}
         <div className="vital-signs-panel-container">
           {isCalibrating && (
             <div className="absolute top-2 left-0 right-0 text-center z-10">
@@ -638,7 +684,6 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Control buttons at the bottom */}
       <div className="h-[40px] grid grid-cols-2 gap-0">
         <button 
           onClick={isMonitoring ? stopMonitoring : startMonitoring}
