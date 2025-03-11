@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -5,6 +6,7 @@ interface CameraViewProps {
   isMonitoring: boolean;
   isFingerDetected?: boolean;
   signalQuality?: number;
+  onFrame?: (imageData: ImageData) => void;
 }
 
 const CameraView = ({ 
@@ -12,8 +14,11 @@ const CameraView = ({
   isMonitoring, 
   isFingerDetected = false, 
   signalQuality = 0,
+  onFrame,
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +43,11 @@ const CameraView = ({
       setStream(null);
       setTorchEnabled(false);
       console.log("Cámara detenida correctamente");
+    }
+
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = undefined;
     }
   };
 
@@ -112,11 +122,53 @@ const CameraView = ({
       if (onStreamReady) {
         onStreamReady(newStream);
       }
+      
+      // Iniciar el procesamiento de frames
+      startFrameProcessing();
+      
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
       setError(err instanceof Error ? err.message : "Error desconocido al iniciar la cámara");
       stopCamera();
     }
+  };
+  
+  const captureFrame = () => {
+    if (!videoRef.current || !canvasRef.current || !onFrame) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    // Ajustar el tamaño del canvas al del video
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+    
+    // Dibujar el frame actual en el canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Obtener los datos de la imagen para procesamiento
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      onFrame(imageData);
+    } catch (e) {
+      console.error("Error al capturar frame:", e);
+    }
+  };
+  
+  const startFrameProcessing = () => {
+    if (!onFrame) return;
+    
+    const processFrame = () => {
+      captureFrame();
+      animationRef.current = requestAnimationFrame(processFrame);
+    };
+    
+    animationRef.current = requestAnimationFrame(processFrame);
   };
 
   useEffect(() => {
@@ -134,6 +186,8 @@ const CameraView = ({
     };
   }, [isMonitoring]);
 
+  console.log("CameraView rendering - isMonitoring:", isMonitoring, "stream:", !!stream, "onFrame:", !!onFrame);
+
   return (
     <>
       <video
@@ -147,6 +201,10 @@ const CameraView = ({
           transform: 'translateZ(0)',
           backfaceVisibility: 'hidden'
         }}
+      />
+      <canvas 
+        ref={canvasRef} 
+        className="hidden" 
       />
       {error && (
         <div className="absolute top-4 left-4 right-4 bg-red-500 text-white p-2 rounded shadow">
