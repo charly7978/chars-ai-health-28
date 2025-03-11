@@ -20,7 +20,6 @@ const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
     onClick();
   };
 
-  // Colores muy claros y definidos para asegurar que el cambio sea notable
   return (
     <button 
       onClick={handleClick}
