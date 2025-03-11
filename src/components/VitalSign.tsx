@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -164,7 +165,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-b from-[#1a3d7c] to-[#102a54] backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full border border-[#2a4e8c]/30">
+    <div className="relative overflow-hidden bg-gradient-to-b from-[#1a3d7c] to-[#102a54] backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full">
       <div className="flex flex-col items-center justify-center flex-1 gap-2">
         <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
