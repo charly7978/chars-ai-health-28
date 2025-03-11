@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -578,7 +577,7 @@ const Index = () => {
         <div className="relative z-10 h-full flex flex-col">
           {/* Nueva alerta de arritmia */}
           { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
-            <div className="alert-banner bg-red-700/50 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
+            <div className="alert-banner bg-red-700/70 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
                ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
             </div>
           )}
@@ -604,8 +603,8 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[110px] top-[calc(50%+2px)] bg-transparent backdrop-blur-sm shadow-inner overflow-hidden">
-            <div className="grid grid-cols-3 h-full w-full p-0.5 gap-0">
+          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)] bg-gradient-to-b from-[rgba(30,41,59,0.6)] to-[rgba(15,23,42,0.6)] backdrop-blur-md shadow-inner overflow-hidden">
+            <div className="grid grid-cols-3 h-full w-full p-0.5">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -645,14 +644,14 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="h-[100px] grid grid-cols-2 gap-0 mt-auto bg-transparent">
+          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto bg-opacity-40">
             <button 
               onClick={handleMonitoringButton}
-              className="w-full h-full text-2xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
+              className="w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 soft-button"
             >
               {isMonitoring ? (
                 <>
-                  <Timer className="h-6 w-6" />
+                  <Timer className="h-5 w-5" />
                   <span>{30 - elapsedTime}s</span>
                 </>
               ) : (
@@ -661,7 +660,7 @@ const Index = () => {
             </button>
             <button 
               onClick={handleReset}
-              className="w-full h-full text-2xl font-bold text-white soft-button bg-red-500/20"
+              className="w-full h-full text-xl font-bold text-white soft-button bg-red-500/30"
             >
               RESETEAR
             </button>
