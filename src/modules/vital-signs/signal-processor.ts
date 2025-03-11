@@ -1,3 +1,4 @@
+
 import { calculateAC, calculateDC } from './utils';
 
 /**
@@ -14,24 +15,24 @@ export class SignalProcessor {
   private readonly MAX_FRAME_TO_FRAME_VARIATION = 0.3;
   private baselineValue: number = 0;
 
-  // Parámetros ÓPTIMOS: más fácil detectar dedos reales, eliminar falsos positivos
-  private readonly MIN_RED_THRESHOLD = 35;       // Reducido para detección más fácil
+  // Parámetros AÚN MÁS ESTRICTOS para evitar falsos positivos
+  private readonly MIN_RED_THRESHOLD = 50;       // Aumentado para reducir falsos positivos
   private readonly MAX_RED_THRESHOLD = 220;     // Mantener límite superior para evitar saturación
-  private readonly RED_DOMINANCE_RATIO = 1.2;   // Reducido para facilitar detección
-  private readonly MIN_SIGNAL_AMPLITUDE = 4;    // Reducido para facilitar detección
-  private readonly MIN_VALID_PIXELS = 80;      // Reducido para facilitar detección
-  private readonly ROI_SCALE = 0.5;            // ROI más grande para capturar más del dedo
+  private readonly RED_DOMINANCE_RATIO = 1.4;   // Aumentado para reducir falsos positivos
+  private readonly MIN_SIGNAL_AMPLITUDE = 8;    // Aumentado para reducir falsos positivos
+  private readonly MIN_VALID_PIXELS = 120;      // Aumentado para reducir falsos positivos
+  private readonly ROI_SCALE = 0.4;            // ROI más pequeño para ser más selectivo
   
-  // Parámetros anti-falsos positivos DRÁSTICAMENTE mejorados
-  private readonly MIN_RED_COVERAGE = 0.25;     // Mínimo porcentaje ROI que debe ser rojo
-  private readonly MIN_FINGER_CONTRAST = 10;    // Contraste mínimo para un dedo real
-  private readonly MAX_TEXTURE_VARIANCE = 400;  // Objetos con textura no son dedos
-  private readonly MAX_EDGE_RATIO = 0.2;        // Objetos con bordes definidos no son dedos
-  private readonly REQUIRED_CONSISTENCY = 3;    // Frames consistentes para confirmar dedo
+  // Parámetros anti-falsos positivos EXTREMADAMENTE mejorados
+  private readonly MIN_RED_COVERAGE = 0.35;     // Aumentado: mayor porcentaje del ROI debe ser rojo
+  private readonly MIN_FINGER_CONTRAST = 15;    // Aumentado: mayor contraste para un dedo real
+  private readonly MAX_TEXTURE_VARIANCE = 300;  // Reducido: objetos con textura no son dedos
+  private readonly MAX_EDGE_RATIO = 0.15;        // Reducido: objetos con bordes definidos no son dedos
+  private readonly REQUIRED_CONSISTENCY = 5;    // Aumentado: más frames consistentes para confirmar dedo
 
   // Enhanced signal quality and stability parameters
-  private readonly STABILITY_THRESHOLD = 0.6;   // Reducido para ser más permisivo
-  private readonly MIN_PERFUSION_INDEX = 0.07;  // Reducido para ser más permisivo
+  private readonly STABILITY_THRESHOLD = 0.7;   // Aumentado para ser más exigente
+  private readonly MIN_PERFUSION_INDEX = 0.12;  // Aumentado para ser más exigente
   
   // Variables de seguimiento para mejorar la precisión
   private lastValidDetectionTime: number = 0;
@@ -47,6 +48,11 @@ export class SignalProcessor {
   private lastRedCoverage: number = 0;
   private lastTextureVariance: number = 0;
   private lastEdgeRatio: number = 0;
+  
+  // Nuevas variables para validación adicional
+  private colorStabilityCounter: number = 0;
+  private lastFrameFingerDetected: boolean = false;
+  private transitionCounter: number = 0;
 
   /**
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
@@ -101,7 +107,7 @@ export class SignalProcessor {
     let pixelCount = 0;
     let totalPixels = 0;
     
-    // Calculate ROI dimensions with larger center focus for mejor captura del dedo
+    // Calculate ROI dimensions with focused center for mejor rechazo de falsos positivos
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
     const roiSize = Math.min(imageData.width, imageData.height) * this.ROI_SCALE;
@@ -134,7 +140,7 @@ export class SignalProcessor {
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Criterio más permisivo para detección inicial
+          // Criterio más estricto para detección inicial
           if (r > g * this.RED_DOMINANCE_RATIO && 
               r > b * this.RED_DOMINANCE_RATIO && 
               r >= this.MIN_RED_THRESHOLD && 
@@ -210,12 +216,21 @@ export class SignalProcessor {
       // Resetear contadores cuando no hay suficiente cobertura roja
       this.redPersistenceCounter = 0;
       this.emptyFrameCount++;
+      this.colorStabilityCounter = 0;
       
       if (this.emptyFrameCount > 2) {
         this.consecutiveValidFrames = 0;
         this.stableSignalCount = 0;
         this.fingerConsistencyCounter = 0;
         this.nonFingerConsistencyCounter++;
+        
+        // Controlar transiciones
+        if (this.lastFrameFingerDetected) {
+          this.transitionCounter++;
+        } else {
+          this.transitionCounter = 0;
+        }
+        this.lastFrameFingerDetected = false;
       }
       return 0;
     }
@@ -225,6 +240,8 @@ export class SignalProcessor {
       this.consecutiveValidFrames = 0;
       this.nonFingerConsistencyCounter++;
       this.fingerConsistencyCounter = 0;
+      this.colorStabilityCounter = 0;
+      this.lastFrameFingerDetected = false;
       return 0;
     }
     
@@ -233,6 +250,8 @@ export class SignalProcessor {
     if (this.lastTextureVariance > this.MAX_TEXTURE_VARIANCE) {
       this.nonFingerConsistencyCounter++;
       this.fingerConsistencyCounter = 0;
+      this.colorStabilityCounter = 0;
+      this.lastFrameFingerDetected = false;
       return 0;
     }
     
@@ -241,6 +260,8 @@ export class SignalProcessor {
     if (this.lastEdgeRatio > this.MAX_EDGE_RATIO) {
       this.nonFingerConsistencyCounter++;
       this.fingerConsistencyCounter = 0;
+      this.colorStabilityCounter = 0;
+      this.lastFrameFingerDetected = false;
       return 0;
     }
     
@@ -251,11 +272,16 @@ export class SignalProcessor {
     // Verificar cambio drástico respecto al valor anterior (indicador de falso positivo)
     if (this.lastRedValue > 0) {
       const change = Math.abs(avgRed - this.lastRedValue) / this.lastRedValue;
-      if (change > 0.4) { // Cambio de más del 40% es sospechoso
+      if (change > 0.3) { // Cambio de más del 30% es sospechoso (reducido de 40% a 30%)
         this.nonFingerConsistencyCounter++;
         this.fingerConsistencyCounter = 0;
+        this.colorStabilityCounter = 0;
+        this.lastFrameFingerDetected = false;
         this.lastRedValue = avgRed;
         return 0;
+      } else {
+        // Si el color es estable, incrementar el contador de estabilidad
+        this.colorStabilityCounter++;
       }
     }
     
@@ -275,22 +301,30 @@ export class SignalProcessor {
     } else {
       this.nonFingerConsistencyCounter++;
       this.fingerConsistencyCounter = 0;
+      this.colorStabilityCounter = 0;
+      this.lastFrameFingerDetected = false;
     }
     
     // Aplicar criterio de consistencia - CRUCIAL para eliminar falsos positivos
     // Un dedo real debe tener varios frames consecutivos con buena señal
-    if (this.fingerConsistencyCounter >= this.REQUIRED_CONSISTENCY) {
+    // y además debe mostrar estabilidad de color
+    if (this.fingerConsistencyCounter >= this.REQUIRED_CONSISTENCY &&
+        this.colorStabilityCounter >= 3) { // Requiere estabilidad de color
       // Señal considerada válida tras confirmación de consistencia
       this.lastRedValue = avgRed;
+      this.lastFrameFingerDetected = true;
+      this.transitionCounter = 0;
       return avgRed;
-    } else if (this.nonFingerConsistencyCounter > 1) {
-      // Posible falso positivo
+    } else if (this.nonFingerConsistencyCounter > 1 || this.transitionCounter > 2) {
+      // Posible falso positivo o demasiadas transiciones
       this.lastRedValue = avgRed;
+      this.lastFrameFingerDetected = false;
       return 0;
     }
     
     // Fase de evaluación
     this.lastRedValue = avgRed;
+    this.lastFrameFingerDetected = false;
     return 0;
   }
 
@@ -358,6 +392,9 @@ export class SignalProcessor {
     this.lastStableValue = 0;
     this.lastValidDetectionTime = 0;
     this.signalBuffer = [];
+    this.colorStabilityCounter = 0;
+    this.lastFrameFingerDetected = false;
+    this.transitionCounter = 0;
   }
 
   public getPPGValues(): number[] {
@@ -365,13 +402,13 @@ export class SignalProcessor {
   }
 
   /**
-   * Enhanced signal stability calculation with reduced threshold
+   * Enhanced signal stability calculation with more strict threshold
    */
   private calculateSignalStability(): boolean {
-    if (this.signalBuffer.length < 4) return false; // Reducido de 5 a 4
+    if (this.signalBuffer.length < 4) return false; 
     
     // Calculate moving statistics
-    const recentValues = this.signalBuffer.slice(-4); // Reducido de 5 a 4
+    const recentValues = this.signalBuffer.slice(-4);
     const mean = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
     
     // Calculate variance
@@ -385,8 +422,8 @@ export class SignalProcessor {
       Math.abs(val - recentValues[i])
     ));
     
-    // Combined stability check with criterios más permisivos
-    return variance < (mean * 0.1) && // Incrementado de 0.08 a 0.1 - más permisivo
+    // Combined stability check con criterios más estrictos
+    return variance < (mean * 0.08) && // Reducido de 0.1 a 0.08 - más estricto
            maxVariation < this.MAX_FRAME_TO_FRAME_VARIATION;
   }
 }

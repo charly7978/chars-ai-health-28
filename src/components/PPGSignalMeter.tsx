@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -15,6 +16,7 @@ interface PPGSignalMeterProps {
     rrVariation: number;
   } | null;
   preserveResults?: boolean;
+  elapsedTime?: number;
 }
 
 const PPGSignalMeter = ({ 
@@ -25,7 +27,8 @@ const PPGSignalMeter = ({
   onReset,
   arrhythmiaStatus,
   rawArrhythmiaData,
-  preserveResults = false
+  preserveResults = false,
+  elapsedTime = 0
 }: PPGSignalMeterProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataBufferRef = useRef<CircularBuffer | null>(null);
@@ -37,6 +40,7 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
+  const isMonitoring = elapsedTime > 0;
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -452,16 +456,22 @@ const PPGSignalMeter = ({
       <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
           onClick={onStartMeasurement}
-          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
+          className="bg-gradient-to-b from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 active:from-blue-700 active:to-blue-800 transition-colors duration-200 shadow-md flex items-center justify-center"
         >
-          <span className="text-base font-semibold">
-            INICIAR/DETENER
-          </span>
+          <div className="flex items-center justify-center gap-2">
+            {isMonitoring ? (
+              <>
+                <span className="text-base font-semibold">{30 - elapsedTime}s</span>
+              </>
+            ) : (
+              <span className="text-base font-semibold">INICIAR</span>
+            )}
+          </div>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+          className="bg-gradient-to-b from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800 transition-colors duration-200 shadow-md"
         >
           <span className="text-base font-semibold">
             RESETEAR

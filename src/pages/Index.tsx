@@ -584,11 +584,12 @@ const Index = () => {
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
-              onStartMeasurement={startMonitoring}
+              onStartMeasurement={handleMonitoringButton}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
               rawArrhythmiaData={lastArrhythmiaData}
               preserveResults={showResults}
+              elapsedTime={elapsedTime}
             />
           </div>
 
@@ -606,37 +607,37 @@ const Index = () => {
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
                 unit="BPM"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
               <VitalSign 
                 label="HEMOGLOBINA"
                 value={vitalSigns.hemoglobin || "--"}
                 unit="g/dL"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
                 value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
-                highlighted={showResults}
+                highlighted={showResults || isFingerDetected}
               />
             </div>
           </div>
@@ -644,11 +645,7 @@ const Index = () => {
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
               onClick={handleMonitoringButton}
-              className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 ${
-                isMonitoring 
-                  ? 'bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 active:from-blue-800 active:to-blue-950' 
-                  : 'bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 active:from-blue-800 active:to-blue-950'
-              }`}
+              className="w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-700 hover:to-blue-900 active:from-blue-800 active:to-blue-950"
             >
               {isMonitoring ? (
                 <>
@@ -673,3 +670,4 @@ const Index = () => {
 };
 
 export default Index;
+
