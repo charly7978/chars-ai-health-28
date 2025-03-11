@@ -43,7 +43,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 600;
+  const CANVAS_HEIGHT = 1000; // Increased height to make the graph fill the entire screen
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 20;
   const verticalScale = 28.0;
@@ -95,13 +95,13 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(0, 10, 20, 0.9)');
-    gradient.addColorStop(1, 'rgba(0, 20, 30, 0.9)');
+    gradient.addColorStop(0, 'rgba(254, 247, 205, 0.2)');
+    gradient.addColorStop(1, 'rgba(253, 225, 211, 0.2)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+    ctx.strokeStyle = 'rgba(159, 142, 106, 0.3)';
     ctx.lineWidth = 0.5;
 
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
@@ -109,7 +109,7 @@ const PPGSignalMeter = ({
       ctx.lineTo(CANVAS_WIDTH, y);
       if (y % (GRID_SIZE_Y * 4) === 0) {
         const amplitude = ((CANVAS_HEIGHT / 2) - y) / verticalScale;
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        ctx.fillStyle = 'rgba(159, 142, 106, 0.7)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'right';
         ctx.fillText(amplitude.toFixed(1), 25, y + 4);
@@ -120,7 +120,7 @@ const PPGSignalMeter = ({
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
       if (x % (GRID_SIZE_X * 4) === 0) {
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        ctx.fillStyle = 'rgba(159, 142, 106, 0.7)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'center';
         ctx.fillText(`${x / 10}ms`, x, CANVAS_HEIGHT - 5);
@@ -129,7 +129,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.4)';
+    ctx.strokeStyle = 'rgba(159, 142, 106, 0.5)';
     ctx.lineWidth = 1;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X * 4) {
@@ -144,7 +144,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(0, 255, 0, 0.7)';
+    ctx.strokeStyle = 'rgba(159, 142, 106, 0.7)';
     ctx.lineWidth = 1.5;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
@@ -255,7 +255,7 @@ const PPGSignalMeter = ({
     
     if ((preserveResults && !isFingerDetected) || !isFingerDetected) {
       if (!isFingerDetected) {
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        ctx.fillStyle = 'rgba(159, 142, 106, 0.7)';
         ctx.font = 'bold 24px Inter';
         ctx.textAlign = 'center';
         ctx.fillText('COLOQUE SU DEDO EN LA CÁMARA', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
@@ -299,8 +299,8 @@ const PPGSignalMeter = ({
 
     if (points.length > 1) {
       ctx.beginPath();
-      ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#0EA5E9';
+      ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
       
@@ -352,24 +352,24 @@ const PPGSignalMeter = ({
         if (x >= 0 && x <= canvas.width) {
           ctx.beginPath();
           ctx.arc(x, y, 5, 0, Math.PI * 2);
-          ctx.fillStyle = peak.isArrhythmia ? '#ff0000' : '#00ffff';
+          ctx.fillStyle = peak.isArrhythmia ? '#DC2626' : '#0EA5E9';
           ctx.fill();
 
           if (peak.isArrhythmia) {
             ctx.beginPath();
             ctx.arc(x, y, 10, 0, Math.PI * 2);
-            ctx.strokeStyle = '#ffff00';
+            ctx.strokeStyle = '#FEF7CD';
             ctx.lineWidth = 3;
             ctx.stroke();
             
             ctx.font = 'bold 12px Inter';
-            ctx.fillStyle = '#ff0000';
+            ctx.fillStyle = '#F97316';
             ctx.textAlign = 'center';
             ctx.fillText('ARRITMIA', x, y - 25);
           }
 
           ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = '#00ff00';
+          ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
           ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
@@ -396,28 +396,28 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-black">
+    <div className="fixed inset-0 bg-transparent">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
         <div className="flex items-center gap-2 mr-6">
-          <span className="text-lg font-bold text-green-500">ECG</span>
+          <span className="text-lg font-bold text-gold-medium">PPG</span>
           <div className="ml-13 w-[180px] mt-1">
             <div className="flex items-center space-x-1.5">
-              <Activity size={16} className="text-green-500" />
-              <div className="relative w-full h-2.5 bg-green-900/30 rounded-full overflow-hidden shadow-inner">
+              <Activity size={16} className="text-gold-medium" />
+              <div className="relative w-full h-2.5 bg-white/20 rounded-full overflow-hidden shadow-inner">
                 <div 
                   className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
                   style={{ 
                     width: `${isFingerDetected ? quality : 0}%`,
-                    boxShadow: 'inset 0 0 6px rgba(0, 255, 0, 0.6)'
+                    boxShadow: 'inset 0 0 6px rgba(255, 255, 255, 0.6)'
                   }}
                 />
               </div>
-              <span className="text-[10px] font-medium text-green-500 w-12 text-right">
+              <span className="text-[10px] font-medium text-gold-medium w-12 text-right">
                 {isFingerDetected ? `${quality}%` : '--%'}
               </span>
             </div>
             <div className="flex items-center justify-between mt-0.5">
-              <span className="text-[9px] font-medium text-green-500">
+              <span className="text-[9px] font-medium text-gold-medium">
                 {getQualityText(quality)}
               </span>
               {quality <= 50 && isFingerDetected && (
@@ -439,44 +439,44 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[8px] text-center font-medium text-green-500">
+          <span className="text-[8px] text-center font-medium text-gold-medium">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
       </div>
 
-      <div className="absolute inset-0 pt-16 pb-16">
+      <div className="canvas-container" style={{ height: 'calc(100vh - 120px)', width: '100%' }}>
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className="w-full h-full"
+          className="w-full h-full graph-grid"
         />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 gap-px bg-black">
+      <div className="fixed bottom-0 left-0 right-0 h-[80px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
-          className="bg-black border-t border-green-900/30 text-green-500 transition-colors duration-200 flex items-center justify-center text-xl"
-          style={{ height: '60px' }}
+          className="bg-transparent soft-button text-white transition-colors duration-200 flex items-center justify-center"
+          style={{ fontSize: '1.5rem', padding: '1rem', height: '80px' }}
         >
           <div className="flex items-center justify-center gap-2">
             {isMonitoring ? (
               <>
-                <span className="text-xl font-semibold">{30 - elapsedTime}s</span>
+                <span className="text-2xl font-semibold">{30 - elapsedTime}s</span>
               </>
             ) : (
-              <span className="text-xl font-semibold">INICIAR</span>
+              <span className="text-2xl font-semibold">INICIAR</span>
             )}
           </div>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-black border-t border-green-900/30 text-green-500 hover:bg-red-900/20 transition-colors duration-200 text-xl"
-          style={{ height: '60px' }}
+          className="bg-transparent soft-button text-white hover:bg-red-500/20 transition-colors duration-200"
+          style={{ fontSize: '1.5rem', padding: '1rem', height: '80px' }}
         >
-          <span className="text-xl font-semibold">
+          <span className="text-2xl font-semibold">
             RESETEAR
           </span>
         </button>

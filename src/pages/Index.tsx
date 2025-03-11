@@ -556,7 +556,7 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-black" style={{ 
+    <div className="fixed inset-0 flex flex-col bg-gold-black" style={{ 
       height: '100dvh',
       width: '100vw',
       maxWidth: '100vw',
@@ -575,7 +575,7 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          {/* Alerta de arritmia */}
+          {/* Nueva alerta de arritmia */}
           { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
             <div className="alert-banner bg-red-700/50 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
                ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
@@ -597,14 +597,14 @@ const Index = () => {
 
           {isCalibrating && (
             <div className="absolute bottom-[55%] left-0 right-0 text-center">
-              <span className="text-sm font-medium text-green-500">
+              <span className="text-sm font-medium text-gold-medium">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
           )}
 
-          {/* Vital signs display as an overlay */}
-          <div className="absolute inset-x-0 bottom-[80px] bg-black/70 backdrop-blur-sm border-t border-green-900/30" style={{ height: '80px' }}>
+          {/* Move vital signs display over the graph */}
+          <div className="absolute inset-x-0 bottom-[150px] bg-transparent backdrop-blur-sm bg-opacity-50" style={{ height: '80px' }}>
             <div className="grid grid-cols-3 h-full w-full p-0.5 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -651,4 +651,3 @@ const Index = () => {
 };
 
 export default Index;
-

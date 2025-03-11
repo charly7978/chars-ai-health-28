@@ -1,4 +1,3 @@
-
 import { SpO2Processor } from './spo2-processor';
 import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
@@ -83,9 +82,8 @@ export class VitalSignsProcessor {
     totalCholesterol: [] as number[],
     triglycerides: [] as number[]
   };
-  
-  // Adding the missing kalmanState property that was mixed with the constructor
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
+
+  constructor() {tate: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
