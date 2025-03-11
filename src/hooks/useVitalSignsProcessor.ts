@@ -119,8 +119,9 @@ export const useVitalSignsProcessor = () => {
       });
     }
     
-    // Si tenemos un resultado válido, guárdalo
-    if (result.spo2 > 0 && result.glucose > 0 && result.lipids.totalCholesterol > 0) {
+    // Si tenemos un resultado válido, guárdalo - IMPORTANTE: validación más estricta
+    // Sólo guardamos resultados cuando hay valores reales para todos los parámetros
+    if (result.spo2 > 90 && result.glucose > 70 && result.lipids.totalCholesterol > 100) {
       console.log("useVitalSignsProcessor: Resultado válido detectado", {
         spo2: result.spo2,
         presión: result.pressure,

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -157,6 +156,12 @@ const Index = () => {
 
   useEffect(() => {
     if (lastValidResults && !isMonitoring) {
+      console.log("Index: Actualizando resultados finales", {
+        spo2: lastValidResults.spo2,
+        pressure: lastValidResults.pressure,
+        glucose: lastValidResults.glucose,
+        timestamp: new Date().toISOString()
+      });
       setVitalSigns(lastValidResults);
       setShowResults(true);
     }
@@ -502,59 +507,71 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      console.log("Index: Procesando señal con calidad:", lastSignal.quality);
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
       
-      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-      if (vitals) {
-        setVitalSigns(prevState => {
-          const newState = { ...prevState };
-          
-          if (vitals.spo2 && vitals.spo2 > 0) {
-            newState.spo2 = vitals.spo2;
-          }
-          
-          if (vitals.pressure && vitals.pressure !== "--/--") {
-            newState.pressure = vitals.pressure;
-          }
-          
-          if (vitals.arrhythmiaStatus) {
-            newState.arrhythmiaStatus = vitals.arrhythmiaStatus;
-          }
-          
-          if (vitals.glucose && vitals.glucose > 0) {
-            newState.glucose = vitals.glucose;
-          }
-          
-          if (vitals.lipids) {
-            if (vitals.lipids.totalCholesterol > 0) {
-              newState.lipids.totalCholesterol = vitals.lipids.totalCholesterol;
-            }
-            if (vitals.lipids.triglycerides > 0) {
-              newState.lipids.triglycerides = vitals.lipids.triglycerides;
-            }
-          }
-          
-          if (vitals.hemoglobin && vitals.hemoglobin > 0) {
-            newState.hemoglobin = vitals.hemoglobin;
-          }
-          
-          return newState;
-        });
+      if (heartBeatResult.bpm > 0) {
+        console.log("Index: BPM detectado:", heartBeatResult.bpm);
+        setHeartRate(heartBeatResult.bpm);
+      }
+      
+      if (lastSignal.quality >= 40) {
+        const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
         
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
+        if (vitals) {
+          setVitalSigns(prevState => {
+            const newState = { ...prevState };
+            
+            if (vitals.spo2 && vitals.spo2 > 80) {
+              newState.spo2 = vitals.spo2;
+            }
+            
+            if (vitals.pressure && vitals.pressure !== "--/--") {
+              newState.pressure = vitals.pressure;
+            }
+            
+            if (vitals.arrhythmiaStatus) {
+              newState.arrhythmiaStatus = vitals.arrhythmiaStatus;
+            }
+            
+            if (vitals.glucose && vitals.glucose > 50) {
+              newState.glucose = vitals.glucose;
+            }
+            
+            if (vitals.lipids) {
+              if (vitals.lipids.totalCholesterol > 100) {
+                newState.lipids.totalCholesterol = vitals.lipids.totalCholesterol;
+              }
+              if (vitals.lipids.triglycerides > 50) {
+                newState.lipids.triglycerides = vitals.lipids.triglycerides;
+              }
+            }
+            
+            if (vitals.hemoglobin && vitals.hemoglobin > 5) {
+              newState.hemoglobin = vitals.hemoglobin;
+            }
+            
+            return newState;
+          });
+          
+          if (vitals.lastArrhythmiaData) {
+            setLastArrhythmiaData(vitals.lastArrhythmiaData);
+            const [status, count] = vitals.arrhythmiaStatus.split('|');
+            setArrhythmiaCount(count || "0");
+          }
         }
+      } else {
+        console.log("Index: Calidad de señal insuficiente para procesar valores:", lastSignal.quality);
       }
       
       setSignalQuality(lastSignal.quality);
+    } else if (!lastSignal?.fingerDetected && isMonitoring) {
+      console.log("Index: No hay dedo detectado");
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gold-black" style={{ 
+    <div className="fixed inset-0 flex flex-col bg-transparent" style={{ 
       height: '100dvh',
       width: '100vw',
       maxWidth: '100vw',
@@ -578,7 +595,7 @@ const Index = () => {
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
-              onStartMeasurement={startMonitoring}
+              onStartMeasurement={handleMonitoringButton}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
               rawArrhythmiaData={lastArrhythmiaData}
@@ -637,11 +654,11 @@ const Index = () => {
 
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
-              onClick={isMonitoring ? stopMonitoring : startMonitoring}
+              onClick={handleMonitoringButton}
               className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
                 isMonitoring 
-                  ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
-                  : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
+                  ? 'stop-button' 
+                  : 'start-button'
               }`}
             >
               {isMonitoring ? 'DETENER' : 'INICIAR'}
@@ -660,3 +677,4 @@ const Index = () => {
 };
 
 export default Index;
+

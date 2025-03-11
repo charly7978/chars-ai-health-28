@@ -6,11 +6,11 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
-  private readonly MIN_PERFUSION_INDEX = 0.35; // Increased threshold for finger detection
-  private readonly MIN_AC_VALUE = 8.0; // Increased minimum AC variation required for real signal
+  private readonly MIN_PERFUSION_INDEX = 0.45; // Increased threshold for finger detection
+  private readonly MIN_AC_VALUE = 10.0; // Increased minimum AC variation required for real signal
   private readonly MIN_VALUES_LENGTH = 30; // Minimum sample size for calculation
-  private readonly MIN_SIGNAL_INTENSITY = 50; // Minimum signal intensity
-  private readonly MIN_STANDARD_DEVIATION = 3.0; // Minimum standard deviation for real signal
+  private readonly MIN_SIGNAL_INTENSITY = 80; // Increased minimum signal intensity
+  private readonly MIN_STANDARD_DEVIATION = 5.0; // Higher minimum standard deviation for real signal
 
   /**
    * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
@@ -42,7 +42,7 @@ export class SpO2Processor {
     const cv = stdDev / Math.abs(dc); // Coefficient of variation
     
     // Check if there's actual pulsatile variation representative of a real finger
-    if (stdDev < this.MIN_STANDARD_DEVIATION || cv < 0.04) {
+    if (stdDev < this.MIN_STANDARD_DEVIATION || cv < 0.06) {
       // Clear all buffers when there's no valid signal
       this.spo2Buffer = [];
       this.medianBuffer = [];
