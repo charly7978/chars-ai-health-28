@@ -23,10 +23,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const isSpO2Display = label === "SPO2";
 
   const getDisplayContent = () => {
-    if (!highlighted || !value || value === 0) {
+    if (!value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
-        color: "text-gray-500",
+        color: "text-gold-light",
         status: ""
       };
     }
@@ -71,13 +71,10 @@ const VitalSign: React.FC<VitalSignProps> = ({
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
-      
-      if (numValue > 600) return { text: String(value), color: "text-red-800", status: "Hiperglucemia Extrema" };
       if (numValue > 400) return { text: String(value), color: "text-red-500", status: "Hiperglucemia Crítica" };
       if (numValue > 300) return { text: String(value), color: "text-red-400", status: "Hiperglucemia Grave" };
       if (numValue > 200) return { text: String(value), color: "text-orange-500", status: "Hiperglucemia Moderada" };
       if (numValue > 140) return { text: String(value), color: "text-yellow-500", status: "Hiperglucemia Leve" };
-      
       return { text: String(value), color: "text-green-500", status: "Normal" };
     }
     
@@ -160,7 +157,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     return {
       text: value,
-      color: highlighted ? "text-white" : "text-gray-500",
+      color: "text-gold-light",
       status: ""
     };
   };
@@ -168,16 +165,16 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="seamless-panel flex flex-col h-full">
-      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-1">
-        <h3 className={`text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[28px] flex items-center justify-center ${!highlighted ? 'opacity-75' : ''}`}>
+    <div className="vital-sign-panel flex flex-col h-full bg-opacity-50">
+      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
+        <h3 className="text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
         
-        <div className="flex flex-col items-center justify-center gap-1 flex-1 py-1">
+        <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
           <div className="flex items-center justify-center gap-1">
             <span 
-              className={`font-bold ${highlighted ? 'glowing-text' : color} transition-colors duration-300 
+              className={`font-bold ${color} transition-colors duration-300 
                 ${isArrhythmiaDisplay ? 'text-[15px]' : ''}
                 ${isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : ''}
                 ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : ''}`}
@@ -186,13 +183,13 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className={`${highlighted ? 'text-gold-medium/90' : 'text-gray-500'} text-[13px] font-medium`}>
+              <span className="text-gold-medium/90 text-[13px] font-medium">
                 {unit}
               </span>
             )}
           </div>
           
-          {status && highlighted && (
+          {status && (
             <span className={`text-[12px] font-medium text-center ${color} mt-0.5`}>
               {status}
             </span>

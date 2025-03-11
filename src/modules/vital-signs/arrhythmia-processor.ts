@@ -1,4 +1,3 @@
-
 /**
  * Advanced Arrhythmia Processor based on peer-reviewed cardiac research
  * Implements algorithms from "Assessment of Arrhythmia Vulnerability by Heart Rate Variability Analysis"
@@ -7,21 +6,21 @@
 export class ArrhythmiaProcessor {
   // Configuración optimizada para reducir falsos positivos
   private readonly RR_WINDOW_SIZE = 5; // Reducido para evitar propagación de falsos positivos
-  private RMSSD_THRESHOLD = 50; // Incrementado para reducir falsos positivos
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 7000; // Periodo de aprendizaje aumentado
-  private readonly SD1_THRESHOLD = 30; // Poincaré plot SD1 threshold - incrementado
-  private readonly PERFUSION_INDEX_MIN = 0.25; // Minimum PI for reliable detection - incrementado
+  private RMSSD_THRESHOLD = 45; // Cambiado a variable normal para permitir ajustes
+  private readonly ARRHYTHMIA_LEARNING_PERIOD = 5000; // Periodo de aprendizaje
+  private readonly SD1_THRESHOLD = 25; // Poincaré plot SD1 threshold
+  private readonly PERFUSION_INDEX_MIN = 0.2; // Minimum PI for reliable detection
   
   // Advanced detection parameters from Mayo Clinic research
-  private readonly PNNX_THRESHOLD = 0.20; // pNN50 threshold - incrementado
-  private readonly SHANNON_ENTROPY_THRESHOLD = 1.7; // Information theory threshold - incrementado
-  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.4; // Sample entropy threshold - incrementado
+  private readonly PNNX_THRESHOLD = 0.15; // pNN50 threshold
+  private readonly SHANNON_ENTROPY_THRESHOLD = 1.5; // Information theory threshold
+  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
   
   // Límites de tiempo para evitar múltiples detecciones del mismo evento
-  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 2000; // Al menos 2 segundos entre arritmias
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1500; // Al menos 1.5 segundos entre arritmias
   
   // Parámetros para evitar falsos positivos en la detección
-  private readonly ANOMALY_CONFIRMATION_FRAMES = 2; // Incrementado a 2 para confirmar arritmias
+  private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
   private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Máximo 1 latido arrítmico consecutivo
   
   // State variables
@@ -46,11 +45,6 @@ export class ArrhythmiaProcessor {
   private consecutiveArrhythmiaFrames: number = 0;
   private pendingArrhythmiaDetection: boolean = false;
   private lastArrhythmiaData: { timestamp: number; rmssd: number; rrVariation: number; } | null = null;
-  
-  // Nueva variable para falsos positivos
-  private stableRRCount: number = 0;
-  private highQualitySignalConfidence: number = 0;
-  private suspiciousDetections: number = 0;
 
   /**
    * Processes heart beat data to detect arrhythmias using advanced HRV analysis
@@ -75,60 +69,36 @@ export class ArrhythmiaProcessor {
         }
       }
       
-      // Nuevo: actualizar contador de señal estable
-      if (this.rrIntervals.length >= 2) {
-        const lastTwo = this.rrIntervals.slice(-2);
-        const diff = Math.abs(lastTwo[1] - lastTwo[0]);
-        const avg = (lastTwo[1] + lastTwo[0]) / 2;
-        
-        if (diff < avg * 0.15) { // Si hay estabilidad (poca variación)
-          this.stableRRCount++;
-          if (this.stableRRCount > 10) {
-            this.highQualitySignalConfidence = Math.min(1, this.highQualitySignalConfidence + 0.1);
-          }
-        } else {
-          this.stableRRCount = Math.max(0, this.stableRRCount - 1);
-          this.highQualitySignalConfidence = Math.max(0, this.highQualitySignalConfidence - 0.05);
-        }
-      }
-      
       // Solo detecta arritmias si ya pasó la fase de aprendizaje y hay suficientes datos
       if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
+        // Determinar si este frame debe ser evaluado para arritmia
+        const shouldEvaluateFrame = 
+          currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
+          !this.arrhythmiaDetected;
         
-        // Nuevo: solo permitir detección con señal de alta calidad
-        if (this.highQualitySignalConfidence > 0.5) {
-          // Determinar si este frame debe ser evaluado para arritmia
-          const shouldEvaluateFrame = 
-            currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS ||
-            !this.arrhythmiaDetected;
+        if (shouldEvaluateFrame) {
+          // Si hay detección pendiente, desactivarla después de un tiempo
+          if (this.pendingArrhythmiaDetection && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.pendingArrhythmiaDetection = false;
+            this.arrhythmiaDetected = false;
+            this.consecutiveArrhythmiaFrames = 0;
+          }
           
-          if (shouldEvaluateFrame) {
-            // Si hay detección pendiente, desactivarla después de un tiempo
-            if (this.pendingArrhythmiaDetection && 
-                currentTime - this.lastArrhythmiaTime > 800) {
-              this.pendingArrhythmiaDetection = false;
-              this.arrhythmiaDetected = false;
-              this.consecutiveArrhythmiaFrames = 0;
-            }
-            
-            // Solo evalúa arritmias si no hay muchas detecciones consecutivas
-            if (this.consecutiveArrhythmiaFrames < this.MAX_CONSECUTIVE_DETECTIONS) {
-              this.detectArrhythmia();
-            } else if (currentTime - this.lastArrhythmiaTime > 1000) {
-              // Resetear contador después de un tiempo
-              this.consecutiveArrhythmiaFrames = 0;
-              this.arrhythmiaDetected = false;
-            }
-          } else {
-            // Si no es momento de evaluar, no mantener la detección demasiado tiempo
-            if (this.arrhythmiaDetected && 
-                currentTime - this.lastArrhythmiaTime > 800) {
-              this.arrhythmiaDetected = false;
-            }
+          // Solo evalúa arritmias si no hay muchas detecciones consecutivas
+          if (this.consecutiveArrhythmiaFrames < this.MAX_CONSECUTIVE_DETECTIONS) {
+            this.detectArrhythmia();
+          } else if (currentTime - this.lastArrhythmiaTime > 1000) {
+            // Resetear contador después de un tiempo
+            this.consecutiveArrhythmiaFrames = 0;
+            this.arrhythmiaDetected = false;
           }
         } else {
-          // Si la señal no es de alta calidad, ignorar posibles arritmias
-          this.arrhythmiaDetected = false;
+          // Si no es momento de evaluar, no mantener la detección demasiado tiempo
+          if (this.arrhythmiaDetected && 
+              currentTime - this.lastArrhythmiaTime > 800) {
+            this.arrhythmiaDetected = false;
+          }
         }
       }
     }
@@ -196,52 +166,39 @@ export class ArrhythmiaProcessor {
     this.lastRMSSD = rmssd;
     this.lastRRVariation = rrVariation;
     
-    // Algoritmo de decisión mejorado con umbrales más estrictos
+    // Algoritmo de decisión mejorado
     // Criterios más estrictos para reducir falsos positivos
     const isArrhythmia = 
       // Requiere alta variación del último intervalo RR respecto al promedio
-      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.30) || // Incrementados ambos umbrales
+      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.25) ||
       // O una variación extrema del intervalo R-R
-      (rrVariation > 0.45); // Umbral incrementado
-    
-    // Nuevo: añadir verificación adicional
-    const isPotentialFalsePositive = 
-      rrStandardDeviation < 20 || // Poca variabilidad general
-      avgRR < 500 || // Frecuencia cardíaca muy alta
-      avgRR > 1200; // Frecuencia cardíaca muy baja
+      (rrVariation > 0.40);
     
     // Si detectamos una arritmia potencial
-    if (isArrhythmia && !isPotentialFalsePositive) {
+    if (isArrhythmia) {
       // Confirmar solo si ha pasado suficiente tiempo desde la última detección
       if (currentTime - this.lastArrhythmiaTime > this.MIN_TIME_BETWEEN_ARRHYTHMIAS_MS) {
-        // Nuevo: incrementar contador para requerir detecciones confirmadas
-        this.suspiciousDetections++;
+        this.arrhythmiaCount++;
+        this.lastArrhythmiaTime = currentTime;
+        this.hasDetectedFirstArrhythmia = true;
+        this.arrhythmiaDetected = true;
+        this.consecutiveArrhythmiaFrames = 1;
         
-        // Solo confirmar después de múltiples detecciones sospechosas
-        if (this.suspiciousDetections >= this.ANOMALY_CONFIRMATION_FRAMES) {
-          this.arrhythmiaCount++;
-          this.lastArrhythmiaTime = currentTime;
-          this.hasDetectedFirstArrhythmia = true;
-          this.arrhythmiaDetected = true;
-          this.consecutiveArrhythmiaFrames = 1;
-          this.suspiciousDetections = 0;
-          
-          // Guardar la información de esta arritmia
-          this.lastArrhythmiaData = {
-            timestamp: currentTime,
-            rmssd: rmssd,
-            rrVariation: rrVariation
-          };
-          
-          console.log('ArrhythmiaProcessor - Nueva arritmia real confirmada:', {
-            contador: this.arrhythmiaCount,
-            rmssd: rmssd.toFixed(2),
-            rrVariation: rrVariation.toFixed(2),
-            avgRR: avgRR.toFixed(2),
-            lastRR: lastRR.toFixed(2),
-            timestamp: new Date(currentTime).toISOString()
-          });
-        }
+        // Guardar la información de esta arritmia
+        this.lastArrhythmiaData = {
+          timestamp: currentTime,
+          rmssd: rmssd,
+          rrVariation: rrVariation
+        };
+        
+        console.log('ArrhythmiaProcessor - Nueva arritmia real confirmada:', {
+          contador: this.arrhythmiaCount,
+          rmssd: rmssd.toFixed(2),
+          rrVariation: rrVariation.toFixed(2),
+          avgRR: avgRR.toFixed(2),
+          lastRR: lastRR.toFixed(2),
+          timestamp: new Date(currentTime).toISOString()
+        });
       } else {
         // Si es muy cercana a la anterior, marcamos como pendiente pero no incrementamos contador
         this.pendingArrhythmiaDetection = true;
@@ -253,9 +210,6 @@ export class ArrhythmiaProcessor {
         }
       }
     } else {
-      // Si no hay arritmia en este frame, resetear contador de detecciones sospechosas
-      this.suspiciousDetections = Math.max(0, this.suspiciousDetections - 1);
-      
       // Si no hay arritmia en este frame, mantener la detección actual brevemente
       // y luego desactivarla si no se confirma
       if (this.arrhythmiaDetected && 

@@ -6,7 +6,6 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
-import { Timer } from "lucide-react";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -36,7 +35,7 @@ const Index = () => {
     rrVariation: number;
   } | null>(null);
   
-  const { startProcessing, stopProcessing, lastSignal, processFrame, setLastSignal: resetLastSignal } = useSignalProcessor();
+  const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
   const { 
     processSignal: processVitalSigns, 
@@ -251,7 +250,6 @@ const Index = () => {
     setElapsedTime(0);
     setSignalQuality(0);
     setCalibrationProgress(undefined);
-    resetLastSignal(null);
   };
 
   const finalizeMeasurement = () => {
@@ -281,7 +279,6 @@ const Index = () => {
     setElapsedTime(0);
     setSignalQuality(0);
     setCalibrationProgress(undefined);
-    resetLastSignal(null);
   };
 
   const handleMonitoringButton = () => {
@@ -575,23 +572,16 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          {/* Nueva alerta de arritmia */}
-          { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
-            <div className="alert-banner bg-red-700/50 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
-               ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
-            </div>
-          )}
           <div className="flex-1">
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
-              onStartMeasurement={handleMonitoringButton}
+              onStartMeasurement={startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
               rawArrhythmiaData={lastArrhythmiaData}
               preserveResults={showResults}
-              elapsedTime={elapsedTime}
             />
           </div>
 
@@ -603,46 +593,64 @@ const Index = () => {
             </div>
           )}
 
-          {/* Move vital signs display over the graph */}
-          <div className="absolute inset-x-0 bottom-[150px] bg-transparent backdrop-blur-sm bg-opacity-50" style={{ height: '80px' }}>
-            <div className="grid grid-cols-3 h-full w-full p-0.5 gap-0">
+          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)]">
+            <div className="grid grid-cols-3 gap-0 h-full w-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
                 unit="BPM"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="HEMOGLOBINA"
                 value={vitalSigns.hemoglobin || "--"}
                 unit="g/dL"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
                 value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
-                highlighted={showResults || (lastSignal?.fingerDetected || false)}
+                highlighted={showResults}
               />
             </div>
+          </div>
+
+          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
+            <button 
+              onClick={isMonitoring ? stopMonitoring : startMonitoring}
+              className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
+                isMonitoring 
+                  ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
+                  : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
+              }`}
+            >
+              {isMonitoring ? 'DETENER' : 'INICIAR'}
+            </button>
+            <button 
+              onClick={handleReset}
+              className="w-full h-full gold-button text-lg font-bold text-white"
+            >
+              RESETEAR
+            </button>
           </div>
         </div>
       </div>
