@@ -4,6 +4,7 @@ import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 import { GlucoseProcessor } from './glucose-processor';
 import { LipidProcessor } from './lipid-processor';
+import { applyTimeBasedProcessing } from './utils';
 
 export interface VitalSignsResult {
   spo2: number;
@@ -76,6 +77,11 @@ export class VitalSignsProcessor {
   private cholesterolBuffer: number[] = [];
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
+
+  private lipidBuffer = {
+    totalCholesterol: [] as number[],
+    triglycerides: [] as number[]
+  };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -249,7 +255,8 @@ export class VitalSignsProcessor {
    */
   public processSignal(
     ppgValue: number,
-    rrData?: { intervals: number[]; lastPeakTime: number | null }
+    rrData?: { intervals: number[]; lastPeakTime: number | null },
+    elapsedTimeRef?: { current: number }
   ): VitalSignsResult {
     if (this.isCalibrating) {
       this.calibrationSamples++;
@@ -280,6 +287,37 @@ export class VitalSignsProcessor {
     // Calculate real lipid values using spectral analysis
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     
+    // Store lipid values for time-based processing
+    if (lipids.totalCholesterol > 0) {
+      this.lipidBuffer.totalCholesterol.push(lipids.totalCholesterol);
+    }
+    if (lipids.triglycerides > 0) {
+      this.lipidBuffer.triglycerides.push(lipids.triglycerides);
+    }
+    
+    // Apply time-based processing at 29 seconds
+    if (elapsedTimeRef?.current && elapsedTimeRef.current >= 29 && 
+        this.lipidBuffer.totalCholesterol.length > 5 && 
+        this.lipidBuffer.triglycerides.length > 5) {
+      
+      const processedCholesterol = applyTimeBasedProcessing(
+        this.lipidBuffer.totalCholesterol,
+        elapsedTimeRef.current,
+        29
+      );
+      
+      const processedTriglycerides = applyTimeBasedProcessing(
+        this.lipidBuffer.triglycerides,
+        elapsedTimeRef.current,
+        29
+      );
+      
+      if (processedCholesterol > 0 && processedTriglycerides > 0) {
+        lipids.totalCholesterol = processedCholesterol;
+        lipids.triglycerides = processedTriglycerides;
+      }
+    }
+
     // Calculate real hemoglobin using optimized algorithm
     const hemoglobin = this.calculateHemoglobin(ppgValues);
     
@@ -448,6 +486,11 @@ export class VitalSignsProcessor {
       clearTimeout(this.calibrationTimer);
       this.calibrationTimer = null;
     }
+
+    this.lipidBuffer = {
+      totalCholesterol: [],
+      triglycerides: []
+    };
     
     return savedResults;
   }
