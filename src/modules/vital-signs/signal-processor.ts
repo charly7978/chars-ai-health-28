@@ -1,3 +1,4 @@
+
 import { calculateAC, calculateDC } from './utils';
 
 /**
@@ -13,29 +14,29 @@ export class SignalProcessor {
   private readonly BASELINE_FACTOR = 0.92;
   private baselineValue: number = 0;
 
-  // Significantly stronger finger detection parameters
-  private readonly MIN_RED_THRESHOLD = 80;      // Increased minimum threshold
-  private readonly MAX_RED_THRESHOLD = 220;     // Reduced to avoid saturation
-  private readonly RED_DOMINANCE_RATIO = 1.50;  // Much higher ratio required
-  private readonly MIN_SIGNAL_AMPLITUDE = 8;    // Much higher variation required
-  private readonly MIN_VALID_PIXELS = 150;      // More valid pixels required
-  private readonly ROI_SCALE = 0.15;           // Smaller, more focused ROI
-  private readonly SIGNAL_MEMORY = 3;          // Reduced memory for faster signal loss
-  private readonly HYSTERESIS = 8;             // Reduced hysteresis
+  // Parámetros originales restaurados
+  private readonly MIN_RED_THRESHOLD = 50;     // Umbral mínimo reducido
+  private readonly MAX_RED_THRESHOLD = 220;    
+  private readonly RED_DOMINANCE_RATIO = 1.20; // Ratio reducido
+  private readonly MIN_SIGNAL_AMPLITUDE = 4;   // Amplitud mínima reducida
+  private readonly MIN_VALID_PIXELS = 100;     // Menos píxeles requeridos
+  private readonly ROI_SCALE = 0.15;           
+  private readonly SIGNAL_MEMORY = 5;          // Mayor memoria de señal
+  private readonly HYSTERESIS = 8;             
 
-  // Signal quality parameters
-  private readonly STABILITY_THRESHOLD = 0.85;  // Higher stability required
-  private readonly MIN_PERFUSION_INDEX = 0.20;  // Much higher perfusion threshold
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 30; // Lower allowed variation
+  // Parámetros de calidad de señal ajustados
+  private readonly STABILITY_THRESHOLD = 0.70;  // Menor estabilidad requerida
+  private readonly MIN_PERFUSION_INDEX = 0.10;  // Índice de perfusión reducido
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 40; // Mayor variación permitida
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
-  private readonly MIN_CONSECUTIVE_FRAMES = 6;  // More frames required for validation
+  private readonly MIN_CONSECUTIVE_FRAMES = 4;  // Menos frames requeridos
   private lastStableValue: number = 0;
   private stableSignalCount: number = 0;
-  private readonly MIN_STABLE_SIGNAL_COUNT = 15; // More stable signals required
+  private readonly MIN_STABLE_SIGNAL_COUNT = 10; // Menos señales estables requeridas
   private signalBuffer: number[] = [];
   private readonly SIGNAL_BUFFER_SIZE = 30;
-  private fingerDetectedState: boolean = false; // Explicit finger detection state
+  private fingerDetectedState: boolean = false; // Estado de detección de dedo
 
   /**
    * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
@@ -74,7 +75,7 @@ export class SignalProcessor {
     if (this.ppgValues.length > 10) {
       const lastTen = this.ppgValues.slice(-10);
       const stdDev = this.calculateStandardDeviation(lastTen);
-      if (stdDev < 1.0 && value > 1.0) {
+      if (stdDev < 0.8 && value > 1.0) { // Umbral reducido
         this.handleSignalLoss();
         return 0;
       }

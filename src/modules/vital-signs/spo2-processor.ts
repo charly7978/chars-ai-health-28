@@ -6,10 +6,10 @@ export class SpO2Processor {
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
-  private readonly MIN_PERFUSION_INDEX = 0.25; // Significantly increased threshold for finger detection
-  private readonly MIN_AC_VALUE = 5.0; // Increased minimum AC variation required for real signal
+  private readonly MIN_PERFUSION_INDEX = 0.1; // Valor reducido para mejor detección 
+  private readonly MIN_AC_VALUE = 2.0; // Valor reducido para captar señales más débiles
   private readonly MIN_VALUES_LENGTH = 30; // Minimum sample size for calculation
-  private readonly MIN_SIGNAL_INTENSITY = 40; // Minimum signal intensity
+  private readonly MIN_SIGNAL_INTENSITY = 20; // Valor reducido para mejor sensibilidad
 
   /**
    * Calculates the oxygen saturation (SpO2) from real PPG values using actual optical properties
@@ -22,7 +22,7 @@ export class SpO2Processor {
 
     // Calculate DC component
     const dc = calculateDC(values);
-    if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { // Increased minimum threshold for DC
+    if (dc === 0 || dc < this.MIN_SIGNAL_INTENSITY) { // Umbral más bajo
       return 0; // No DC component or too weak signal
     }
 
@@ -37,7 +37,7 @@ export class SpO2Processor {
     const cv = stdDev / Math.abs(dc); // Coefficient of variation
     
     // Check if there's actual pulsatile variation representative of a real finger
-    if (stdDev < 2.5 || cv < 0.03) {
+    if (stdDev < 1.5 || cv < 0.02) { // Valores más bajos para mejor detección
       // Clear all buffers when there's no valid signal
       this.spo2Buffer = [];
       this.medianBuffer = [];
@@ -116,7 +116,7 @@ export class SpO2Processor {
     
     // Real PPG should have between 6-30 zero crossings in this length of signal
     // (representing heart beats and their harmonics)
-    if (zeroCrossings < 6 || zeroCrossings > 30) {
+    if (zeroCrossings < 4 || zeroCrossings > 35) { // Valores ajustados para mejor detección
       return false;
     }
     

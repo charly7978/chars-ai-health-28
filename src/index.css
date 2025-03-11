@@ -93,10 +93,11 @@
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
-  border: 1px solid #9F8E6A25;
+  background: linear-gradient(167deg, rgba(50, 46, 52, 0.3) 0%, rgba(34, 31, 38, 0.3) 100%);
+  border: 1px solid rgba(159, 142, 106, 0.15);
   overflow: hidden;
   backdrop-filter: blur(1px);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
 }
 
 .background-grid {
@@ -126,4 +127,17 @@
 
 .stop-button:active {
   background: linear-gradient(to bottom, #941111, #71110e);
+}
+
+@keyframes pulse-white {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+  }
+  50% {
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.9);
+  }
+}
+
+.animate-pulse {
+  animation: pulse-white 2s infinite;
 }
