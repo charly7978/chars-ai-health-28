@@ -91,16 +91,14 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Create a darker background for the canvas
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(5, 8, 12, 0.9)');  // Darker background
-    gradient.addColorStop(1, 'rgba(3, 5, 10, 0.95)'); // Even darker at the bottom
+    gradient.addColorStop(0, 'rgba(5, 8, 12, 0.9)');
+    gradient.addColorStop(1, 'rgba(3, 5, 10, 0.95)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Very subtle grid lines, almost invisible
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.02)'; // Much less visible grid
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.02)';
     ctx.lineWidth = 0.3;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
@@ -114,7 +112,6 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Center line - keep very subtle
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(51, 65, 85, 0.06)';
     ctx.lineWidth = 1;
@@ -122,7 +119,6 @@ const PPGSignalMeter = ({
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
-    // Arrhythmia alerts if needed
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
@@ -361,7 +357,14 @@ const PPGSignalMeter = ({
 
   return (
     <div className="fixed inset-0 bg-black/25 backdrop-blur-sm">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-black/10 backdrop-blur-sm border-b border-white/5 shadow-sm pt-3">
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="w-full h-[100vh] absolute inset-0 z-0"
+      />
+
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent z-10 border-b border-white/5 shadow-sm pt-3">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold text-white/90">PPG</span>
           <div className="w-[180px]">
@@ -394,14 +397,7 @@ const PPGSignalMeter = ({
         </div>
       </div>
 
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="w-full h-[100vh] mt-14"
-      />
-
-      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 bg-transparent z-10">
         <button 
           onClick={onStartMeasurement}
           className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200 text-sm font-semibold"
