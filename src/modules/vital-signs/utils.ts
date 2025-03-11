@@ -1,4 +1,3 @@
-
 /**
  * Calculates the AC component (peak-to-peak amplitude) of a signal
  */
@@ -247,4 +246,52 @@ export function applySavitzkyGolayFilter(values: number[], windowSize: number = 
   }
   
   return result;
+}
+
+/**
+ * Applies data processing at measurement completion milestone (e.g., 29-second mark)
+ * @param values Array of values to process
+ * @param elapsedTime Current elapsed time in seconds
+ * @param targetTime Target time in seconds (e.g. 29)
+ * @returns Processed value using median and weighted average
+ */
+export function applyTimeBasedProcessing(
+  values: number[], 
+  elapsedTime: number, 
+  targetTime: number = 29
+): number {
+  if (values.length === 0) return 0;
+  
+  // If we've reached the target time
+  if (Math.floor(elapsedTime) === targetTime) {
+    console.log(`[Time-Based Processing] Applying special processing at ${targetTime}s mark`, {
+      valuesCount: values.length,
+      timeExact: elapsedTime
+    });
+    
+    // Apply outlier removal
+    const filteredValues = removeOutliers(values);
+    
+    // Apply median filter to get stable base
+    const medianValue = calculateMedian(filteredValues);
+    
+    // Apply weighted average (more weight to recent values)
+    const weightedValue = calculateWeightedAverage(filteredValues, 1.4);
+    
+    // Combine both with 60% weight to median (stability) and 40% to weighted avg (recency)
+    const finalValue = medianValue * 0.6 + weightedValue * 0.4;
+    
+    console.log(`[Time-Based Processing] Results at ${targetTime}s mark`, {
+      originalValues: values.length,
+      filteredValues: filteredValues.length,
+      median: medianValue.toFixed(2),
+      weightedAvg: weightedValue.toFixed(2),
+      finalValue: finalValue.toFixed(2)
+    });
+    
+    return Math.round(finalValue);
+  }
+  
+  // Default: just return the median for stability
+  return Math.round(calculateMedian(values));
 }
