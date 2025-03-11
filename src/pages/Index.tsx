@@ -410,11 +410,6 @@ const Index = () => {
     if (!isMonitoring) return;
     
     const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack || videoTrack.readyState !== 'live') {
-      console.log("Video track not in live state, cannot process");
-      return;
-    }
-    
     const imageCapture = new ImageCapture(videoTrack);
     
     if (videoTrack.getCapabilities()?.torch) {
@@ -434,11 +429,10 @@ const Index = () => {
     }
     
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/20;
+    const targetFrameInterval = 1000/30;
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
-    let isCapturing = true;
     
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
@@ -446,20 +440,13 @@ const Index = () => {
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
-      if (!isMonitoring || !isCapturing) return;
+      if (!isMonitoring) return;
       
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
-          if (!videoTrack || videoTrack.readyState !== 'live') {
-            console.log("Video track not ready for frame capture, skipping");
-            cancelAnimationFrame(requestAnimationFrame(processImage));
-            isCapturing = false;
-            return;
-          }
-          
           const frame = await imageCapture.grabFrame();
           
           const targetWidth = Math.min(320, frame.width);
@@ -501,18 +488,10 @@ const Index = () => {
           }
         } catch (error) {
           console.error("Error capturando frame:", error);
-          
-          if (error instanceof Error && 
-              (error.name === 'InvalidStateError' || 
-               error.message.includes('invalid state'))) {
-            console.log("Track in invalid state, stopping capture loop");
-            isCapturing = false;
-            return;
-          }
         }
       }
       
-      if (isMonitoring && isCapturing) {
+      if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
     };
