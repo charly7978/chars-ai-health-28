@@ -93,7 +93,6 @@ const Index = () => {
       }));
       
       // Iniciar calibración automática
-      // Importante: esto debe establecer correctamente el estado de calibración
       console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
@@ -425,7 +424,11 @@ const Index = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
-      height: 'calc(100vh + env(safe-area-inset-bottom))',
+      height: '100vh',
+      width: '100vw',
+      maxWidth: '100vw',
+      maxHeight: '100vh',
+      overflow: 'hidden',
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
@@ -461,7 +464,7 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-[50%] bottom-[70px] bg-black px-3 py-4">
+          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/20 backdrop-blur-sm px-3 py-4">
             <div className="grid grid-cols-3 gap-3 h-full">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
@@ -500,20 +503,6 @@ const Index = () => {
                 highlighted={showResults}
               />
             </div>
-          </div>
-
-          <div className="h-[70px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
-            <MonitorButton 
-              isMonitoring={isMonitoring}
-              onClick={startMonitoring}
-            />
-            <button 
-              onClick={handleReset}
-              className="w-full h-full bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
-              style={{textShadow: '0 1px 2px rgba(0,0,0,0.2)'}}
-            >
-              RESETEAR
-            </button>
           </div>
         </div>
       </div>

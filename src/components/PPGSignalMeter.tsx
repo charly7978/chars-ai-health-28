@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -385,10 +386,10 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-3">
+    <div className="fixed inset-0 bg-gradient-to-b from-black/80 to-black/70">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-black/20 backdrop-blur-sm border-b border-white/5 shadow-sm pt-3">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-slate-700">PPG</span>
+          <span className="text-lg font-bold text-white/90">PPG</span>
           <div className="w-[180px]">
             <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
               <div
@@ -413,7 +414,7 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[8px] text-center font-medium text-slate-600">
+          <span className="text-[8px] text-center font-medium text-white/70">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
@@ -423,25 +424,25 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(45vh)] mt-14"
+        className="w-full h-[calc(85vh)] mt-14"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[60px] grid grid-cols-2 gap-px bg-gray-800/30">
         <button 
           onClick={onStartMeasurement}
-          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
+          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
-          <span className="text-base font-semibold">
-            INICIAR/DETENER
+          <span className="text-sm font-semibold">
+            INICIAR
           </span>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+          className="bg-transparent text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
-          <span className="text-base font-semibold">
-            RESETEAR
+          <span className="text-sm font-semibold">
+            RESET
           </span>
         </button>
       </div>
