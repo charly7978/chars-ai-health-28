@@ -466,7 +466,7 @@ const Index = () => {
           </div>
 
           <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/10 px-3 py-4">
-            <div className="grid grid-cols-3 gap-3 h-full justify-items-center items-center">
+            <div className="grid grid-cols-3 gap-2 place-items-center">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}

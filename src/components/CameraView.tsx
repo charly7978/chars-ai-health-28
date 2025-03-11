@@ -161,6 +161,9 @@ const CameraView = ({
     }
   }, [stream, isFingerDetected, torchEnabled]);
 
+  // Cambiar la tasa de cuadros a, por ejemplo, 12 FPS:
+  const targetFrameInterval = 1000/12; // Apunta a 12 FPS para menor consumo
+
   return (
     <video
       ref={videoRef}
