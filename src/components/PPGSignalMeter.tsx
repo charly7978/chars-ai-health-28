@@ -442,7 +442,7 @@ const PPGSignalMeter = ({
         className="w-full h-[calc(55vh)] mt-0"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
           onClick={onStartMeasurement}
           className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
