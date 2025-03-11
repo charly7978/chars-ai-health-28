@@ -572,6 +572,12 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
+          {/* Nueva alerta de arritmia */}
+          { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
+            <div className="alert-banner bg-red-700 text-white p-2 text-center font-bold mb-2">
+               ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
+            </div>
+          )}
           <div className="flex-1">
             <PPGSignalMeter 
               value={lastSignal?.filteredValue || 0}

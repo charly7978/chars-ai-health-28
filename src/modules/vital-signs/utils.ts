@@ -1,4 +1,3 @@
-
 export const applyTimeBasedProcessing = (
   readings: number[], 
   elapsedTime: number,
@@ -6,26 +5,28 @@ export const applyTimeBasedProcessing = (
 ): number => {
   if (readings.length < 5) return 0;
   
-  // Sort readings for median calculation
+  // Ordenar los valores para calcular la mediana
   const sortedReadings = [...readings].sort((a, b) => a - b);
-  
-  // Calculate median
   const mid = Math.floor(sortedReadings.length / 2);
   const median = sortedReadings.length % 2 === 0
     ? (sortedReadings[mid - 1] + sortedReadings[mid]) / 2
     : sortedReadings[mid];
     
-  // Calculate weighted average for last 5 readings
+  // Calcular la media ponderada de los últimos 5 valores (mayor peso a los más recientes)
   const lastReadings = readings.slice(-5);
   const weightedSum = lastReadings.reduce((sum, reading, index) => {
-    // Higher weight for more recent readings
     const weight = (index + 1) / lastReadings.length;
     return sum + (reading * weight);
   }, 0);
-  
   const weightedAverage = weightedSum / ((lastReadings.length + 1) / 2);
   
-  // Blend median and weighted average based on time
+  // Si ha alcanzado o superado el tiempo objetivo (29s) se aplica la fusión avanzada:
+  // Se retorna la media aritmética entre la mediana y el promedio ponderado.
+  if (elapsedTime >= targetTime) {
+    return Math.round((median + weightedAverage) / 2);
+  }
+  
+  // De lo contrario, se mezcla progresivamente en función del tiempo transcurrido
   const timeWeight = Math.min(1, elapsedTime / targetTime);
   return Math.round(median * (1 - timeWeight) + weightedAverage * timeWeight);
 };

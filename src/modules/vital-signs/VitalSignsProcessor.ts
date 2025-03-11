@@ -83,6 +83,8 @@ export class VitalSignsProcessor {
     triglycerides: [] as number[]
   };
 
+  constructor() {tate: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
+
   constructor() {
     this.spo2Processor = new SpO2Processor();
     this.bpProcessor = new BloodPressureProcessor();
@@ -127,7 +129,7 @@ export class VitalSignsProcessor {
       }
     }, this.CALIBRATION_DURATION_MS);
     
-    console.log("VitalSignsProcessor: Calibraci��n iniciada con parámetros:", {
+    console.log("VitalSignsProcessor: Calibración iniciada con parámetros:", {
       muestrasRequeridas: this.CALIBRATION_REQUIRED_SAMPLES,
       tiempoMáximo: this.CALIBRATION_DURATION_MS,
       inicioCalibración: new Date(this.calibrationStartTime).toISOString()
@@ -249,6 +251,24 @@ export class VitalSignsProcessor {
       }
     }
   }
+
+  // NUEVO: Método de filtro de Kalman para optimizar el suavizado de la señal
+  private applyKalmanFilter(value: number): number {
+    const Q = 0.01; // Varianza del proceso (puede afinarse)
+    const R = 1;    // Varianza de la medición
+    // Predicción
+    const prediction = this.kalmanState.estimate;
+    const predictionError = this.kalmanState.errorCovariance + Q;
+    // Cálculo de ganancia
+    const K = predictionError / (predictionError + R);
+    // Actualización
+    const updatedEstimate = prediction + K * (value - prediction);
+    const updatedErrorCovariance = (1 - K) * predictionError;
+    // Guardar valores actualizados
+    this.kalmanState.estimate = updatedEstimate;
+    this.kalmanState.errorCovariance = updatedErrorCovariance;
+    return updatedEstimate;
+  }
   
   /**
    * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
@@ -262,7 +282,8 @@ export class VitalSignsProcessor {
       this.calibrationSamples++;
     }
     
-    const filtered = this.signalProcessor.applySMAFilter(ppgValue);
+    // Utilizar filtro de Kalman en vez de SMA para optimizar la reducción de ruido
+    const filtered = this.applyKalmanFilter(ppgValue);
     
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     

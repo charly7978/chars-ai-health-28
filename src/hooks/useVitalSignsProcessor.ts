@@ -130,14 +130,14 @@ export const useVitalSignsProcessor = () => {
       }
     }
     
-    // Apply time-based processing at the 29-second mark
-    let processedResult = {...result};
+    // Apply advanced time-based processing at the 29s mark (o al finalizar la medición) for blood pressure readings
+    let processedResult = { ...result };
     
-    if (Math.floor(elapsedTimeRef.current) === FINAL_PROCESSING_TIME && 
+    if (elapsedTimeRef.current >= FINAL_PROCESSING_TIME && 
         bloodPressureReadings.current.systolic.length > 5 && 
         bloodPressureReadings.current.diastolic.length > 5) {
         
-      console.log(`[Time-Based BP Processing] Applying at ${FINAL_PROCESSING_TIME}s mark`, {
+      console.log(`[Time-Based BP Processing] Advanced filtering at ${FINAL_PROCESSING_TIME}s: using median and average fusion`, {
         systolicReadings: bloodPressureReadings.current.systolic.length,
         diastolicReadings: bloodPressureReadings.current.diastolic.length,
         exactTime: elapsedTimeRef.current
@@ -157,8 +157,7 @@ export const useVitalSignsProcessor = () => {
       
       if (processedSystolic > 0 && processedDiastolic > 0) {
         processedResult.pressure = `${processedSystolic}/${processedDiastolic}`;
-        
-        console.log(`[Time-Based BP Processing] Final processed value at ${FINAL_PROCESSING_TIME}s mark:`, {
+        console.log(`[Time-Based BP Processing] Final advanced processed value:`, {
           pressure: processedResult.pressure,
           originalPressure: result.pressure
         });

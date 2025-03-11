@@ -140,15 +140,15 @@ export class LipidProcessor {
     
     // Calculate augmentation index (correlates with arterial stiffness)
     let augmentationValues = [];
-    for (let i = 0; i < peaks.length - 1; i++) {
-      const peakIdx = peaks[i];
-      const nextPeakIdx = peaks[i+1];
+      for (let i = 0; i < peaks.length - 1; i++) {
+        const peakIdx = peaks[i];
+        const nextPeakIdx = peaks[i+1];
       const valleysBetween = troughs.filter(t => t > peakIdx && t < nextPeakIdx);
-      
-      if (valleysBetween.length > 0) {
-        const valleyIdx = valleysBetween[0];
-        const peakHeight = normalizedPPG[peakIdx];
-        const valleyHeight = normalizedPPG[valleyIdx];
+          
+          if (valleysBetween.length > 0) {
+            const valleyIdx = valleysBetween[0];
+            const peakHeight = normalizedPPG[peakIdx];
+            const valleyHeight = normalizedPPG[valleyIdx];
         
         if (peakHeight - valleyHeight > 0) {
           augmentationValues.push((peakHeight - valleyHeight) / peakHeight);

@@ -63,7 +63,7 @@ export class BloodPressureProcessor {
     peakCount: 0,
     valleyCount: 0
   };
-  
+
   constructor() {
     this.reset();
     console.log("[BP Processor] Procesador inicializado con configuración:", {
@@ -184,7 +184,7 @@ export class BloodPressureProcessor {
     // Calcular valores actuales usando mediana para estabilidad
     const currentSystolic = Math.round(calculateMedian(this.systolicBuffer));
     const currentDiastolic = Math.round(calculateMedian(this.diastolicBuffer));
-    
+
     return {
       systolic: currentSystolic, 
       diastolic: currentDiastolic,
@@ -668,7 +668,7 @@ export class BloodPressureProcessor {
     systolic = Math.max(this.MIN_SYSTOLIC, Math.min(this.MAX_SYSTOLIC, systolic));
     diastolic = Math.max(this.MIN_DIASTOLIC, Math.min(this.MAX_DIASTOLIC, diastolic));
     
-    return { 
+    return {
       systolic: Math.round(systolic), 
       diastolic: Math.round(diastolic) 
     };

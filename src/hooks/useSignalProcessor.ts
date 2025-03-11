@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -29,36 +28,22 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      console.log("useSignalProcessor: Señal recibida detallada:", {
-        timestamp: signal.timestamp,
-        formattedTime: new Date(signal.timestamp).toISOString(),
-        quality: signal.quality,
-        rawValue: signal.rawValue,
-        filteredValue: signal.filteredValue,
-        fingerDetected: signal.fingerDetected,
-        roi: signal.roi,
-        processingTime: Date.now() - signal.timestamp
-      });
-      
       setLastSignal(signal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      // Actualizar estadísticas
-      setSignalStats(prev => {
-        const newStats = {
-          minValue: Math.min(prev.minValue, signal.filteredValue),
-          maxValue: Math.max(prev.maxValue, signal.filteredValue),
-          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
-          totalValues: prev.totalValues + 1
-        };
-        
-        if (prev.totalValues % 50 === 0) {
-          console.log("useSignalProcessor: Estadísticas de señal:", newStats);
-        }
-        
-        return newStats;
-      });
+      // Actualizar estadísticas solo cada 50 frames
+      if ((framesProcessed + 1) % 50 === 0) {
+        setSignalStats(prev => {
+          const newStats = {
+            minValue: Math.min(prev.minValue, signal.filteredValue),
+            maxValue: Math.max(prev.maxValue, signal.filteredValue),
+            avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+            totalValues: prev.totalValues + 1
+          };
+          return newStats;
+        });
+      }
     };
 
     processor.onError = (error: ProcessingError) => {
