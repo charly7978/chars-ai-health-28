@@ -1,4 +1,3 @@
-
 /**
  * Calculates the AC component (peak-to-peak amplitude) of a signal
  */
@@ -12,7 +11,7 @@ export function calculateAC(values: number[]): number {
  */
 export function calculateDC(values: number[]): number {
   if (values.length === 0) return 0;
-  return values.reduce((a, b) => a + b, 0) / values.length;
+  return values.reduce((sum, val) => sum + val, 0) / values.length;
 }
 
 /**
@@ -30,26 +29,15 @@ export function calculateStandardDeviation(values: number[]): number {
 /**
  * Finds peaks and valleys in a signal
  */
-export function findPeaksAndValleys(values: number[]) {
+export function findPeaksAndValleys(values: number[]): { peakIndices: number[]; valleyIndices: number[] } {
   const peakIndices: number[] = [];
   const valleyIndices: number[] = [];
 
-  for (let i = 2; i < values.length - 2; i++) {
-    const v = values[i];
-    if (
-      v > values[i - 1] &&
-      v > values[i - 2] &&
-      v > values[i + 1] &&
-      v > values[i + 2]
-    ) {
+  for (let i = 1; i < values.length - 1; i++) {
+    if (values[i] > values[i - 1] && values[i] > values[i + 1]) {
       peakIndices.push(i);
     }
-    if (
-      v < values[i - 1] &&
-      v < values[i - 2] &&
-      v < values[i + 1] &&
-      v < values[i + 2]
-    ) {
+    if (values[i] < values[i - 1] && values[i] < values[i + 1]) {
       valleyIndices.push(i);
     }
   }
@@ -61,21 +49,15 @@ export function findPeaksAndValleys(values: number[]) {
  */
 export function calculateAmplitude(
   values: number[],
-  peaks: number[],
-  valleys: number[]
+  peakIndices: number[],
+  valleyIndices: number[]
 ): number {
-  if (peaks.length === 0 || valleys.length === 0) return 0;
+  if (!peakIndices.length || !valleyIndices.length) return 0;
 
-  const amps: number[] = [];
-  const len = Math.min(peaks.length, valleys.length);
+  let sum = 0;
+  const len = Math.min(peakIndices.length, valleyIndices.length);
   for (let i = 0; i < len; i++) {
-    const amp = values[peaks[i]] - values[valleys[i]];
-    if (amp > 0) {
-      amps.push(amp);
-    }
+    sum += values[peakIndices[i]] - values[valleyIndices[i]];
   }
-  if (amps.length === 0) return 0;
-
-  const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
-  return mean;
+  return sum / len;
 }

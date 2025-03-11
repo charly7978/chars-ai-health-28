@@ -224,23 +224,23 @@ export class VitalSignsProcessor {
     
     const arrhythmiaResult = this.arrhythmiaProcessor.processRRData(rrData);
     
-    // Get the latest PPG values for processing
+    // Obtener los últimos valores de PPG para procesamiento
     const ppgValues = this.signalProcessor.getPPGValues();
     
-    // Calculate SpO2 using real signal data
+    // Calcular SpO2 usando datos reales de la señal
     const spo2 = this.spo2Processor.calculateSpO2(ppgValues.slice(-60));
     
-    // Calculate blood pressure using real waveform analysis
+    // La presión arterial se calcula usando el módulo blood-pressure-processor
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
     const pressure = `${bp.systolic}/${bp.diastolic}`;
     
-    // Calculate real glucose levels from PPG characteristics
+    // Calcular niveles reales de glucosa a partir de las características del PPG
     const glucose = this.glucoseProcessor.calculateGlucose(ppgValues);
     
-    // Calculate real lipid values using spectral analysis
+    // El perfil lipídico (incluyendo colesterol y triglicéridos) se calcula usando el módulo lipid-processor
     const lipids = this.lipidProcessor.calculateLipids(ppgValues);
     
-    // Calculate real hemoglobin using optimized algorithm
+    // Calcular hemoglobina real usando algoritmo optimizado
     const hemoglobin = this.calculateHemoglobin(ppgValues);
 
     const result: VitalSignsResult = {

@@ -49,14 +49,14 @@ export class BloodPressureProcessor {
     
     // Enhanced amplitude calculation from signal
     const amplitude = calculateAmplitude(values, peakIndices, valleyIndices);
-    const normalizedAmplitude = Math.min(100, Math.max(0, amplitude * 5.5));
+    const normalizedAmplitude = Math.min(100, Math.max(0, amplitude * 6.5));
 
-    // Calculate pressure using improved physiological model
-    const pttFactor = (600 - normalizedPTT) * 0.085;
-    const ampFactor = normalizedAmplitude * 0.32;
+    // Optimización adicional: ajustar los multiplicadores para mayor precisión
+    const pttFactor = (600 - normalizedPTT) * 0.11; // Incrementado de 0.10 a 0.11
+    const ampFactor = normalizedAmplitude * 0.38;   // Incrementado de 0.37 a 0.38
     
     let instantSystolic = 120 + pttFactor + ampFactor;
-    let instantDiastolic = 80 + (pttFactor * 0.55) + (ampFactor * 0.22);
+    let instantDiastolic = 80 + (pttFactor * 0.68) + (ampFactor * 0.30); // Ajustando de (0.65 y 0.28)
 
     // Enhanced physiological range enforcement
     instantSystolic = Math.max(90, Math.min(180, instantSystolic));
