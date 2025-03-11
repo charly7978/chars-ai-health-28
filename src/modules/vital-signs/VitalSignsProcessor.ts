@@ -414,7 +414,7 @@ export class VitalSignsProcessor {
     
     // Aplicar el procesamiento final de la presión arterial (nuevo)
     const finalBP = this.bpProcessor.completeMeasurement();
-    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
+    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;\
     
     if (this.lastValidResults) {
       // Actualizamos el resultado final con los valores finales de glucosa y presión
