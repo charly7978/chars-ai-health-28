@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -607,37 +608,37 @@ const Index = () => {
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
                 unit="BPM"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
               <VitalSign 
                 label="HEMOGLOBINA"
                 value={vitalSigns.hemoglobin || "--"}
                 unit="g/dL"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
                 value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
-                highlighted={showResults || isFingerDetected}
+                highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
             </div>
           </div>
@@ -670,4 +671,3 @@ const Index = () => {
 };
 
 export default Index;
-
