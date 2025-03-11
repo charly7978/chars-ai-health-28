@@ -167,9 +167,9 @@ const VitalSign: React.FC<VitalSignProps> = ({
   return (
     <div className="relative overflow-hidden flex flex-col h-full transition-all duration-300"
          style={{
-           background: 'linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%)',
+           backgroundColor: '#1E3A8A',
            borderRadius: '0.5rem',
-           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 1px 3px rgba(0,0,0,0.1)',
+           boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
            border: 'none'
          }}>
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-3">
@@ -189,7 +189,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gray-300/90 text-[13px] font-medium">
+              <span className="text-white text-[13px] font-medium">
                 {unit}
               </span>
             )}
