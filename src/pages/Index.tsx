@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -572,65 +573,67 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          <div className="flex-1">
-            <PPGSignalMeter 
-              value={lastSignal?.filteredValue || 0}
-              quality={lastSignal?.quality || 0}
-              isFingerDetected={lastSignal?.fingerDetected || false}
-              onStartMeasurement={startMonitoring}
-              onReset={handleReset}
-              arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-              rawArrhythmiaData={lastArrhythmiaData}
-              preserveResults={showResults}
-            />
-          </div>
-
-          {isCalibrating && (
-            <div className="absolute bottom-[55%] left-0 right-0 text-center">
-              <span className="text-sm font-medium text-gold-medium">
-                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
-              </span>
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1">
+              <PPGSignalMeter 
+                value={lastSignal?.filteredValue || 0}
+                quality={lastSignal?.quality || 0}
+                isFingerDetected={lastSignal?.fingerDetected || false}
+                onStartMeasurement={startMonitoring}
+                onReset={handleReset}
+                arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
+                rawArrhythmiaData={lastArrhythmiaData}
+                preserveResults={showResults}
+              />
             </div>
-          )}
+            
+            <div className="absolute bottom-0 left-0 right-0 top-1/2 bg-gold-darkest shadow-lg border-t border-gold-medium/20">
+              {isCalibrating && (
+                <div className="absolute top-2 left-0 right-0 text-center z-10">
+                  <span className="text-sm font-medium text-gold-medium">
+                    Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
+                  </span>
+                </div>
+              )}
 
-          <div className="absolute inset-x-0 bottom-0 mb-[58px]">
-            <div className="grid grid-cols-3 gap-0" style={{ minHeight: "210px" }}>
-              <VitalSign 
-                label="FRECUENCIA CARDÍACA"
-                value={heartRate || "--"}
-                unit="BPM"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="SPO2"
-                value={vitalSigns.spo2 || "--"}
-                unit="%"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="PRESIÓN ARTERIAL"
-                value={vitalSigns.pressure}
-                unit="mmHg"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="HEMOGLOBINA"
-                value={vitalSigns.hemoglobin || "--"}
-                unit="g/dL"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="GLUCOSA"
-                value={vitalSigns.glucose || "--"}
-                unit="mg/dL"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                unit="mg/dL"
-                highlighted={showResults}
-              />
+              <div className="grid grid-cols-3 gap-0 h-full pt-10 pb-16">
+                <VitalSign 
+                  label="FRECUENCIA CARDÍACA"
+                  value={heartRate || "--"}
+                  unit="BPM"
+                  highlighted={showResults}
+                />
+                <VitalSign 
+                  label="SPO2"
+                  value={vitalSigns.spo2 || "--"}
+                  unit="%"
+                  highlighted={showResults}
+                />
+                <VitalSign 
+                  label="PRESIÓN ARTERIAL"
+                  value={vitalSigns.pressure}
+                  unit="mmHg"
+                  highlighted={showResults}
+                />
+                <VitalSign 
+                  label="HEMOGLOBINA"
+                  value={vitalSigns.hemoglobin || "--"}
+                  unit="g/dL"
+                  highlighted={showResults}
+                />
+                <VitalSign 
+                  label="GLUCOSA"
+                  value={vitalSigns.glucose || "--"}
+                  unit="mg/dL"
+                  highlighted={showResults}
+                />
+                <VitalSign 
+                  label="COLESTEROL/TRIGL."
+                  value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                  unit="mg/dL"
+                  highlighted={showResults}
+                />
+              </div>
             </div>
           </div>
 
