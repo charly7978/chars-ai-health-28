@@ -48,9 +48,9 @@ const Index = () => {
   } = useVitalSignsProcessor();
 
   useEffect(() => {
-    const activateFullscreen = async () => {
+    const tryFullscreen = async () => {
       try {
-        setTimeout(async () => {
+        const enterFullscreen = async () => {
           if (document.documentElement.requestFullscreen) {
             await document.documentElement.requestFullscreen();
           } else if ((document.documentElement as any).webkitRequestFullscreen) {
@@ -68,13 +68,26 @@ const Index = () => {
               console.log('No se pudo bloquear la orientación:', err);
             }
           }
-        }, 300);
+        };
+
+        // Try immediately
+        await enterFullscreen();
+        
+        // Also try after a delay in case the first attempt fails
+        setTimeout(enterFullscreen, 500);
+        
+        // Add a button click listener to force fullscreen on user interaction
+        const forceFullscreen = () => {
+          enterFullscreen();
+          document.removeEventListener('click', forceFullscreen);
+        };
+        document.addEventListener('click', forceFullscreen);
       } catch (err) {
         console.log('Error al entrar en pantalla completa:', err);
       }
     };
     
-    activateFullscreen();
+    tryFullscreen();
   }, []);
 
   useEffect(() => {
@@ -466,7 +479,7 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px] px-0">
+          <div className="absolute inset-x-0 bottom-[60px]">
             <div className="grid grid-cols-3 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
