@@ -43,28 +43,23 @@ const PPGSignalMeter = ({
   const isMonitoring = elapsedTime > 0;
 
   const WINDOW_WIDTH_MS = 3000;
-  const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 800; // Increased height to extend the graph
-  const GRID_SIZE_X = 20;
-  const GRID_SIZE_Y = 20;
+  const CANVAS_WIDTH = 800;
+  const CANVAS_HEIGHT = 1000; // Increased height to extend the graph
+  const GRID_SIZE_X = 10;
+  const GRID_SIZE_Y = 10;
   const verticalScale = 28.0;
   const SMOOTHING_FACTOR = 1.3;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
   
-  const PEAK_DETECTION_WINDOW = 8;
+  const PEAK_DETECTION_WINDOW = 6;
   const PEAK_THRESHOLD = 3;
   const MIN_PEAK_DISTANCE_MS = 250;
   
   const IMMEDIATE_RENDERING = true;
-  const MAX_PEAKS_TO_DISPLAY = 25;
-
-  useEffect(() => {
-    if (!dataBufferRef.current) {
-      dataBufferRef.current = new CircularBuffer(BUFFER_SIZE);
+  const MAX_P
     }
-    
     if (preserveResults && !isFingerDetected) {
       if (dataBufferRef.current) {
         dataBufferRef.current.clear();
@@ -404,7 +399,7 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-transparent">
+    <div className="fixed inset-0 bg-transparent flex flex-col">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-gold-medium">PPG</span>
@@ -453,13 +448,15 @@ const PPGSignalMeter = ({
         </div>
       </div>
 
-      <div className="canvas-container">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          className="w-full h-full graph-grid"
-        />
+      <div className="flex-1 relative">
+        <div className="canvas-container absolute inset-0">
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            className="w-full h-full graph-grid"
+          />
+        </div>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 h-[100px] grid grid-cols-2 gap-px bg-transparent">
