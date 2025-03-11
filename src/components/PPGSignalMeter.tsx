@@ -404,7 +404,7 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-transparent">
+    <div className="fixed inset-0 bg-transparent flex flex-col">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-gold-medium">PPG</span>
@@ -453,13 +453,15 @@ const PPGSignalMeter = ({
         </div>
       </div>
 
-      <div className="canvas-container">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          className="w-full h-full graph-grid"
-        />
+      <div className="flex-1 relative">
+        <div className="canvas-container absolute inset-0">
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            className="w-full h-full graph-grid"
+          />
+        </div>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 h-[100px] grid grid-cols-2 gap-px bg-transparent">
