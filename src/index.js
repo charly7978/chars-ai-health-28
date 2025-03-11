@@ -183,6 +183,7 @@ const Index = () => {
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
   const toggleMonitoring = () => {
+    console.log('Toggle monitoring called, current state:', isMonitoring);
     if (isMonitoring) {
       stopMonitoring();
     } else {
