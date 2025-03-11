@@ -48,46 +48,70 @@ const Index = () => {
   } = useVitalSignsProcessor();
 
   useEffect(() => {
-    const tryFullscreen = async () => {
-      try {
-        const enterFullscreen = async () => {
-          if (document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
-          } else if ((document.documentElement as any).webkitRequestFullscreen) {
-            await (document.documentElement as any).webkitRequestFullscreen();
-          } else if ((document.documentElement as any).mozRequestFullScreen) {
-            await (document.documentElement as any).mozRequestFullScreen();
-          } else if ((document.documentElement as any).msRequestFullscreen) {
-            await (document.documentElement as any).msRequestFullscreen();
-          }
-          
-          if (screen.orientation && screen.orientation.lock) {
-            try {
-              await screen.orientation.lock('portrait');
-            } catch (err) {
-              console.log('No se pudo bloquear la orientación:', err);
-            }
-          }
-        };
-
-        // Try immediately
-        await enterFullscreen();
-        
-        // Also try after a delay in case the first attempt fails
-        setTimeout(enterFullscreen, 500);
-        
-        // Add a button click listener to force fullscreen on user interaction
-        const forceFullscreen = () => {
-          enterFullscreen();
-          document.removeEventListener('click', forceFullscreen);
-        };
-        document.addEventListener('click', forceFullscreen);
-      } catch (err) {
-        console.log('Error al entrar en pantalla completa:', err);
+    let fullscreenAttempts = 0;
+    const maxAttempts = 5;
+    
+    const requestFullscreen = async (element: any) => {
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if (element.webkitRequestFullscreen) {
+        await element.webkitRequestFullscreen();
+      } else if (element.mozRequestFullScreen) {
+        await element.mozRequestFullScreen();
+      } else if (element.msRequestFullscreen) {
+        await element.msRequestFullscreen();
       }
     };
     
-    tryFullscreen();
+    const tryEnterFullscreen = async () => {
+      try {
+        await requestFullscreen(document.documentElement);
+        console.log("Fullscreen requested successfully");
+        
+        if (screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock('portrait');
+            console.log("Orientation locked to portrait");
+          } catch (err) {
+            console.log('No se pudo bloquear la orientación:', err);
+          }
+        }
+      } catch (err) {
+        console.log(`Intento ${fullscreenAttempts + 1} fallido para activar pantalla completa:`, err);
+        fullscreenAttempts++;
+        
+        if (fullscreenAttempts < maxAttempts) {
+          setTimeout(tryEnterFullscreen, 1000); // Try again after a delay
+        }
+      }
+    };
+    
+    // Try fullscreen on load
+    tryEnterFullscreen();
+    
+    // Setup event listeners for user interactions which can trigger fullscreen
+    const userInteractionEvents = ['click', 'touchstart', 'pointerdown'];
+    
+    const fullscreenOnUserInteraction = () => {
+      tryEnterFullscreen();
+      
+      // Remove this specific handler after first interaction
+      userInteractionEvents.forEach(eventType => {
+        document.removeEventListener(eventType, fullscreenOnUserInteraction);
+      });
+    };
+    
+    // Add listeners for user interaction events
+    userInteractionEvents.forEach(eventType => {
+      document.addEventListener(eventType, fullscreenOnUserInteraction, { once: true });
+    });
+    
+    // Clean up event listeners on component unmount
+    return () => {
+      userInteractionEvents.forEach(eventType => {
+        document.removeEventListener(eventType, fullscreenOnUserInteraction);
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -112,6 +136,21 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
+      try {
+        const element = document.documentElement;
+        if (element.requestFullscreen) {
+          element.requestFullscreen();
+        } else if ((element as any).webkitRequestFullscreen) {
+          (element as any).webkitRequestFullscreen();
+        } else if ((element as any).mozRequestFullScreen) {
+          (element as any).mozRequestFullScreen();
+        } else if ((element as any).msRequestFullscreen) {
+          (element as any).msRequestFullscreen();
+        }
+      } catch (e) {
+        console.error("Error forcing fullscreen on start:", e);
+      }
+      
       setIsMonitoring(true);
       setIsCameraOn(true);
       setShowResults(false);
