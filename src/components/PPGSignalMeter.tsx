@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle, Heart, Check } from 'lucide-react';
+import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -37,9 +37,6 @@ const PPGSignalMeter = ({
   const arrhythmiaCountRef = useRef<number>(0);
   const peaksRef = useRef<{time: number, value: number, isArrhythmia: boolean}[]>([]);
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
-  const [calibrationCompleted, setCalibrationCompleted] = useState(false);
-  const [measurementEnded, setMeasurementEnded] = useState(false);
-  const [arrhythmiaAlertEndTime, setArrhythmiaAlertEndTime] = useState<number | null>(null);
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
@@ -73,12 +70,6 @@ const PPGSignalMeter = ({
       lastValueRef.current = null;
     }
   }, [preserveResults, isFingerDetected]);
-
-  useEffect(() => {
-    if (measurementEnded && showArrhythmiaAlert) {
-      setArrhythmiaAlertEndTime(Date.now() + 10000);
-    }
-  }, [measurementEnded, showArrhythmiaAlert]);
 
   const getQualityColor = useCallback((q: number) => {
     if (!isFingerDetected) return 'from-gray-400 to-gray-500';
@@ -168,58 +159,8 @@ const PPGSignalMeter = ({
       } 
     }
     
-    if (calibrationCompleted && !showArrhythmiaAlert) {
-      ctx.fillStyle = '#0EA5E9';
-      ctx.font = 'bold 16px Inter';
-      ctx.textAlign = 'left';
-      ctx.fillText('LATIDO NORMAL', 45, 35);
-      
-      ctx.beginPath();
-      ctx.arc(30, 30, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#0EA5E9';
-      ctx.fill();
-      
-      ctx.beginPath();
-      ctx.moveTo(25, 30);
-      ctx.lineTo(29, 34);
-      ctx.lineTo(35, 26);
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    if (showArrhythmiaAlert) {
-      const now = Date.now();
-      if (arrhythmiaAlertEndTime && now > arrhythmiaAlertEndTime) {
-        setShowArrhythmiaAlert(false);
-        setArrhythmiaAlertEndTime(null);
-      } else {
-        ctx.fillStyle = '#ea384c';
-        ctx.font = 'bold 16px Inter';
-        ctx.textAlign = 'left';
-        ctx.fillText('ARRITMIA DETECTADA', 45, 35);
-        
-        ctx.beginPath();
-        ctx.arc(30, 30, 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#ea384c';
-        ctx.fill();
-        
-        ctx.beginPath();
-        ctx.moveTo(30, 25);
-        ctx.lineTo(30, 32);
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.arc(30, 35, 1, 0, Math.PI * 2);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
-      }
-    }
-    
     ctx.stroke();
-  }, [arrhythmiaStatus, showArrhythmiaAlert, calibrationCompleted, arrhythmiaAlertEndTime]);
+  }, [arrhythmiaStatus, showArrhythmiaAlert]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
     if (points.length < PEAK_DETECTION_WINDOW) return;
@@ -330,8 +271,7 @@ const PPGSignalMeter = ({
     let isArrhythmia = false;
     if (rawArrhythmiaData && 
         arrhythmiaStatus?.includes("ARRITMIA") && 
-        now - rawArrhythmiaData.timestamp < 500 && 
-        !showArrhythmiaAlert) {
+        now - rawArrhythmiaData.timestamp < 500) {
       isArrhythmia = true;
       lastArrhythmiaTime.current = rawArrhythmiaData.timestamp;
     }
@@ -441,19 +381,9 @@ const PPGSignalMeter = ({
 
   const handleReset = useCallback(() => {
     setShowArrhythmiaAlert(false);
-    setCalibrationCompleted(false);
-    setMeasurementEnded(false);
-    setArrhythmiaAlertEndTime(null);
     peaksRef.current = [];
     onReset();
   }, [onReset]);
-
-  const handleStartStop = useCallback(() => {
-    if (showArrhythmiaAlert) {
-      setMeasurementEnded(true);
-    }
-    onStartMeasurement();
-  }, [onStartMeasurement, showArrhythmiaAlert]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
@@ -499,7 +429,7 @@ const PPGSignalMeter = ({
 
       <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
-          onClick={handleStartStop}
+          onClick={onStartMeasurement}
           className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
         >
           <span className="text-base font-semibold">
