@@ -83,7 +83,7 @@ export class VitalSignsProcessor {
     triglycerides: [] as number[]
   };
 
-  constructor() {tate: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
+  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -94,10 +94,6 @@ export class VitalSignsProcessor {
     this.lipidProcessor = new LipidProcessor();
   }
 
-  /**
-   * Inicia el proceso de calibración que analiza y optimiza los algoritmos
-   * para las condiciones específicas del usuario y dispositivo
-   */
   public startCalibration(): void {
     console.log("VitalSignsProcessor: Iniciando calibración avanzada");
     this.isCalibrating = true;
@@ -136,9 +132,6 @@ export class VitalSignsProcessor {
     });
   }
   
-  /**
-   * Finaliza el proceso de calibración y aplica los parámetros optimizados
-   */
   private completeCalibration(): void {
     if (!this.isCalibrating) return;
     
@@ -213,11 +206,6 @@ export class VitalSignsProcessor {
     });
   }
 
-  /**
-   * Calcula la mediana de un array de números
-   * @param values Array de valores numéricos
-   * @returns Valor de la mediana
-   */
   private calculateMedian(values: number[]): number {
     if (values.length === 0) return 0;
     
@@ -235,11 +223,6 @@ export class VitalSignsProcessor {
     return (sortedValues[mid - 1] + sortedValues[mid]) / 2;
   }
   
-  /**
-   * Añade un valor al buffer de mediana y mantiene el tamaño máximo
-   * @param buffer Buffer donde se almacenan los valores
-   * @param value Nuevo valor a añadir
-   */
   private addToMedianBuffer(buffer: number[], value: number): void {
     // Solo añadir valores válidos (mayores que cero)
     if (value > 0) {
@@ -252,7 +235,6 @@ export class VitalSignsProcessor {
     }
   }
 
-  // NUEVO: Método de filtro de Kalman para optimizar el suavizado de la señal
   private applyKalmanFilter(value: number): number {
     const Q = 0.01; // Varianza del proceso (puede afinarse)
     const R = 1;    // Varianza de la medición
@@ -270,9 +252,6 @@ export class VitalSignsProcessor {
     return updatedEstimate;
   }
   
-  /**
-   * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
-   */
   public processSignal(
     ppgValue: number,
     rrData?: { intervals: number[]; lastPeakTime: number | null },
@@ -402,10 +381,6 @@ export class VitalSignsProcessor {
     return result;
   }
 
-  /**
-   * Completa la medición y aplica el procesamiento estadístico final
-   * a la glucosa y presión arterial, devolviendo los resultados finales.
-   */
   public completeMeasurement(): VitalSignsResult | null {
     console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
@@ -476,9 +451,6 @@ export class VitalSignsProcessor {
     this.forceCompleteCalibration = true;
   }
 
-  /**
-   * Resetea el procesador de signos vitales
-   */
   public reset(): VitalSignsResult | null {
     // Guardar resultados válidos antes de resetear
     const savedResults = this.lastValidResults;
@@ -516,18 +488,13 @@ export class VitalSignsProcessor {
     return savedResults;
   }
   
-  /**
-   * Obtener los últimos resultados válidos
-   */
   public getLastValidResults(): VitalSignsResult | null {
     return this.lastValidResults;
   }
   
-  /**
-   * Reseteo completo incluyendo resultados guardados
-   */
   public fullReset(): void {
     this.reset();
     this.lastValidResults = null;
   }
 }
+
