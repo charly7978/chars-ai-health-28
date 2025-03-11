@@ -179,6 +179,6 @@ export const useSignalProcessor = () => {
     stopProcessing,
     calibrate,
     processFrame,
-    setLastSignal // Add this to allow external reset
+    setLastSignal // Export this to allow external reset
   };
 };

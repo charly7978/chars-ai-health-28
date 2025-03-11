@@ -36,7 +36,7 @@ const Index = () => {
     rrVariation: number;
   } | null>(null);
   
-  const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
+  const { startProcessing, stopProcessing, lastSignal, processFrame, setLastSignal: resetLastSignal } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
   const { 
     processSignal: processVitalSigns, 
@@ -251,7 +251,7 @@ const Index = () => {
     setElapsedTime(0);
     setSignalQuality(0);
     setCalibrationProgress(undefined);
-    setLastSignal(null);
+    resetLastSignal(null);
   };
 
   const finalizeMeasurement = () => {
@@ -281,7 +281,7 @@ const Index = () => {
     setElapsedTime(0);
     setSignalQuality(0);
     setCalibrationProgress(undefined);
-    setLastSignal(null);
+    resetLastSignal(null);
   };
 
   const handleMonitoringButton = () => {
@@ -577,7 +577,7 @@ const Index = () => {
         <div className="relative z-10 h-full flex flex-col">
           {/* Nueva alerta de arritmia */}
           { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
-            <div className="alert-banner bg-red-700 text-white p-2 text-center font-bold mb-2">
+            <div className="alert-banner bg-red-700/50 backdrop-blur-sm text-white p-2 text-center font-bold mb-2 border border-red-500/30">
                ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
             </div>
           )}
@@ -603,8 +603,9 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)] bg-gradient-to-b from-[#1E293B] to-[#0F172A] shadow-inner overflow-hidden">
-            <div className="grid grid-cols-3 gap-0.5 h-full w-full p-0.5">
+          {/* Move vital signs display over the graph */}
+          <div className="absolute inset-x-0 bottom-[150px] bg-transparent backdrop-blur-sm bg-opacity-50" style={{ height: '80px' }}>
+            <div className="grid grid-cols-3 h-full w-full p-0.5 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -642,28 +643,6 @@ const Index = () => {
                 highlighted={showResults || (lastSignal?.fingerDetected || false)}
               />
             </div>
-          </div>
-
-          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
-            <button 
-              onClick={handleMonitoringButton}
-              className="w-full h-full text-xl font-bold text-white transition-colors duration-200 flex items-center justify-center gap-2 bg-gradient-to-b from-[#3B82F6] to-[#1D4ED8] hover:from-[#2563EB] hover:to-[#1E40AF] active:from-[#1E40AF] active:to-[#1E3A8A]"
-            >
-              {isMonitoring ? (
-                <>
-                  <Timer className="h-5 w-5" />
-                  <span>{30 - elapsedTime}s</span>
-                </>
-              ) : (
-                'INICIAR'
-              )}
-            </button>
-            <button 
-              onClick={handleReset}
-              className="w-full h-full text-xl font-bold text-white bg-gradient-to-b from-[#EF4444] to-[#B91C1C] hover:from-[#DC2626] hover:to-[#991B1B] active:from-[#991B1B] active:to-[#7F1D1D]"
-            >
-              RESETEAR
-            </button>
           </div>
         </div>
       </div>
