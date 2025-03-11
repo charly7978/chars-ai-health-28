@@ -90,7 +90,7 @@ export default {
         },
         "value-glow": {
           "0%, 100%": { textShadow: "0 0 1px rgba(255,255,255,0.2)" },
-          "50%": { textShadow: "0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(255,255,255,0.4)" }
+          "50%": { textShadow: "0 0 20px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.6)" }
         }
       },
       animation: {
@@ -100,5 +100,19 @@ export default {
       }
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    function({ addUtilities }) {
+      const newUtilities = {
+        '.text-gradient-soft': {
+          background: 'linear-gradient(to bottom, #FFFFFF, #F2FCE2)',
+          '-webkit-background-clip': 'text',
+          'background-clip': 'text',
+          'color': 'transparent',
+          'text-shadow': '0 0 5px rgba(255,255,255,0.3)'
+        },
+      }
+      addUtilities(newUtilities)
+    }
+  ],
 } satisfies Config;

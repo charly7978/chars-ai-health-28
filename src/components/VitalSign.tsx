@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -17,7 +16,6 @@ const VitalSign = ({
   calibrationProgress 
 }: VitalSignProps) => {
   const getRiskLabel = (label: string, value: string | number) => {
-    // First handle number values
     if (typeof value === 'number') {
       switch(label) {
         case 'FRECUENCIA CARDÍACA':
@@ -40,7 +38,6 @@ const VitalSign = ({
       }
     }
     
-    // Then handle string values separately
     if (typeof value === 'string') {
       switch(label) {
         case 'PRESIÓN ARTERIAL':
@@ -68,7 +65,6 @@ const VitalSign = ({
           }
           return '';
         case 'ARRITMIAS':
-          // Handle the arrhythmia status which comes in format "STATUS|COUNT"
           const parts = value.split('|');
           if (parts.length === 2) {
             const status = parts[0];
@@ -113,7 +109,6 @@ const VitalSign = ({
     }
   };
 
-  // Handle arrhythmia display separately
   const getArrhythmiaDisplay = (value: string | number) => {
     if (typeof value !== 'string') return null;
     
@@ -125,19 +120,19 @@ const VitalSign = ({
     
     if (status === "ARRITMIA DETECTADA" && count !== "0") {
       return (
-        <div className="text-xs font-medium mt-2 text-[#ea384c]">
+        <div className="text-sm font-medium mt-2 text-[#ea384c]">
           Arritmias: {count}
         </div>
       );
     } else if (status === "SIN ARRITMIAS") {
       return (
-        <div className="text-xs font-medium mt-2 text-green-500">
+        <div className="text-sm font-medium mt-2 text-green-500">
           Normal
         </div>
       );
     } else if (status === "CALIBRANDO...") {
       return (
-        <div className="text-xs font-medium mt-2 text-blue-400">
+        <div className="text-sm font-medium mt-2 text-blue-400">
           Calibrando...
         </div>
       );
@@ -156,15 +151,15 @@ const VitalSign = ({
         {label}
       </div>
       
-      <div className="font-bold text-lg sm:text-xl transition-all duration-300">
-        <span className="text-white animate-value-glow">
+      <div className="font-bold text-xl sm:text-2xl transition-all duration-300">
+        <span className="text-gradient-soft animate-value-glow">
           {isArrhytmia && typeof value === 'string' ? value.split('|')[0] : value}
         </span>
         {unit && <span className="text-xs text-white/70 ml-1">{unit}</span>}
       </div>
 
       {!isArrhytmia && riskLabel && (
-        <div className={`text-xs font-medium mt-1 ${riskColor}`}>
+        <div className={`text-sm font-medium mt-1 ${riskColor}`}>
           {riskLabel}
         </div>
       )}
