@@ -5,7 +5,7 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import MonitorButton from "@/components/MonitorButton";
+import TopControlBar from "@/components/TopControlBar";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
 const Index = () => {
@@ -537,6 +537,11 @@ const Index = () => {
             signalQuality={signalQuality}
           />
         </div>
+
+        <TopControlBar 
+          isMonitoring={isMonitoring} 
+          onToggleMonitoring={startMonitoring} 
+        />
 
         <div className="relative z-10 h-full flex flex-col">
           <div className="flex-1">
