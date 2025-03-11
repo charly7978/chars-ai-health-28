@@ -392,13 +392,13 @@ const PPGSignalMeter = ({
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="ml-10 w-[180px]">
-            <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
+            <div className={`h-1.5 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
               <div
                 className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
                 style={{ width: `${isFingerDetected ? quality : 0}%` }}
               />
             </div>
-            <span className="text-[8px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
+            <span className="text-[9px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
                   style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
               {getQualityText(quality)}
             </span>
