@@ -5,8 +5,6 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import ShareButton from "@/components/ShareButton";
-import { toast } from "sonner";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -20,7 +18,6 @@ const Index = () => {
   const [heartRate, setHeartRate] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState("--");
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [selectedVitalSign, setSelectedVitalSign] = useState(null);
   const measurementTimerRef = useRef(null);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
@@ -96,16 +93,6 @@ const Index = () => {
     stopProcessing();
     resetVitalSigns();
     setElapsedTime(0);
-    setSignalQuality(0);
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-      measurementTimerRef.current = null;
-    }
-  };
-
-  const resetAll = () => {
-    stopMonitoring();
     setHeartRate(0);
     setVitalSigns({ 
       spo2: 0, 
@@ -113,7 +100,12 @@ const Index = () => {
       arrhythmiaStatus: "--" 
     });
     setArrhythmiaCount("--");
-    toast.success("Todos los datos han sido restablecidos");
+    setSignalQuality(0);
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
   };
 
   const handleStreamReady = (stream) => {
@@ -162,45 +154,46 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
+      const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
+      setHeartRate(calculatedHeartRate);
       
+      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        setVitalSigns(vitals);
+        // Solo actualizar cuando tengamos valores reales
+        setVitalSigns({
+          spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
+          pressure: vitals.pressure || "--/--",
+          arrhythmiaStatus: vitals.arrhythmiaStatus || "--"
+        });
         setArrhythmiaCount(vitals.arrhythmiaStatus.split('|')[1] || "--");
       }
       
       setSignalQuality(lastSignal.quality);
+    } else {
+      // Si no hay señal válida, resetear valores
+      setHeartRate(0);
+      setVitalSigns({ 
+        spo2: 0, 
+        pressure: "--/--",
+        arrhythmiaStatus: "--" 
+      });
+      setArrhythmiaCount("--");
+      setSignalQuality(0);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Mis signos vitales',
-          text: `Frecuencia cardíaca: ${heartRate || "--"} BPM\nSPO2: ${vitalSigns.spo2 || "--"}%\nPresión arterial: ${vitalSigns.pressure}\nArritmias: ${arrhythmiaCount === "--" ? "No detectadas" : arrhythmiaCount}`,
-          url: window.location.href,
-        });
-      } else {
-        const text = `Frecuencia cardíaca: ${heartRate || "--"} BPM\nSPO2: ${vitalSigns.spo2 || "--"}%\nPresión arterial: ${vitalSigns.pressure}\nArritmias: ${arrhythmiaCount === "--" ? "No detectadas" : arrhythmiaCount}`;
-        await navigator.clipboard.writeText(text);
-        toast.success("Información copiada al portapapeles");
-      }
-    } catch (error) {
-      console.error("Error al compartir:", error);
-      toast.error("No se pudo compartir la información");
-    }
-  };
-
   return (
-    <div className="fixed inset-0 flex flex-col bg-black" 
+    <div 
+      className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
         height: 'calc(100vh + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)'
-      }}>
+      }}
+    >
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
@@ -220,39 +213,30 @@ const Index = () => {
               onStartMeasurement={startMonitoring}
               onReset={stopMonitoring}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-              rawArrhythmiaData={vitalSigns.lastArrhythmiaData}
             />
           </div>
 
-          <div className="absolute bottom-[170px] left-0 right-0 px-4">
-            <div className="bg-gray-900/70 backdrop-blur-sm rounded-xl p-5 shadow-lg">
-              <div className="grid grid-cols-4 gap-4">
+          <div className="absolute bottom-[200px] left-0 right-0 px-4">
+            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
+              <div className="grid grid-cols-4 gap-2">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
-                  calibrationProgress={vitalSigns.calibration?.progress.heartRate}
-                  displaySize="large"
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
-                  calibrationProgress={vitalSigns.calibration?.progress.spo2}
-                  displaySize="large"
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
-                  calibrationProgress={vitalSigns.calibration?.progress.pressure}
-                  displaySize="large"
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
-                  calibrationProgress={vitalSigns.calibration?.progress.arrhythmia}
-                  displaySize="large"
                 />
               </div>
             </div>
@@ -260,21 +244,20 @@ const Index = () => {
 
           {isMonitoring && (
             <div className="absolute bottom-40 left-0 right-0 text-center">
-              <span className="text-2xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
+              <span className="text-xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
             </div>
           )}
 
-          <div className="h-[100px] grid grid-cols-3 gap-px bg-gray-900 mt-auto">
+          <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <button 
               onClick={startMonitoring}
-              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
             >
               INICIAR
             </button>
-            <ShareButton onShare={handleShare} />
             <button 
-              onClick={resetAll}
-              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
+              onClick={stopMonitoring}
+              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
             >
               RESET
             </button>
