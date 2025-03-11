@@ -10,11 +10,11 @@ export class HeartBeatProcessor {
   private readonly MIN_PEAK_TIME_MS = 400; 
   private readonly WARMUP_TIME_MS = 3000; 
 
-  // Parámetros de filtrado
-  private readonly MEDIAN_FILTER_WINDOW = 3; 
-  private readonly MOVING_AVERAGE_WINDOW = 3; 
-  private readonly EMA_ALPHA = 0.4; 
-  private readonly BASELINE_FACTOR = 1.0; 
+  // Parámetros de filtrado - ajustados para mayor precisión
+  private readonly MEDIAN_FILTER_WINDOW = 5; // Increased from 3 to 5
+  private readonly MOVING_AVERAGE_WINDOW = 5; // Increased from 3 to 5
+  private readonly EMA_ALPHA = 0.35; // Reduced from 0.4 to 0.35 for smoother signal
+  private readonly BASELINE_FACTOR = 0.98; // Increased from 1.0 to 0.98
 
   // Parámetros de beep
   private readonly BEEP_PRIMARY_FREQUENCY = 880; 

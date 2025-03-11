@@ -16,12 +16,19 @@ export class ArrhythmiaProcessor {
   private readonly SHANNON_ENTROPY_THRESHOLD = 1.5; // Information theory threshold
   private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
   
+  // Modified to improve detection accuracy
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 3000; // At least 3 seconds between arritmias
+  
+  // Increased to prevent false positives
+  private readonly ANOMALY_CONFIRMATION_FRAMES = 2; // More confirmation needed
+  private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Still max 1 arrhythmic beat consecutive
+  
   // Límites de tiempo para evitar múltiples detecciones del mismo evento
-  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS = 1500; // Al menos 1.5 segundos entre arritmias
+  private readonly MIN_TIME_BETWEEN_ARRHYTHMIAS_MS_OLD = 1500; // Al menos 1.5 segundos entre arritmias
   
   // Parámetros para evitar falsos positivos en la detección
-  private readonly ANOMALY_CONFIRMATION_FRAMES = 1; // Solo confirma un latido como arritmia
-  private readonly MAX_CONSECUTIVE_DETECTIONS = 1; // Máximo 1 latido arrítmico consecutivo
+  private readonly ANOMALY_CONFIRMATION_FRAMES_OLD = 1; // Solo confirma un latido como arritmia
+  private readonly MAX_CONSECUTIVE_DETECTIONS_OLD = 1; // Máximo 1 latido arrítmico consecutivo
   
   // State variables
   private rrIntervals: number[] = [];
@@ -96,7 +103,7 @@ export class ArrhythmiaProcessor {
         } else {
           // Si no es momento de evaluar, no mantener la detección demasiado tiempo
           if (this.arrhythmiaDetected && 
-              currentTime - this.lastArrhythmiaTime > 800) {
+              currentTime - this.lastArrhythmiaTime > 1500) { // Reduced from 800 to 1500ms
             this.arrhythmiaDetected = false;
           }
         }
@@ -115,7 +122,15 @@ export class ArrhythmiaProcessor {
       arrhythmiaStatus = "CALIBRANDO...";
     } else if (this.arrhythmiaDetected) { 
       // Solo muestra detección durante la ventana activa
-      arrhythmiaStatus = `ARRITMIA DETECTADA|${this.arrhythmiaCount}`;
+      // y comprueba que no haya pasado demasiado tiempo
+      const timeSinceLastDetection = currentTime - this.lastArrhythmiaTime;
+      if (timeSinceLastDetection < 3000) { // Only show for 3 seconds max
+        arrhythmiaStatus = `ARRITMIA DETECTADA|${this.arrhythmiaCount}`;
+      } else {
+        // Auto-reset the detection state if time has passed
+        this.arrhythmiaDetected = false;
+        arrhythmiaStatus = `SIN ARRITMIAS|${this.arrhythmiaCount}`;
+      }
     } else {
       arrhythmiaStatus = `SIN ARRITMIAS|${this.arrhythmiaCount}`;
     }
