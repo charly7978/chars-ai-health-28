@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -390,7 +391,7 @@ const PPGSignalMeter = ({
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-6">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
-          <div className="ml-10 w-[180px] mt-1">
+          <div className="ml-13 w-[180px] mt-1">
             <div className="flex items-center space-x-1.5">
               <Activity size={16} className="text-slate-600" />
               <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
