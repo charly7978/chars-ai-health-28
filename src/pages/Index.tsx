@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -577,7 +578,7 @@ const Index = () => {
               value={lastSignal?.filteredValue || 0}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
-              onStartMeasurement={startMonitoring}
+              onStartMeasurement={isMonitoring ? stopMonitoring : startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
               rawArrhythmiaData={lastArrhythmiaData}
@@ -586,7 +587,7 @@ const Index = () => {
           </div>
 
           {isCalibrating && (
-            <div className="absolute bottom-[55%] left-0 right-0 text-center">
+            <div className="absolute bottom-[205px] left-0 right-0 text-center">
               <span className="text-sm font-medium text-gold-medium">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
