@@ -18,7 +18,7 @@ const VitalSign = ({
 }: VitalSignProps) => {
   return (
     <div className={`relative flex flex-col justify-center items-center p-2 rounded-lg ${
-      highlighted ? 'bg-black/15' : 'bg-black/15'
+      highlighted ? 'bg-black/20' : 'bg-black/20'
     } backdrop-blur-sm border-0 transition-all duration-500`}>
       <div className="text-[10px] font-medium text-white/70 uppercase tracking-tight mb-1">
         {label}

@@ -91,17 +91,17 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Create a darker but semi-transparent gradient for the canvas background
+    // Create a darker background for the canvas
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(10, 15, 20, 0.8)');
-    gradient.addColorStop(1, 'rgba(5, 10, 15, 0.85)');
+    gradient.addColorStop(0, 'rgba(5, 8, 12, 0.9)');  // Darker background
+    gradient.addColorStop(1, 'rgba(3, 5, 10, 0.95)'); // Even darker at the bottom
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Very subtle grid lines, almost invisible
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.05)';
-    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.02)'; // Much less visible grid
+    ctx.lineWidth = 0.3;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
@@ -114,26 +114,10 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
-    // Slightly more visible for the main grid lines
+    // Center line - keep very subtle
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.08)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.06)';
     ctx.lineWidth = 1;
-
-    for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X * 4) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, CANVAS_HEIGHT);
-    }
-
-    for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y * 4) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(CANVAS_WIDTH, y);
-    }
-    ctx.stroke();
-
-    // Center line
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
-    ctx.lineWidth = 1.5;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
