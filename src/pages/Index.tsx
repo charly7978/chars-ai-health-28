@@ -595,7 +595,10 @@ const Index = () => {
           )}
 
           <div className="absolute inset-x-0 bottom-0 mb-[60px]">
-            <div className="background-grid w-full h-full absolute inset-0"></div>
+            <div className="background-grid w-full h-full absolute inset-0" style={{
+              opacity: 0.4,
+              zIndex: -1,
+            }}></div>
             <div className="grid grid-cols-3 gap-0">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
