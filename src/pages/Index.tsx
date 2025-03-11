@@ -433,8 +433,6 @@ const Index = () => {
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
-    let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 5;
     
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
@@ -449,28 +447,7 @@ const Index = () => {
       
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
-          if (!videoTrack || !videoTrack.readyState || videoTrack.readyState === 'ended') {
-            console.error("Video track is no longer available or active");
-            consecutiveErrors++;
-            
-            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-              console.error("Too many consecutive camera errors, restarting camera");
-              setIsCameraOn(false);
-              setTimeout(() => {
-                if (isMonitoring) {
-                  setIsCameraOn(true);
-                }
-              }, 1000);
-              return;
-            }
-            
-            requestAnimationFrame(processImage);
-            return;
-          }
-          
           const frame = await imageCapture.grabFrame();
-          
-          consecutiveErrors = 0;
           
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
@@ -511,18 +488,6 @@ const Index = () => {
           }
         } catch (error) {
           console.error("Error capturando frame:", error);
-          consecutiveErrors++;
-          
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-            console.error("Demasiados errores consecutivos, reiniciando cámara...");
-            setIsCameraOn(false);
-            setTimeout(() => {
-              if (isMonitoring) {
-                setIsCameraOn(true);
-              }
-            }, 1000);
-            return;
-          }
         }
       }
       
@@ -532,21 +497,6 @@ const Index = () => {
     };
 
     processImage();
-    
-    return () => {
-      console.log("Cleaning up stream processing resources");
-      if (videoTrack && videoTrack.readyState !== 'ended') {
-        try {
-          if (videoTrack.getCapabilities()?.torch) {
-            videoTrack.applyConstraints({
-              advanced: [{ torch: false }]
-            }).catch(err => console.error("Error desactivando linterna:", err));
-          }
-        } catch (e) {
-          console.error("Error during video track cleanup:", e);
-        }
-      }
-    };
   };
 
   useEffect(() => {
@@ -612,7 +562,7 @@ const Index = () => {
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
       <div className="flex-1 relative">
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0">
           <CameraView 
             onStreamReady={handleStreamReady}
             isMonitoring={isCameraOn}
@@ -621,86 +571,94 @@ const Index = () => {
           />
         </div>
 
-        <div className="relative z-10 h-1/2">
-          <PPGSignalMeter 
-            value={lastSignal?.filteredValue || 0}
-            quality={lastSignal?.quality || 0}
-            isFingerDetected={lastSignal?.fingerDetected || false}
-            onStartMeasurement={startMonitoring}
-            onReset={handleReset}
-            arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
-            rawArrhythmiaData={lastArrhythmiaData}
-            preserveResults={showResults}
-          />
-        </div>
-            
-        <div className="vital-signs-panel-container">
+        <div className="relative z-10 h-full flex flex-col">
+          {/* Nueva alerta de arritmia */}
+          { vitalSigns.arrhythmiaStatus.startsWith("ARRITMIA DETECTADA") && (
+            <div className="alert-banner bg-red-700 text-white p-2 text-center font-bold mb-2">
+               ¡ALERTA DE ARRITMIA! Contador: { vitalSigns.arrhythmiaStatus.split('|')[1] || "0" }
+            </div>
+          )}
+          <div className="flex-1">
+            <PPGSignalMeter 
+              value={lastSignal?.filteredValue || 0}
+              quality={lastSignal?.quality || 0}
+              isFingerDetected={lastSignal?.fingerDetected || false}
+              onStartMeasurement={startMonitoring}
+              onReset={handleReset}
+              arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
+              rawArrhythmiaData={lastArrhythmiaData}
+              preserveResults={showResults}
+            />
+          </div>
+
           {isCalibrating && (
-            <div className="absolute top-2 left-0 right-0 text-center z-10">
+            <div className="absolute bottom-[55%] left-0 right-0 text-center">
               <span className="text-sm font-medium text-gold-medium">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-0 h-full">
-            <VitalSign 
-              label="FRECUENCIA CARDÍACA"
-              value={heartRate || "--"}
-              unit="BPM"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="SPO2"
-              value={vitalSigns.spo2 || "--"}
-              unit="%"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="PRESIÓN ARTERIAL"
-              value={vitalSigns.pressure}
-              unit="mmHg"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="HEMOGLOBINA"
-              value={vitalSigns.hemoglobin || "--"}
-              unit="g/dL"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="GLUCOSA"
-              value={vitalSigns.glucose || "--"}
-              unit="mg/dL"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="COLESTEROL/TRIGL."
-              value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-              unit="mg/dL"
-              highlighted={showResults}
-            />
+          <div className="absolute inset-x-0 bottom-[72px] top-[calc(50%+2px)]">
+            <div className="grid grid-cols-3 gap-0 h-full w-full">
+              <VitalSign 
+                label="FRECUENCIA CARDÍACA"
+                value={heartRate || "--"}
+                unit="BPM"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="SPO2"
+                value={vitalSigns.spo2 || "--"}
+                unit="%"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="PRESIÓN ARTERIAL"
+                value={vitalSigns.pressure}
+                unit="mmHg"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+            </div>
+          </div>
+
+          <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
+            <button 
+              onClick={isMonitoring ? stopMonitoring : startMonitoring}
+              className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
+                isMonitoring 
+                  ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
+                  : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
+              }`}
+            >
+              {isMonitoring ? 'DETENER' : 'INICIAR'}
+            </button>
+            <button 
+              onClick={handleReset}
+              className="w-full h-full gold-button text-lg font-bold text-white"
+            >
+              RESETEAR
+            </button>
           </div>
         </div>
-      </div>
-
-      <div className="h-[40px] grid grid-cols-2 gap-0">
-        <button 
-          onClick={isMonitoring ? stopMonitoring : startMonitoring}
-          className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
-            isMonitoring 
-              ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
-              : 'bg-gradient-to-b from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 active:from-green-800 active:to-green-950'
-          }`}
-        >
-          {isMonitoring ? 'DETENER' : 'INICIAR'}
-        </button>
-        <button 
-          onClick={handleReset}
-          className="w-full h-full gold-button text-lg font-bold text-white"
-        >
-          RESETEAR
-        </button>
       </div>
     </div>
   );

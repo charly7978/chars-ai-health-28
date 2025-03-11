@@ -1,118 +1,301 @@
+export const applyTimeBasedProcessing = (
+  readings: number[], 
+  elapsedTime: number,
+  targetTime: number
+): number => {
+  if (readings.length < 5) return 0;
+  
+  // Ordenar los valores para calcular la mediana
+  const sortedReadings = [...readings].sort((a, b) => a - b);
+  const mid = Math.floor(sortedReadings.length / 2);
+  const median = sortedReadings.length % 2 === 0
+    ? (sortedReadings[mid - 1] + sortedReadings[mid]) / 2
+    : sortedReadings[mid];
+    
+  // Calcular la media ponderada de los últimos 5 valores (mayor peso a los más recientes)
+  const lastReadings = readings.slice(-5);
+  const weightedSum = lastReadings.reduce((sum, reading, index) => {
+    const weight = (index + 1) / lastReadings.length;
+    return sum + (reading * weight);
+  }, 0);
+  const weightedAverage = weightedSum / ((lastReadings.length + 1) / 2);
+  
+  // Si ha alcanzado o superado el tiempo objetivo (29s) se aplica la fusión avanzada:
+  // Se retorna la media aritmética entre la mediana y el promedio ponderado.
+  if (elapsedTime >= targetTime) {
+    return Math.round((median + weightedAverage) / 2);
+  }
+  
+  // De lo contrario, se mezcla progresivamente en función del tiempo transcurrido
+  const timeWeight = Math.min(1, elapsedTime / targetTime);
+  return Math.round(median * (1 - timeWeight) + weightedAverage * timeWeight);
+};
 
-/**
- * Calculates the AC component (peak-to-peak amplitude) of a signal
- */
-export function calculateAC(values: number[]): number {
-  if (values.length === 0) return 0;
-  return Math.max(...values) - Math.min(...values);
-}
+export const calculateAC = (values: number[]): number => {
+  if (values.length < 10) return 0;
+  
+  // AC component is the variation in the signal
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  return max - min;
+};
 
-/**
- * Calculates the DC component (average value) of a signal
- */
-export function calculateDC(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
+export const calculateDC = (values: number[]): number => {
+  if (values.length < 10) return 0;
+  
+  // DC component is the average value of the signal
+  return values.reduce((sum, val) => sum + val, 0) / values.length;
+};
 
-/**
- * Calculates the standard deviation of a set of values
- */
-export function calculateStandardDeviation(values: number[]): number {
-  const n = values.length;
-  if (n === 0) return 0;
-  const mean = values.reduce((a, b) => a + b, 0) / n;
-  const sqDiffs = values.map((v) => Math.pow(v - mean, 2));
-  const avgSqDiff = sqDiffs.reduce((a, b) => a + b, 0) / n;
-  return Math.sqrt(avgSqDiff);
-}
+export const calculateAmplitude = (
+  values: number[],
+  peakIndices: number[],
+  valleyIndices: number[]
+): number => {
+  if (peakIndices.length === 0 || valleyIndices.length === 0) return 0;
+  
+  const peaks = peakIndices.map(idx => values[idx]);
+  const valleys = valleyIndices.map(idx => values[idx]);
+  
+  const avgPeak = peaks.reduce((sum, val) => sum + val, 0) / peaks.length;
+  const avgValley = valleys.reduce((sum, val) => sum + val, 0) / valleys.length;
+  
+  return avgPeak - avgValley;
+};
 
-/**
- * Finds peaks and valleys in a signal
- */
-export function findPeaksAndValleys(values: number[]) {
+export const findPeaksAndValleys = (
+  values: number[],
+  minDistance: number = 3
+): { peakIndices: number[], valleyIndices: number[] } => {
   const peakIndices: number[] = [];
   const valleyIndices: number[] = [];
-
-  for (let i = 2; i < values.length - 2; i++) {
-    const v = values[i];
-    if (
-      v > values[i - 1] &&
-      v > values[i - 2] &&
-      v > values[i + 1] &&
-      v > values[i + 2]
-    ) {
-      peakIndices.push(i);
+  
+  // Simple peaks and valleys detection
+  for (let i = minDistance; i < values.length - minDistance; i++) {
+    // Check for peaks
+    let isPeak = true;
+    for (let j = i - minDistance; j <= i + minDistance; j++) {
+      if (j !== i && values[j] >= values[i]) {
+        isPeak = false;
+        break;
+      }
     }
-    if (
-      v < values[i - 1] &&
-      v < values[i - 2] &&
-      v < values[i + 1] &&
-      v < values[i + 2]
-    ) {
+    
+    if (isPeak) {
+      peakIndices.push(i);
+      continue; // Skip valley check for this point
+    }
+    
+    // Check for valleys
+    let isValley = true;
+    for (let j = i - minDistance; j <= i + minDistance; j++) {
+      if (j !== i && values[j] <= values[i]) {
+        isValley = false;
+        break;
+      }
+    }
+    
+    if (isValley) {
       valleyIndices.push(i);
     }
   }
+  
   return { peakIndices, valleyIndices };
-}
+};
 
-/**
- * Calculates the amplitude between peaks and valleys
- */
-export function calculateAmplitude(
-  values: number[],
-  peaks: number[],
-  valleys: number[]
-): number {
-  if (peaks.length === 0 || valleys.length === 0) return 0;
+export const calculateStandardDeviation = (values: number[]): number => {
+  if (values.length < 2) return 0;
+  
+  const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+  const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+  const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
+  
+  return Math.sqrt(variance);
+};
 
-  const amps: number[] = [];
-  const len = Math.min(peaks.length, valleys.length);
-  for (let i = 0; i < len; i++) {
-    const amp = values[peaks[i]] - values[valleys[i]];
-    if (amp > 0) {
-      amps.push(amp);
-    }
-  }
-  if (amps.length === 0) return 0;
+export const calculatePerfusionIndex = (values: number[]): number => {
+  if (values.length < 10) return 0;
+  
+  const ac = calculateAC(values);
+  const dc = calculateDC(values);
+  
+  return dc !== 0 ? ac / dc : 0;
+};
 
-  const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
-  return mean;
-}
-
-/**
- * Applies time-based processing to a series of measurements
- * @param values Array of values to process
- * @param currentTime Current elapsed time in seconds
- * @param targetTime Target time in seconds for processing completion
- * @returns Processed value
- */
-export function applyTimeBasedProcessing(
-  values: number[],
-  currentTime: number,
-  targetTime: number
-): number {
+export const calculateMedian = (values: number[]): number => {
   if (values.length === 0) return 0;
   
-  // If we're at the target time, apply weighted averaging
-  if (currentTime >= targetTime) {
-    const recentValues = values.slice(-5); // Last 5 values
-    const olderValues = values.slice(0, -5);
-    
-    if (recentValues.length === 0) return 0;
-    
-    const recentAvg = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
-    
-    // If we have older values, blend them with recent ones
-    if (olderValues.length > 0) {
-      const olderAvg = olderValues.reduce((a, b) => a + b, 0) / olderValues.length;
-      // Recent values have more weight (70%)
-      return recentAvg * 0.7 + olderAvg * 0.3;
-    }
-    
-    return recentAvg;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
   }
   
-  // If we're not at the target time yet, just return the average
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
+  return sorted[mid];
+};
+
+export const calculateWeightedAverage = (
+  values: number[],
+  exponent: number = 1.0
+): number => {
+  if (values.length === 0) return 0;
+  
+  let sum = 0;
+  let weightSum = 0;
+  
+  for (let i = 0; i < values.length; i++) {
+    // Exponential weighting puts more emphasis on later values
+    const weight = Math.pow((i + 1) / values.length, exponent);
+    sum += values[i] * weight;
+    weightSum += weight;
+  }
+  
+  return sum / weightSum;
+};
+
+export const removeOutliers = (values: number[]): number[] => {
+  if (values.length < 4) return [...values];
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  
+  // Calculate quartiles and IQR
+  const q1Index = Math.floor(sorted.length / 4);
+  const q3Index = Math.floor(3 * sorted.length / 4);
+  
+  const q1 = sorted[q1Index];
+  const q3 = sorted[q3Index];
+  const iqr = q3 - q1;
+  
+  // Define bounds
+  const lowerBound = q1 - (1.5 * iqr);
+  const upperBound = q3 + (1.5 * iqr);
+  
+  // Filter outliers
+  return values.filter(val => val >= lowerBound && val <= upperBound);
+};
+
+export const applyHampelFilter = (
+  values: number[],
+  windowSize: number = 5,
+  threshold: number = 3
+): number[] => {
+  if (values.length < windowSize) return [...values];
+  
+  const result = [...values];
+  const halfWindow = Math.floor(windowSize / 2);
+  
+  for (let i = 0; i < values.length; i++) {
+    const windowStart = Math.max(0, i - halfWindow);
+    const windowEnd = Math.min(values.length - 1, i + halfWindow);
+    const window = values.slice(windowStart, windowEnd + 1);
+    
+    const median = calculateMedian(window);
+    const deviations = window.map(val => Math.abs(val - median));
+    const mad = calculateMedian(deviations); // Median Absolute Deviation
+    
+    // Check if the point is an outlier
+    if (Math.abs(values[i] - median) > threshold * mad && mad > 0) {
+      result[i] = median; // Replace outlier with median
+    }
+  }
+  
+  return result;
+};
+
+export const applySavitzkyGolayFilter = (
+  values: number[],
+  windowSize: number = 9
+): number[] => {
+  if (values.length < windowSize) return [...values];
+  
+  const result: number[] = [];
+  const halfWindow = Math.floor(windowSize / 2);
+  
+  // Simple coefficients for quadratic SG filter
+  let coefficients: number[];
+  
+  if (windowSize === 5) {
+    coefficients = [-3, 12, 17, 12, -3];
+    const norm = 35;
+    
+    for (let i = 0; i < values.length; i++) {
+      let sum = 0;
+      
+      for (let j = -halfWindow; j <= halfWindow; j++) {
+        const index = i + j;
+        if (index >= 0 && index < values.length) {
+          const coef = coefficients[j + halfWindow];
+          sum += values[index] * coef;
+        } else {
+          // Edge handling - mirror values
+          const mirrorIndex = index < 0 ? -index : 2 * values.length - index - 2;
+          if (mirrorIndex >= 0 && mirrorIndex < values.length) {
+            const coef = coefficients[j + halfWindow];
+            sum += values[mirrorIndex] * coef;
+          }
+        }
+      }
+      
+      result.push(sum / norm);
+    }
+  } else if (windowSize === 7) {
+    coefficients = [-2, 3, 6, 7, 6, 3, -2];
+    const norm = 21;
+    
+    for (let i = 0; i < values.length; i++) {
+      let sum = 0;
+      
+      for (let j = -halfWindow; j <= halfWindow; j++) {
+        const index = i + j;
+        if (index >= 0 && index < values.length) {
+          const coef = coefficients[j + halfWindow];
+          sum += values[index] * coef;
+        } else {
+          const mirrorIndex = index < 0 ? -index : 2 * values.length - index - 2;
+          if (mirrorIndex >= 0 && mirrorIndex < values.length) {
+            const coef = coefficients[j + halfWindow];
+            sum += values[mirrorIndex] * coef;
+          }
+        }
+      }
+      
+      result.push(sum / norm);
+    }
+  } else if (windowSize === 9) {
+    coefficients = [-21, 14, 39, 54, 59, 54, 39, 14, -21];
+    const norm = 231;
+    
+    for (let i = 0; i < values.length; i++) {
+      let sum = 0;
+      
+      for (let j = -halfWindow; j <= halfWindow; j++) {
+        const index = i + j;
+        if (index >= 0 && index < values.length) {
+          const coef = coefficients[j + halfWindow];
+          sum += values[index] * coef;
+        } else {
+          const mirrorIndex = index < 0 ? -index : 2 * values.length - index - 2;
+          if (mirrorIndex >= 0 && mirrorIndex < values.length) {
+            const coef = coefficients[j + halfWindow];
+            sum += values[mirrorIndex] * coef;
+          }
+        }
+      }
+      
+      result.push(sum / norm);
+    }
+  } else {
+    // Default simple moving average for unsupported window sizes
+    for (let i = 0; i < values.length; i++) {
+      const windowStart = Math.max(0, i - halfWindow);
+      const windowEnd = Math.min(values.length - 1, i + halfWindow);
+      const window = values.slice(windowStart, windowEnd + 1);
+      const average = window.reduce((sum, val) => sum + val, 0) / window.length;
+      
+      result.push(average);
+    }
+  }
+  
+  return result;
+};
