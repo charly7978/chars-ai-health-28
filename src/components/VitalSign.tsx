@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface VitalSignProps {
@@ -116,10 +117,11 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const systolic = parseInt(parts[0]);
       const diastolic = parseInt(parts[1]);
       
-      if (isNaN(systolic) || isNaN(diastolic)) {
-        return { text: String(value), color: "text-white", status: "" };
+      if (isNaN(systolic) || isNaN(diastolic) || systolic <= 0 || diastolic <= 0) {
+        return { text: "--/--", color: "text-white", status: "" };
       }
       
+      // Expanded ranges to accommodate the wider measurement capabilities
       if (systolic >= 300 || diastolic >= 200) {
         return { text: String(value), color: "text-purple-800", status: "Crisis Extrema" };
       } else if (systolic >= 230 || diastolic >= 150) {
@@ -144,7 +146,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (isArrhythmiaDisplay) {
       if (value === "--") {
         return { 
-          text: "--/--", 
+          text: "--", 
           color: "text-white",
           status: ""
         };

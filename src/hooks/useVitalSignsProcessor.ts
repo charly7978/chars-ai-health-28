@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
@@ -178,13 +177,13 @@ export const useVitalSignsProcessor = () => {
           rmssd,
           rrVariation,
           rrSD,
-          condición1: rmssd > 50 && rrVariation > 0.20,
-          condición2: rrSD > 35 && rrVariation > 0.18,
-          condición3: lastRR > 1.4 * avgRR,
-          condición4: lastRR < 0.6 * avgRR,
+          lastRR,
+          avgRR,
+          intervals: lastThreeIntervals,
+          contador: arrhythmiaCounter,
           timestamp: new Date().toISOString()
         });
-        
+
         if (currentTime - lastArrhythmiaTime.current >= MIN_TIME_BETWEEN_ARRHYTHMIAS &&
             arrhythmiaCounter < MAX_ARRHYTHMIAS_PER_SESSION) {
           
@@ -256,26 +255,68 @@ export const useVitalSignsProcessor = () => {
     
     // Aplicar el procesamiento final para la glucosa y presión arterial
     const finalResults = processor.completeMeasurement();
+    console.log("useVitalSignsProcessor: Processor.completeMeasurement() retornó:", finalResults);
     
     measurementActive.current = false;
     
-    console.log("useVitalSignsProcessor: Medición completada", {
-      resultadosFinales: finalResults,
-      timestamp: new Date().toISOString()
-    });
+    // Debug validations for the returned values
+    if (finalResults) {
+      if (typeof finalResults.pressure === 'string' && finalResults.pressure.includes('/')) {
+        const [systolic, diastolic] = finalResults.pressure.split('/').map(Number);
+        if (isNaN(systolic) || isNaN(diastolic) || systolic <= 0 || diastolic <= 0 || systolic <= diastolic) {
+          console.warn("useVitalSignsProcessor: Valores de presión arterial inválidos en finalResults:", finalResults.pressure);
+        } else {
+          console.log("useVitalSignsProcessor: Presión arterial válida en finalResults:", finalResults.pressure);
+        }
+      } else {
+        console.warn("useVitalSignsProcessor: Formato de presión arterial inválido en finalResults:", finalResults.pressure);
+      }
+      
+      if (finalResults.glucose <= 0) {
+        console.warn("useVitalSignsProcessor: Valor de glucosa inválido en finalResults:", finalResults.glucose);
+      }
+    } else {
+      console.warn("useVitalSignsProcessor: completeMeasurement() retornó undefined o null");
+    }
     
     // Actualizar los resultados válidos con los valores finales
     if (finalResults && lastValidResults) {
       const updatedResults = {
-        ...lastValidResults,
-        glucose: finalResults.glucose,
-        pressure: finalResults.pressure
+        ...lastValidResults
       };
+      
+      // Only update glucose if it's valid
+      if (finalResults.glucose > 0) {
+        updatedResults.glucose = finalResults.glucose;
+      }
+      
+      // Only update pressure if it's valid
+      if (typeof finalResults.pressure === 'string' && 
+          finalResults.pressure.includes('/') && 
+          finalResults.pressure !== '--/--' &&
+          finalResults.pressure !== '0/0') {
+        
+        const [systolic, diastolic] = finalResults.pressure.split('/').map(Number);
+        if (!isNaN(systolic) && !isNaN(diastolic) && 
+            systolic > 0 && diastolic > 0 && 
+            systolic > diastolic) {
+          updatedResults.pressure = finalResults.pressure;
+          console.log("useVitalSignsProcessor: Actualizando presión arterial en resultados:", finalResults.pressure);
+        } else {
+          console.warn("useVitalSignsProcessor: No se actualizó la presión arterial debido a valores inválidos");
+        }
+      }
+      
+      console.log("useVitalSignsProcessor: Medición completada", {
+        resultadosFinales: updatedResults,
+        timestamp: new Date().toISOString()
+      });
       
       setLastValidResults(updatedResults);
       return updatedResults;
     }
     
+    console.log("useVitalSignsProcessor: Retornando lastValidResults sin cambios");
     return lastValidResults;
   }, [processor, lastValidResults]);
 
