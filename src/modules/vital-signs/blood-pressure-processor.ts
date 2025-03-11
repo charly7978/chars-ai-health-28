@@ -358,28 +358,28 @@ export class BloodPressureProcessor {
   /**
    * Encuentra muescas dicróticas en la señal PPG
    */
-  private findDicroticNotches(values: number[], peaks: number[], troughs: number[]): number[] {
+  private findDicroticNotches(values: number[], peaks: number[], valleys: number[]): number[] {
     const notches: number[] = [];
     
     for (let i = 0; i < peaks.length; i++) {
       const peakIndex = peaks[i];
-      let nextTroughIndex = -1;
+      let nextValleyIndex = -1;
       
       // Encontrar el siguiente valle
-      for (let j = 0; j < troughs.length; j++) {
-        if (troughs[j] > peakIndex) {
-          nextTroughIndex = troughs[j];
+      for (let j = 0; j < valleys.length; j++) {
+        if (valleys[j] > peakIndex) {
+          nextValleyIndex = valleys[j];
           break;
         }
       }
       
-      if (nextTroughIndex !== -1) {
+      if (nextValleyIndex !== -1) {
         // Buscar muesca dicrótica entre pico y valle siguiente
         // (punto de inflexión en la pendiente descendente)
         let lastDerivative = 0;
         let notchIndex = -1;
         
-        for (let j = peakIndex + 2; j < nextTroughIndex - 2; j++) {
+        for (let j = peakIndex + 2; j < nextValleyIndex - 2; j++) {
           const derivative = values[j] - values[j-1];
           
           // Detectar cambio de pendiente descendente a ascendente
@@ -405,10 +405,10 @@ export class BloodPressureProcessor {
    */
   private extractBPFeatures(ppgValues: number[]): any {
     // Detectar puntos característicos
-    const { peakIndices: peaks, valleyIndices: valleys } = findPeaksAndValleys(ppgValues);
-    const dicroticNotches = this.findDicroticNotches(ppgValues, peaks, valleys);
+    const { peakIndices, valleyIndices } = findPeaksAndValleys(ppgValues);
+    const dicroticNotches = this.findDicroticNotches(ppgValues, peakIndices, valleyIndices);
     
-    if (peaks.length < 3 || valleys.length < 3) {
+    if (peakIndices.length < 3 || valleyIndices.length < 3) {
       return {
         pulseTransitTime: 0,
         systolicUptime: 0,
@@ -436,8 +436,8 @@ export class BloodPressureProcessor {
     
     // 1. Tiempo de tránsito de pulso (ms)
     const pttValues = [];
-    for (let i = 1; i < peaks.length; i++) {
-      const ptt = peaks[i] - peaks[i-1];
+    for (let i = 1; i < peakIndices.length; i++) {
+      const ptt = peakIndices[i] - peakIndices[i-1];
       if (ptt > 15 && ptt < 60) { // Filtrado fisiológico (30-120 BPM a 30fps)
         pttValues.push(ptt * (1000 / 30)); // Convertir a ms
       }
@@ -448,20 +448,20 @@ export class BloodPressureProcessor {
     
     // 2. Tiempo de subida sistólica (ms)
     const systolicUptimes = [];
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIndex = peaks[i];
-      let precedingTroughIndex = -1;
+    for (let i = 0; i < peakIndices.length; i++) {
+      const peakIndex = peakIndices[i];
+      let precedingValleyIndex = -1;
       
       // Encontrar valle precedente
-      for (let j = troughs.length - 1; j >= 0; j--) {
-        if (troughs[j] < peakIndex) {
-          precedingTroughIndex = troughs[j];
+      for (let j = valleyIndices.length - 1; j >= 0; j--) {
+        if (valleyIndices[j] < peakIndex) {
+          precedingValleyIndex = valleyIndices[j];
           break;
         }
       }
       
-      if (precedingTroughIndex !== -1) {
-        systolicUptimes.push((peakIndex - precedingTroughIndex) * (1000 / 30));
+      if (precedingValleyIndex !== -1) {
+        systolicUptimes.push((peakIndex - precedingValleyIndex) * (1000 / 30));
       }
     }
     const systolicUptime = systolicUptimes.length > 0 ? 
@@ -470,22 +470,22 @@ export class BloodPressureProcessor {
     
     // 3. Tiempo diastólico (ms)
     const diastolicTimes = [];
-    for (let i = 0; i < peaks.length - 1; i++) {
-      const currentPeakIndex = peaks[i];
-      const nextPeakIndex = peaks[i + 1];
+    for (let i = 0; i < peakIndices.length - 1; i++) {
+      const currentPeakIndex = peakIndices[i];
+      const nextPeakIndex = peakIndices[i + 1];
       
-      let followingTroughIndex = -1;
+      let followingValleyIndex = -1;
       
       // Encontrar valle siguiente
-      for (let j = 0; j < troughs.length; j++) {
-        if (troughs[j] > currentPeakIndex && troughs[j] < nextPeakIndex) {
-          followingTroughIndex = troughs[j];
+      for (let j = 0; j < valleyIndices.length; j++) {
+        if (valleyIndices[j] > currentPeakIndex && valleyIndices[j] < nextPeakIndex) {
+          followingValleyIndex = valleyIndices[j];
           break;
         }
       }
       
-      if (followingTroughIndex !== -1) {
-        diastolicTimes.push((followingTroughIndex - currentPeakIndex) * (1000 / 30));
+      if (followingValleyIndex !== -1) {
+        diastolicTimes.push((followingValleyIndex - currentPeakIndex) * (1000 / 30));
       }
     }
     const diastolicTime = diastolicTimes.length > 0 ? 
@@ -494,8 +494,8 @@ export class BloodPressureProcessor {
     
     // 4. Índice de aumento (ratio de segundo pico a primer pico)
     const augmentationIndices = [];
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIndex = peaks[i];
+    for (let i = 0; i < peakIndices.length; i++) {
+      const peakIndex = peakIndices[i];
       let dicroticIndex = -1;
       
       // Encontrar muesca dicrótica más cercana
@@ -536,8 +536,8 @@ export class BloodPressureProcessor {
     
     // 5. Índice de reflexión (tiempo hasta muesca dicrótica)
     const reflectionIndices = [];
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIndex = peaks[i];
+    for (let i = 0; i < peakIndices.length; i++) {
+      const peakIndex = peakIndices[i];
       let dicroticIndex = -1;
       
       // Encontrar muesca dicrótica
@@ -559,14 +559,14 @@ export class BloodPressureProcessor {
     
     // 6. Índice de rigidez (pendiente de subida)
     const stiffnessIndices = [];
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIndex = peaks[i];
+    for (let i = 0; i < peakIndices.length; i++) {
+      const peakIndex = peakIndices[i];
       let valleyIndex = -1;
       
       // Encontrar valle precedente
-      for (let j = troughs.length - 1; j >= 0; j--) {
-        if (troughs[j] < peakIndex) {
-          valleyIndex = troughs[j];
+      for (let j = valleyIndices.length - 1; j >= 0; j--) {
+        if (valleyIndices[j] < peakIndex) {
+          valleyIndex = valleyIndices[j];
           break;
         }
       }
@@ -590,8 +590,8 @@ export class BloodPressureProcessor {
     
     // 8. Ancho de forma de onda (ms)
     const waveformWidths = [];
-    for (let i = 0; i < peaks.length - 1; i++) {
-      const width = peaks[i+1] - peaks[i];
+    for (let i = 0; i < peakIndices.length - 1; i++) {
+      const width = peakIndices[i+1] - peakIndices[i];
       if (width > 15 && width < 60) { // Filtrar valores no fisiológicos
         waveformWidths.push(width * (1000 / 30));
       }
@@ -602,16 +602,16 @@ export class BloodPressureProcessor {
     
     // 9. Ratio de áreas (área diastólica / área sistólica)
     const areaRatios = [];
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIndex = peaks[i];
-      let precedingTroughIndex = -1;
+    for (let i = 0; i < peakIndices.length; i++) {
+      const peakIndex = peakIndices[i];
+      let precedingValleyIndex = -1;
       let dicroticIndex = -1;
-      let followingTroughIndex = -1;
+      let followingValleyIndex = -1;
       
       // Encontrar puntos característicos
-      for (let j = troughs.length - 1; j >= 0; j--) {
-        if (troughs[j] < peakIndex) {
-          precedingTroughIndex = troughs[j];
+      for (let j = valleyIndices.length - 1; j >= 0; j--) {
+        if (valleyIndices[j] < peakIndex) {
+          precedingValleyIndex = valleyIndices[j];
           break;
         }
       }
@@ -623,25 +623,25 @@ export class BloodPressureProcessor {
         }
       }
       
-      for (let j = 0; j < troughs.length; j++) {
-        if (troughs[j] > peakIndex) {
-          followingTroughIndex = troughs[j];
+      for (let j = 0; j < valleyIndices.length; j++) {
+        if (valleyIndices[j] > peakIndex) {
+          followingValleyIndex = valleyIndices[j];
           break;
         }
       }
       
       // Si tenemos todos los puntos necesarios
-      if (precedingTroughIndex !== -1 && dicroticIndex !== -1 && followingTroughIndex !== -1) {
+      if (precedingValleyIndex !== -1 && dicroticIndex !== -1 && followingValleyIndex !== -1) {
         let systolicArea = 0;
         let diastolicArea = 0;
         
         // Calcular área sistólica (desde valle inicial hasta muesca dicrótica)
-        for (let j = precedingTroughIndex; j <= dicroticIndex; j++) {
+        for (let j = precedingValleyIndex; j <= dicroticIndex; j++) {
           systolicArea += ppgValues[j];
         }
         
         // Calcular área diastólica (desde muesca hasta valle final)
-        for (let j = dicroticIndex; j <= followingTroughIndex; j++) {
+        for (let j = dicroticIndex; j <= followingValleyIndex; j++) {
           diastolicArea += ppgValues[j];
         }
         
@@ -802,3 +802,4 @@ export class BloodPressureProcessor {
     return this.referenceValues;
   }
 }
+

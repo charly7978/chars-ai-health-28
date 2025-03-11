@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -26,9 +27,16 @@ const CameraView = ({
   const torchIntervalRef = useRef<number | null>(null);
   const restartAttemptRef = useRef<number>(0);
   const lastTorchToggleRef = useRef<number>(0);
+  const cameraStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopCamera = useCallback(async () => {
     console.log("Deteniendo cámara...");
+    
+    // Clean up any pending timeouts
+    if (cameraStopTimeoutRef.current) {
+      clearTimeout(cameraStopTimeoutRef.current);
+      cameraStopTimeoutRef.current = null;
+    }
     
     // Clear any pending torch toggle interval
     if (torchIntervalRef.current) {
@@ -79,6 +87,12 @@ const CameraView = ({
 
   const startCamera = useCallback(async () => {
     try {
+      // Prevent concurrent startCamera calls
+      if (isCameraInitializing) {
+        console.log("Cámara ya se está inicializando, ignorando llamada duplicada");
+        return;
+      }
+      
       setIsCameraInitializing(true);
       setPermissionDenied(false);
       console.log("Iniciando cámara...");
@@ -89,6 +103,10 @@ const CameraView = ({
 
       // Stop any existing stream first to prevent resource conflicts
       await stopCamera();
+      
+      // Add a small delay after stopping the camera before starting it again
+      // This helps prevent the camera from flickering
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Check for permissions first
       try {
@@ -108,11 +126,11 @@ const CameraView = ({
       const isAndroid = /android/i.test(navigator.userAgent);
       console.log(`Detected platform: ${isAndroid ? 'Android' : 'Other'}`);
 
-      // Base constraints - keeping simpler for broader compatibility
+      // Simpler constraints for better compatibility
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: 'environment',
-          width: { ideal: 640 }, // Reduced from 720 for better compatibility
+          width: { ideal: 640 },
           height: { ideal: 480 }
         }
       };
@@ -170,11 +188,13 @@ const CameraView = ({
       
       console.log("Cámara iniciada correctamente");
       
-      // Enable the torch after a delay to ensure camera is ready
+      // Enable the torch after a longer delay to ensure camera is ready
       setTimeout(() => {
         console.log("Attempting to enable torch after camera start");
-        enableTorch(videoTrack);
-      }, 1000); // Increased delay
+        if (isMonitoring && isFingerDetected) {
+          enableTorch(videoTrack);
+        }
+      }, 2000); // Increased delay to 2 seconds
       
       // Initialize canvas for frame capture
       if (canvasRef.current) {
@@ -211,7 +231,7 @@ const CameraView = ({
         }, restartDelay);
       }
     }
-  }, [stopCamera, onStreamReady, isMonitoring, permissionDenied]);
+  }, [stopCamera, onStreamReady, isMonitoring, permissionDenied, isFingerDetected]);
 
   const enableTorch = useCallback((videoTrack?: MediaStreamTrack) => {
     const now = Date.now();
@@ -392,16 +412,30 @@ const CameraView = ({
   useEffect(() => {
     console.log("CameraView effect - isMonitoring:", isMonitoring, "stream:", !!stream, "hasActiveTrack:", hasActiveTrack);
     
+    // Add proper cleanup logic when component unmounts or when monitoring status changes
     if (isMonitoring && (!stream || !hasActiveTrack) && !isCameraInitializing) {
       console.log("Starting camera because monitoring is enabled and no active stream");
       startCamera();
     } else if (!isMonitoring && stream) {
-      console.log("Stopping camera because monitoring is disabled");
-      stopCamera();
+      console.log("Scheduling camera stop because monitoring is disabled");
+      
+      // Use a timeout to prevent rapid start/stop cycles that can cause flickering
+      if (cameraStopTimeoutRef.current) {
+        clearTimeout(cameraStopTimeoutRef.current);
+      }
+      
+      cameraStopTimeoutRef.current = setTimeout(() => {
+        console.log("Executing delayed camera stop");
+        stopCamera();
+        cameraStopTimeoutRef.current = null;
+      }, 300); // Short delay to prevent rapid cycling
     }
     
     return () => {
       console.log("Componente CameraView desmontándose");
+      if (cameraStopTimeoutRef.current) {
+        clearTimeout(cameraStopTimeoutRef.current);
+      }
       stopCamera();
     };
   }, [isMonitoring, stream, hasActiveTrack, isCameraInitializing, startCamera, stopCamera]);
@@ -469,3 +503,4 @@ const CameraView = ({
 };
 
 export default CameraView;
+

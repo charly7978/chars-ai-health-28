@@ -370,3 +370,4 @@ export class SpO2Processor {
     return qualityFactor;
   }
 }
+
