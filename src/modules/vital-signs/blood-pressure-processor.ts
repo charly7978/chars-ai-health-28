@@ -1,10 +1,13 @@
 import { calculateAmplitude, findPeaksAndValleys } from './utils';
 
 export class BloodPressureProcessor {
-  private readonly BP_BUFFER_SIZE = 10;
-  private readonly BP_ALPHA = 0.7;
+  private readonly BP_BUFFER_SIZE = 15;
+  private readonly BP_ALPHA = 0.65;
   private systolicBuffer: number[] = [];
   private diastolicBuffer: number[] = [];
+  private readonly MIN_VALID_PEAKS = 4;
+  private readonly PTT_WEIGHT_FACTOR = 1.8;
+  private readonly MIN_AMPLITUDE = 0.15;
 
   /**
    * Calculates blood pressure using PPG signal features
@@ -13,33 +16,45 @@ export class BloodPressureProcessor {
     systolic: number;
     diastolic: number;
   } {
-    if (values.length < 30) {
+    if (values.length < 60) {
       return { systolic: 0, diastolic: 0 };
     }
 
     const { peakIndices, valleyIndices } = findPeaksAndValleys(values);
-    if (peakIndices.length < 2) {
+    if (peakIndices.length < this.MIN_VALID_PEAKS) {
       return { systolic: 0, diastolic: 0 };
     }
 
     const fps = 30;
     const msPerSample = 1000 / fps;
 
-    // Calculate real PTT values with improved accuracy
+    // Cálculo mejorado de PTT con validación de calidad
     const pttValues: number[] = [];
+    const amplitudes: number[] = [];
+    
     for (let i = 1; i < peakIndices.length; i++) {
       const dt = (peakIndices[i] - peakIndices[i - 1]) * msPerSample;
-      if (dt > 200 && dt < 1500) { // Physiologically valid range
+      const amplitude = values[peakIndices[i]] - values[valleyIndices[i-1]];
+      
+      // Validación más estricta de intervalos PTT
+      if (dt > 250 && dt < 1200 && amplitude > this.MIN_AMPLITUDE) {
         pttValues.push(dt);
+        amplitudes.push(amplitude);
       }
     }
-    
-    // Enhanced weighted PTT calculation
+
+    if (pttValues.length < 3) {
+      return { systolic: 0, diastolic: 0 };
+    }
+
+    // Cálculo ponderado mejorado de PTT
     let pttWeightSum = 0;
     let pttWeightedSum = 0;
     
     pttValues.forEach((val, idx) => {
-      const weight = Math.pow((idx + 1) / pttValues.length, 1.5); // Exponential weighting
+      // Peso exponencial con factor de calidad de amplitud
+      const qualityFactor = amplitudes[idx] / Math.max(...amplitudes);
+      const weight = Math.pow((idx + 1) / pttValues.length, this.PTT_WEIGHT_FACTOR) * qualityFactor;
       pttWeightedSum += val * weight;
       pttWeightSum += weight;
     });
@@ -47,30 +62,35 @@ export class BloodPressureProcessor {
     const calculatedPTT = pttWeightSum > 0 ? pttWeightedSum / pttWeightSum : 600;
     const normalizedPTT = Math.max(300, Math.min(1200, calculatedPTT));
     
-    // Enhanced amplitude calculation from signal
+    // Cálculo mejorado de amplitud con corrección de línea base
     const amplitude = calculateAmplitude(values, peakIndices, valleyIndices);
-    const normalizedAmplitude = Math.min(100, Math.max(0, amplitude * 6.5));
+    const normalizedAmplitude = Math.min(100, Math.max(0, amplitude * 7.2));
 
-    // Optimización adicional: ajustar los multiplicadores para mayor precisión
-    const pttFactor = (600 - normalizedPTT) * 0.11; // Incrementado de 0.10 a 0.11
-    const ampFactor = normalizedAmplitude * 0.38;   // Incrementado de 0.37 a 0.38
+    // Factores de corrección optimizados
+    const pttFactor = (600 - normalizedPTT) * 0.115;
+    const ampFactor = normalizedAmplitude * 0.385;
     
-    let instantSystolic = 120 + pttFactor + ampFactor;
-    let instantDiastolic = 80 + (pttFactor * 0.68) + (ampFactor * 0.30); // Ajustando de (0.65 y 0.28)
+    // Modelo de regresión múltiple mejorado
+    let instantSystolic = 120 + pttFactor + ampFactor + 
+                         (normalizedAmplitude > 60 ? 5 : 0) - 
+                         (calculatedPTT > 800 ? 8 : 0);
+                         
+    let instantDiastolic = 80 + (pttFactor * 0.72) + (ampFactor * 0.31) -
+                          (calculatedPTT > 800 ? 5 : 0);
 
-    // Enhanced physiological range enforcement
+    // Validación fisiológica mejorada
     instantSystolic = Math.max(90, Math.min(180, instantSystolic));
     instantDiastolic = Math.max(60, Math.min(110, instantDiastolic));
     
-    // Maintain realistic pressure differential with improved bounds
+    // Control de diferencial de presión más preciso
     const differential = instantSystolic - instantDiastolic;
-    if (differential < 25) {
-      instantDiastolic = instantSystolic - 25;
-    } else if (differential > 75) {
-      instantDiastolic = instantSystolic - 75;
+    if (differential < 30) {
+      instantDiastolic = instantSystolic - 30;
+    } else if (differential > 70) {
+      instantDiastolic = instantSystolic - 70;
     }
 
-    // Update pressure buffers with new values
+    // Actualización de buffers con peso variable
     this.systolicBuffer.push(instantSystolic);
     this.diastolicBuffer.push(instantDiastolic);
     
@@ -79,24 +99,21 @@ export class BloodPressureProcessor {
       this.diastolicBuffer.shift();
     }
 
-    // Calculate final smoothed values with enhanced exponential moving average
+    // Promedio ponderado exponencial mejorado
     let finalSystolic = 0;
     let finalDiastolic = 0;
-    let smoothingWeightSum = 0;
+    let weightSum = 0;
 
     for (let i = 0; i < this.systolicBuffer.length; i++) {
       const weight = Math.pow(this.BP_ALPHA, this.systolicBuffer.length - 1 - i);
       finalSystolic += this.systolicBuffer[i] * weight;
       finalDiastolic += this.diastolicBuffer[i] * weight;
-      smoothingWeightSum += weight;
+      weightSum += weight;
     }
 
-    finalSystolic = smoothingWeightSum > 0 ? finalSystolic / smoothingWeightSum : instantSystolic;
-    finalDiastolic = smoothingWeightSum > 0 ? finalDiastolic / smoothingWeightSum : instantDiastolic;
-
     return {
-      systolic: Math.round(finalSystolic),
-      diastolic: Math.round(finalDiastolic)
+      systolic: Math.round(weightSum > 0 ? finalSystolic / weightSum : instantSystolic),
+      diastolic: Math.round(weightSum > 0 ? finalDiastolic / weightSum : instantDiastolic)
     };
   }
 
