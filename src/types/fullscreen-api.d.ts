@@ -1,31 +1,26 @@
 
 // Type definitions for browser fullscreen API
-// Needed to support vendor-prefixed methods in TypeScript
 
 interface Document {
   // Standard
-  fullscreenElement: Element | null;
-  fullscreenEnabled: boolean;
+  readonly fullscreenElement: Element | null;
+  readonly fullscreenEnabled: boolean;
   exitFullscreen(): Promise<void>;
   
   // WebKit
-  webkitFullscreenElement: Element | null;
-  webkitFullscreenEnabled: boolean;
+  readonly webkitFullscreenElement: Element | null;
+  readonly webkitFullscreenEnabled: boolean;
   webkitExitFullscreen(): Promise<void>;
   
   // Mozilla
-  mozFullScreenElement: Element | null;
-  mozFullScreenEnabled: boolean;
+  readonly mozFullScreenElement: Element | null;
+  readonly mozFullScreenEnabled: boolean;
   mozCancelFullScreen(): Promise<void>;
   
   // Microsoft
-  msFullscreenElement: Element | null;
-  msFullscreenEnabled: boolean;
+  readonly msFullscreenElement: Element | null;
+  readonly msFullscreenEnabled: boolean;
   msExitFullscreen(): Promise<void>;
-
-  // Event handler properties
-  onfullscreenchange: ((this: Document, ev: Event) => any) | null;
-  onfullscreenerror: ((this: Document, ev: Event) => any) | null;
 }
 
 interface HTMLElement {
@@ -41,6 +36,3 @@ interface HTMLElement {
   // Microsoft
   msRequestFullscreen(options?: FullscreenOptions): Promise<void>;
 }
-
-// This export {} is necessary to make this file a module rather than a script
-export {};

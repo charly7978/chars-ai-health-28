@@ -97,3 +97,25 @@
   border: 1px solid #9F8E6A25;
   overflow: hidden;
 }
+
+.start-button {
+  background: linear-gradient(to bottom, #0b65d4, #0f4a94);
+  border: 1px solid #2e8eff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.start-button:active {
+  background: linear-gradient(to bottom, #0f4a94, #0b3871);
+}
+
+.stop-button {
+  background: linear-gradient(to bottom, #d40b0b, #941111);
+  border: 1px solid #ff2e2e;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.stop-button:active {
+  background: linear-gradient(to bottom, #941111, #71110e);
+}
