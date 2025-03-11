@@ -248,6 +248,13 @@ const Index = () => {
             </div>
           )}
 
+          <div className="absolute bottom-[96px] left-0 right-0 text-center">
+            <h1 className="text-3xl font-bold">
+              <span className="text-white">Chars</span>
+              <span className="text-red-500">Healt</span>
+            </h1>
+          </div>
+
           <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
             <button 
               onClick={startMonitoring}
