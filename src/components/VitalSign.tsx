@@ -25,7 +25,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (!value || value === 0) {
       return {
         text: isLipidsDisplay || isPressureDisplay ? "--/--" : "--",
-        color: "text-gold-light",
+        color: "text-white",
         status: ""
       };
     }
@@ -159,7 +159,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
     
     return {
       text: value,
-      color: "text-gold-light",
+      color: "text-white",
       status: ""
     };
   };
@@ -167,16 +167,16 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="vital-sign-panel flex flex-col h-full bg-opacity-50">
+    <div className="vital-sign-panel flex flex-col h-full bg-opacity-25 backdrop-blur-sm">
       <div className="flex flex-col items-center justify-center flex-1 gap-2 p-2">
-        <h3 className="text-gold-medium text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
+        <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
         
         <div className="flex flex-col items-center justify-center gap-1.5 flex-1 py-1">
           <div className="flex items-center justify-center gap-1">
             <span 
-              className={`font-bold ${color} transition-colors duration-300 
+              className={`font-bold ${color} transition-colors duration-300 animate-pulse
                 ${isArrhythmiaDisplay ? 'text-[15px]' : ''}
                 ${isLipidsDisplay || isPressureDisplay ? 'text-[18px]' : ''}
                 ${!isArrhythmiaDisplay && !isLipidsDisplay && !isPressureDisplay ? 'text-[24px]' : ''}`}
@@ -185,7 +185,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-gold-medium/90 text-[13px] font-medium">
+              <span className="text-white/90 text-[13px] font-medium">
                 {unit}
               </span>
             )}

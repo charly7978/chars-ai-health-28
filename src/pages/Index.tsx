@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -587,7 +588,7 @@ const Index = () => {
 
           {isCalibrating && (
             <div className="absolute bottom-[55%] left-0 right-0 text-center">
-              <span className="text-sm font-medium text-gold-medium">
+              <span className="text-sm font-medium text-white animate-pulse">
                 Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
               </span>
             </div>
