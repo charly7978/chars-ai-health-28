@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -6,6 +7,7 @@ import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import ShareButton from "@/components/ShareButton";
+import VitalSignDetailDialog from "@/components/VitalSignDetailDialog";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -20,6 +22,7 @@ const Index = () => {
   const [heartRate, setHeartRate] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState("--");
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [selectedVitalSign, setSelectedVitalSign] = useState(null);
   const measurementTimerRef = useRef(null);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
@@ -95,6 +98,16 @@ const Index = () => {
     stopProcessing();
     resetVitalSigns();
     setElapsedTime(0);
+    setSignalQuality(0);
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
+  };
+
+  const resetAll = () => {
+    stopMonitoring();
     setHeartRate(0);
     setVitalSigns({ 
       spo2: 0, 
@@ -102,12 +115,7 @@ const Index = () => {
       arrhythmiaStatus: "--" 
     });
     setArrhythmiaCount("--");
-    setSignalQuality(0);
-    
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-      measurementTimerRef.current = null;
-    }
+    toast.success("Todos los datos han sido restablecidos");
   };
 
   const handleStreamReady = (stream) => {
@@ -189,6 +197,19 @@ const Index = () => {
     }
   };
 
+  const handleVitalSignClick = (label, value, unit, info) => {
+    setSelectedVitalSign({
+      label,
+      value,
+      unit,
+      info
+    });
+  };
+
+  const closeVitalSignDetail = () => {
+    setSelectedVitalSign(null);
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
@@ -220,30 +241,78 @@ const Index = () => {
           </div>
 
           <div className="absolute bottom-[200px] left-0 right-0 px-4">
-            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
+            <div className="bg-gray-900/50 backdrop-blur-sm rounded-xl p-4 shadow-lg">
               <div className="grid grid-cols-4 gap-2">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
                   calibrationProgress={vitalSigns.calibration?.progress.heartRate}
+                  onDetailClick={() => handleVitalSignClick(
+                    "FRECUENCIA CARDÍACA", 
+                    heartRate || "--",
+                    "BPM", 
+                    {
+                      description: "Mide las veces que el corazón late por minuto",
+                      normalRange: "60-100 BPM",
+                      recommendation: heartRate > 100 
+                        ? "Su frecuencia cardíaca está elevada, considere descansar o consultar a un médico"
+                        : heartRate < 60
+                          ? "Su frecuencia cardíaca está baja, considere consultar a un médico si se siente mareado"
+                          : "Su frecuencia cardíaca está en el rango normal"
+                    }
+                  )}
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
                   calibrationProgress={vitalSigns.calibration?.progress.spo2}
+                  onDetailClick={() => handleVitalSignClick(
+                    "SPO2", 
+                    vitalSigns.spo2 || "--",
+                    "%", 
+                    {
+                      description: "Saturación de oxígeno en sangre",
+                      normalRange: "95-100%",
+                      recommendation: vitalSigns.spo2 < 95
+                        ? "Su nivel de oxígeno está bajo, considere consultar a un médico"
+                        : "Su nivel de oxígeno está en el rango normal"
+                    }
+                  )}
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
                   calibrationProgress={vitalSigns.calibration?.progress.pressure}
+                  onDetailClick={() => handleVitalSignClick(
+                    "PRESIÓN ARTERIAL", 
+                    vitalSigns.pressure,
+                    "mmHg", 
+                    {
+                      description: "Mide la fuerza que ejerce la sangre contra las paredes de las arterias",
+                      normalRange: "90/60 - 120/80 mmHg",
+                      recommendation: "Mantenga un estilo de vida saludable para controlar su presión arterial"
+                    }
+                  )}
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
                   calibrationProgress={vitalSigns.calibration?.progress.arrhythmia}
+                  onDetailClick={() => handleVitalSignClick(
+                    "ARRITMIAS", 
+                    arrhythmiaCount,
+                    "", 
+                    {
+                      description: "Latidos irregulares del corazón",
+                      normalRange: "0 arritmias",
+                      recommendation: arrhythmiaCount > 1
+                        ? "Se han detectado arritmias, considere consultar a un cardiólogo"
+                        : "No se han detectado arritmias significativas"
+                    }
+                  )}
                 />
               </div>
             </div>
@@ -264,7 +333,7 @@ const Index = () => {
             </button>
             <ShareButton onShare={handleShare} />
             <button 
-              onClick={stopMonitoring}
+              onClick={resetAll}
               className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
             >
               RESET
@@ -272,6 +341,13 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      {selectedVitalSign && (
+        <VitalSignDetailDialog
+          vitalSign={selectedVitalSign}
+          onClose={closeVitalSignDetail}
+        />
+      )}
     </div>
   );
 };

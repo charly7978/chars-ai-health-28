@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import { cn } from '@/lib/utils';
 
 interface VitalSignProps {
@@ -7,6 +8,7 @@ interface VitalSignProps {
   unit?: string;
   highlighted?: boolean;
   calibrationProgress?: number;
+  onDetailClick?: () => void;
 }
 
 const VitalSign = ({ 
@@ -14,10 +16,9 @@ const VitalSign = ({
   value, 
   unit, 
   highlighted = false,
-  calibrationProgress 
+  calibrationProgress,
+  onDetailClick
 }: VitalSignProps) => {
-  const [showDetails, setShowDetails] = useState(false);
-
   const getRiskLabel = (label: string, value: string | number) => {
     if (typeof value === 'number') {
       switch(label) {
@@ -144,121 +145,24 @@ const VitalSign = ({
     return null;
   };
 
-  const getMedianAndAverageInfo = (label: string, value: string | number) => {
-    // Skip for SPO2 and glucose as requested
-    if (label === 'SPO2' || label === 'GLUCOSA') return null;
-
-    // For demonstration purposes - in a real app these would come from actual calculations
-    let median, average, interpretation;
-
-    if (typeof value === 'number') {
-      switch(label) {
-        case 'FRECUENCIA CARDÍACA':
-          median = 75;
-          average = 72;
-          interpretation = value > 100 
-            ? "Su frecuencia está por encima del rango normal (60-100 BPM)."
-            : value < 60 
-              ? "Su frecuencia está por debajo del rango normal (60-100 BPM)."
-              : "Su frecuencia está dentro del rango normal (60-100 BPM).";
-          break;
-        case 'HEMOGLOBINA':
-          median = 14;
-          average = 14.5;
-          interpretation = value < 12 
-            ? "Su nivel está por debajo del rango normal (12-16 g/dL)."
-            : value > 16 
-              ? "Su nivel está por encima del rango normal (12-16 g/dL)."
-              : "Su nivel está dentro del rango normal (12-16 g/dL).";
-          break;
-        default:
-          return null;
-      }
-    } else if (typeof value === 'string') {
-      switch(label) {
-        case 'PRESIÓN ARTERIAL':
-          median = "120/80";
-          average = "118/78";
-          const bloodPressureParts = value.split('/');
-          if (bloodPressureParts.length === 2) {
-            const systolic = parseInt(bloodPressureParts[0], 10);
-            const diastolic = parseInt(bloodPressureParts[1], 10);
-            interpretation = (systolic >= 140 || diastolic >= 90)
-              ? "Su presión está por encima del rango normal (<140/90 mmHg)."
-              : (systolic < 90 || diastolic < 60)
-                ? "Su presión está por debajo del rango normal (>90/60 mmHg)."
-                : "Su presión está dentro del rango normal (90/60 - 140/90 mmHg).";
-          }
-          break;
-        case 'COLESTEROL/TRIGL.':
-          median = "180/130";
-          average = "175/120";
-          const lipidParts = value.split('/');
-          if (lipidParts.length === 2) {
-            const cholesterol = parseInt(lipidParts[0], 10);
-            const triglycerides = parseInt(lipidParts[1], 10);
-            interpretation = 
-              cholesterol > 200 
-                ? "Su nivel de colesterol está elevado (>200 mg/dL)." 
-                : "Su nivel de colesterol está dentro del rango normal (<200 mg/dL).";
-            
-            if (triglycerides > 150) {
-              interpretation += " Sus triglicéridos están elevados (>150 mg/dL).";
-            } else {
-              interpretation += " Sus triglicéridos están dentro del rango normal (<150 mg/dL).";
-            }
-          }
-          break;
-        case 'ARRITMIAS':
-          const rhythmParts = value.split('|');
-          if (rhythmParts.length === 2) {
-            const status = rhythmParts[0];
-            const count = rhythmParts[1];
-            
-            if (status === "ARRITMIA DETECTADA") {
-              median = "0";
-              average = "0-1";
-              interpretation = parseInt(count) > 3 
-                ? "Ha tenido varias arritmias. Considere consultar a un especialista."
-                : "Ha tenido algunas arritmias detectadas. Monitoree su condición.";
-            } else {
-              median = "0";
-              average = "0";
-              interpretation = "No se detectaron arritmias, lo cual es normal.";
-            }
-          }
-          break;
-        default:
-          return null;
-      }
-    }
-
-    return { median, average, interpretation };
-  };
-
   const riskLabel = getRiskLabel(label, value);
   const riskColor = getRiskColor(riskLabel);
   const isArrhytmia = label === 'ARRITMIAS';
-  const medianAndAverage = getMedianAndAverageInfo(label, value);
-
-  const handleClick = () => {
-    setShowDetails(!showDetails);
-  };
 
   return (
     <div 
       className={cn(
-        "relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-500 text-center cursor-pointer",
-        showDetails && "bg-gray-800/20 backdrop-blur-sm rounded-lg"
+        "relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-300 text-center cursor-pointer",
+        highlighted && "bg-blue-500/10 rounded-lg"
       )}
-      onClick={handleClick}
+      onClick={onDetailClick}
     >
-      <div className="text-[11px] font-medium uppercase tracking-wider text-black/70 mb-1">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-white/80 mb-1">
         {label}
       </div>
       
       <div className="font-bold text-xl sm:text-2xl transition-all duration-300">
-        <span className="text-gradient-soft animate-value-glow">
+        <span className="text-white animate-value-glow">
           {isArrhytmia && typeof value === 'string' ? value.split('|')[0] : value}
         </span>
         {unit && <span className="text-xs text-white/70 ml-1">{unit}</span>}
@@ -285,23 +189,9 @@ const VitalSign = ({
           </div>
         </div>
       )}
-
-      {showDetails && medianAndAverage && (
-        <div className="absolute inset-x-0 top-full z-50 mt-2 p-4 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-left">
-          <div className="text-sm font-medium text-gray-900 mb-2">Información adicional:</div>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <div className="text-xs">
-              <span className="font-medium">Mediana:</span> {medianAndAverage.median} {unit}
-            </div>
-            <div className="text-xs">
-              <span className="font-medium">Promedio ponderado:</span> {medianAndAverage.average} {unit}
-            </div>
-          </div>
-          <div className="text-xs mt-1 text-gray-800">
-            {medianAndAverage.interpretation}
-          </div>
-        </div>
-      )}
+      
+      {/* Indicator to show it's clickable */}
+      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-6 h-1 rounded-full bg-blue-400/50 mt-1"></div>
     </div>
   );
 };
