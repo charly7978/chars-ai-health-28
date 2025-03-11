@@ -224,39 +224,35 @@ const Index = () => {
             />
           </div>
 
-          <div className="absolute bottom-[150px] left-0 right-0 px-4">
-            <div className="bg-gray-900/80 backdrop-blur-sm rounded-xl p-6 shadow-xl border border-gray-800">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="absolute bottom-[170px] left-0 right-0 px-4">
+            <div className="bg-gray-900/70 backdrop-blur-sm rounded-xl p-5 shadow-lg">
+              <div className="grid grid-cols-4 gap-4">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
                   value={heartRate || "--"}
                   unit="BPM"
                   calibrationProgress={vitalSigns.calibration?.progress.heartRate}
-                  displaySize="xlarge"
-                  highlighted={true}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="SPO2"
                   value={vitalSigns.spo2 || "--"}
                   unit="%"
                   calibrationProgress={vitalSigns.calibration?.progress.spo2}
-                  displaySize="xlarge"
-                  highlighted={true}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="PRESIÓN ARTERIAL"
                   value={vitalSigns.pressure}
                   unit="mmHg"
                   calibrationProgress={vitalSigns.calibration?.progress.pressure}
-                  displaySize="xlarge"
-                  highlighted={true}
+                  displaySize="large"
                 />
                 <VitalSign 
                   label="ARRITMIAS"
                   value={vitalSigns.arrhythmiaStatus}
                   calibrationProgress={vitalSigns.calibration?.progress.arrhythmia}
-                  displaySize="xlarge"
-                  highlighted={true}
+                  displaySize="large"
                 />
               </div>
             </div>
@@ -264,21 +260,21 @@ const Index = () => {
 
           {isMonitoring && (
             <div className="absolute bottom-40 left-0 right-0 text-center">
-              <span className="text-3xl font-bold text-white">{elapsedTime}s / 30s</span>
+              <span className="text-2xl font-medium text-gray-300">{elapsedTime}s / 30s</span>
             </div>
           )}
 
-          <div className="h-[120px] grid grid-cols-3 gap-px bg-gray-900 mt-auto">
+          <div className="h-[100px] grid grid-cols-3 gap-px bg-gray-900 mt-auto">
             <button 
               onClick={startMonitoring}
-              className="w-full h-full bg-black/80 text-4xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
             >
               INICIAR
             </button>
             <ShareButton onShare={handleShare} />
             <button 
               onClick={resetAll}
-              className="w-full h-full bg-black/80 text-4xl font-bold text-white active:bg-gray-800"
+              className="w-full h-full bg-black/80 text-3xl font-bold text-white active:bg-gray-800"
             >
               RESET
             </button>
