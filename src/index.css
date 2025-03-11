@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -96,20 +97,6 @@
   border: 1px solid #9F8E6A25;
   overflow: hidden;
   backdrop-filter: blur(1px);
-}
-
-.vital-signs-panel-container {
-  background: linear-gradient(180deg, rgba(20, 18, 22, 0.95) 0%, rgba(32, 29, 36, 0.98) 100%);
-  border-top: 2px solid rgba(159, 142, 106, 0.3);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
-  z-index: 20;
-  position: absolute;
-  top: 50%;
-  bottom: 40px;
-  left: 0;
-  right: 0;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
 }
 
 .background-grid {
