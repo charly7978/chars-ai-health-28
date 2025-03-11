@@ -70,7 +70,7 @@ const VitalSign = ({
             const status = parts[0];
             const count = parts[1];
             
-            if (status === "ARRITMIA DETECTADA" && count !== "0") {
+            if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
               return `Arritmias: ${count}`;
             } else if (status === "SIN ARRITMIAS") {
               return 'Normal';
@@ -118,7 +118,7 @@ const VitalSign = ({
     const status = parts[0];
     const count = parts[1];
     
-    if (status === "ARRITMIA DETECTADA" && count !== "0") {
+    if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
       return (
         <div className="text-sm font-medium mt-2 text-[#ea384c]">
           Arritmias: {count}

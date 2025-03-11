@@ -1,22 +1,22 @@
-
 /**
  * Advanced Arrhythmia Processor based on peer-reviewed cardiac research
- * Implements algorithms from "Assessment of Arrhythmia Vulnerability by Heart Rate Variability Analysis"
- * and "Machine Learning for Arrhythmia Detection" publications
  */
 export class ArrhythmiaProcessor {
   // Configuration based on Harvard Medical School research on HRV
-  private readonly RR_WINDOW_SIZE = 8; // Increased window for better statistical power
-  private readonly RMSSD_THRESHOLD = 30; // Updated per latest HRV research
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 5000; // Extended learning period
-  private readonly SD1_THRESHOLD = 25; // Poincaré plot SD1 threshold
-  private readonly PERFUSION_INDEX_MIN = 0.2; // Minimum PI for reliable detection
+  private readonly RR_WINDOW_SIZE = 10; // Increased window for better statistical power
+  private readonly RMSSD_THRESHOLD = 45; // More conservative threshold
+  private readonly ARRHYTHMIA_LEARNING_PERIOD = 6000; // Extended learning period
+  private readonly SD1_THRESHOLD = 35; // More conservative Poincaré plot SD1 threshold
+  private readonly PERFUSION_INDEX_MIN = 0.3; // Higher minimum PI for reliable detection
   
   // Advanced detection parameters from Mayo Clinic research
-  private readonly PNNX_THRESHOLD = 0.15; // pNN50 threshold
-  private readonly SHANNON_ENTROPY_THRESHOLD = 1.5; // Information theory threshold
-  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.2; // Sample entropy threshold
+  private readonly PNNX_THRESHOLD = 0.25; // More conservative pNN50 threshold
+  private readonly SHANNON_ENTROPY_THRESHOLD = 1.8; // Higher entropy threshold
+  private readonly SAMPLE_ENTROPY_THRESHOLD = 1.4; // Higher sample entropy threshold
   
+  // Minimum time between arrhythmias to reduce false positives
+  private readonly MIN_ARRHYTHMIA_INTERVAL = 2000; // 2 seconds minimum between detections
+
   // State variables
   private rrIntervals: number[] = [];
   private rrDifferences: number[] = [];
@@ -102,42 +102,67 @@ export class ArrhythmiaProcessor {
     const currentTime = Date.now();
     const recentRR = this.rrIntervals.slice(-this.RR_WINDOW_SIZE);
     
-    // Calculate RMSSD (Root Mean Square of Successive Differences)
-    // Validated metric for parasympathetic modulation assessment
+    // Calculate RMSSD with more stringent validation
     let sumSquaredDiff = 0;
+    let validIntervals = 0;
+    
     for (let i = 1; i < recentRR.length; i++) {
       const diff = recentRR[i] - recentRR[i-1];
-      sumSquaredDiff += diff * diff;
+      // Only count intervals within physiological limits
+      if (recentRR[i] >= 500 && recentRR[i] <= 1500) {
+        sumSquaredDiff += diff * diff;
+        validIntervals++;
+      }
     }
     
-    const rmssd = Math.sqrt(sumSquaredDiff / (recentRR.length - 1));
+    // Require at least 70% valid intervals
+    if (validIntervals < this.RR_WINDOW_SIZE * 0.7) {
+      return;
+    }
     
-    // Calculate mean RR and standard deviation
-    const avgRR = recentRR.reduce((a, b) => a + b, 0) / recentRR.length;
-    const lastRR = recentRR[recentRR.length - 1];
+    const rmssd = Math.sqrt(sumSquaredDiff / validIntervals);
     
-    // Calculate coefficient of variation and relative RR variation
-    const rrStandardDeviation = Math.sqrt(recentRR.reduce((sum, val) => 
-      sum + Math.pow(val - avgRR, 2), 0) / recentRR.length);
+    // Calculate mean RR and standard deviation with outlier rejection
+    const validRRs = recentRR.filter(rr => rr >= 500 && rr <= 1500);
+    if (validRRs.length < this.RR_WINDOW_SIZE * 0.7) return;
+    
+    const avgRR = validRRs.reduce((a, b) => a + b, 0) / validRRs.length;
+    const lastRR = validRRs[validRRs.length - 1];
+    
+    // More conservative variation calculations
+    const rrStandardDeviation = Math.sqrt(
+      validRRs.reduce((sum, val) => sum + Math.pow(val - avgRR, 2), 0) / validRRs.length
+    );
+    
     const coefficientOfVariation = rrStandardDeviation / avgRR;
     const rrVariation = Math.abs(lastRR - avgRR) / avgRR;
     
-    // Advanced non-linear dynamics metrics
-    this.calculateNonLinearMetrics(recentRR);
+    // Advanced non-linear dynamics metrics with stricter thresholds
+    this.calculateNonLinearMetrics(validRRs);
     
     this.lastRMSSD = rmssd;
     this.lastRRVariation = rrVariation;
     
-    // Multi-parametric decision algorithm based on cardiology research
-    // Combines time-domain (RMSSD), frequency-domain and non-linear metrics
+    // Multi-parametric decision algorithm with more conservative thresholds
+    const timeSinceLastArrhythmia = currentTime - this.lastArrhythmiaTime;
     const newArrhythmiaState = 
-      // Primary time-domain condition
-      (rmssd > this.RMSSD_THRESHOLD && rrVariation > 0.20) ||
-      // Secondary non-linear dynamics condition
-      (this.shannonEntropy > this.SHANNON_ENTROPY_THRESHOLD && this.pnnX > this.PNNX_THRESHOLD) ||
-      // Tertiary condition based on coefficient of variation
-      (coefficientOfVariation > 0.15 && rrVariation > 0.18);
-    
+      timeSinceLastArrhythmia >= this.MIN_ARRHYTHMIA_INTERVAL && (
+        // Primary condition: requires multiple criteria to be met
+        (rmssd > this.RMSSD_THRESHOLD && 
+         rrVariation > 0.25 && 
+         coefficientOfVariation > 0.15) ||
+        
+        // Secondary condition: requires very strong signal quality
+        (this.shannonEntropy > this.SHANNON_ENTROPY_THRESHOLD && 
+         this.pnnX > this.PNNX_THRESHOLD && 
+         coefficientOfVariation > 0.2) ||
+        
+        // Extreme variation condition: requires multiple confirmations
+        (rrVariation > 0.35 && 
+         coefficientOfVariation > 0.25 && 
+         this.sampleEntropy > this.SAMPLE_ENTROPY_THRESHOLD)
+      );
+
     // If it's a new arrhythmia and enough time has passed since the last one
     if (newArrhythmiaState && 
         currentTime - this.lastArrhythmiaTime > 1000) { // Minimum 1 second between arrhythmias
