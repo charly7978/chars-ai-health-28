@@ -6,6 +6,7 @@ import Index from './pages/Index'
 import Auth from './pages/Auth'
 import NotFound from './pages/NotFound'
 import './index.css'
+import { Toaster } from './components/ui/toaster'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -16,6 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" />} />
       </Routes>
+      <Toaster />
     </BrowserRouter>
   </React.StrictMode>
 )
