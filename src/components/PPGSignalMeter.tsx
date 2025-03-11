@@ -1,6 +1,5 @@
-
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle } from 'lucide-react';
+import { Fingerprint, AlertCircle, ActivitySquare } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -386,17 +385,44 @@ const PPGSignalMeter = ({
     onReset();
   }, [onReset]);
 
+  const getQualityBarStyle = useCallback((index: number, totalBars: number = 5) => {
+    if (!isFingerDetected) return 'bg-gray-300';
+    
+    const threshold = Math.floor((quality / 100) * totalBars);
+    
+    if (index <= threshold) {
+      if (quality > 75) return 'bg-green-500';
+      if (quality > 50) return 'bg-yellow-500';
+      return 'bg-red-500';
+    }
+    
+    return 'bg-gray-200';
+  }, [quality, isFingerDetected]);
+
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-5">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
           <div className="ml-10 w-[180px]">
-            <div className={`h-1.5 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
-              <div
-                className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
-                style={{ width: `${isFingerDetected ? quality : 0}%` }}
-              />
+            <div className="flex items-center">
+              <ActivitySquare size={18} className="mr-2 text-slate-600" />
+              <div className="flex gap-0.5 items-center">
+                {[1, 2, 3, 4, 5].map((bar) => (
+                  <div 
+                    key={bar} 
+                    className={`h-5 w-6 rounded-sm ${getQualityBarStyle(bar)} transition-colors duration-300 flex items-center justify-center ${bar <= Math.ceil(quality / 20) ? 'shadow-inner' : ''}`}
+                    style={{
+                      height: `${Math.min(20 + (bar * 5), 40)}px`,
+                      opacity: bar <= Math.ceil(quality / 20) ? 1 : 0.3
+                    }}
+                  >
+                    {bar === Math.ceil(quality / 20) && (
+                      <span className="text-[8px] font-bold text-white">{quality}%</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <span className="text-[9px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
                   style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
