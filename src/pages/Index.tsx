@@ -82,21 +82,17 @@ const Index = () => {
       setIsCameraOn(true);
       setShowResults(false);
       
-      // Iniciar procesamiento de señal
       startProcessing();
       
-      // Resetear valores
       setElapsedTime(0);
       setVitalSigns(prev => ({
         ...prev,
         arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
-      // Iniciar calibración automática
       console.log("Iniciando fase de calibración automática");
       startAutoCalibration();
       
-      // Iniciar temporizador para medición
       if (measurementTimerRef.current) {
         clearInterval(measurementTimerRef.current);
       }
@@ -106,7 +102,6 @@ const Index = () => {
           const newTime = prev + 1;
           console.log(`Tiempo transcurrido: ${newTime}s`);
           
-          // Finalizar medición después de 30 segundos
           if (newTime >= 30) {
             finalizeMeasurement();
             return 30;
@@ -121,11 +116,8 @@ const Index = () => {
     console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
     
-    // Iniciar la calibración en el procesador
     startCalibration();
     
-    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
-    // Esto garantiza que el estado comience correctamente
     console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
@@ -140,22 +132,18 @@ const Index = () => {
       }
     });
     
-    // Logear para verificar que el estado se estableció
     setTimeout(() => {
       console.log("Estado de calibración establecido:", calibrationProgress);
     }, 100);
     
-    // Actualizar el progreso visualmente en intervalos regulares
     let step = 0;
     const calibrationInterval = setInterval(() => {
       step += 1;
       
-      // Actualizar progreso visual (10 pasos en total)
       if (step <= 10) {
-        const progressPercent = step * 10; // 0-100%
+        const progressPercent = step * 10;
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        // Actualizar cada valor individualmente para asegurar que se renderice
         setCalibrationProgress({
           isCalibrating: true,
           progress: {
@@ -169,18 +157,13 @@ const Index = () => {
           }
         });
       } else {
-        // Al finalizar, detener el intervalo
-        console.log("Finalizando animación de calibración");
         clearInterval(calibrationInterval);
         
-        // Completar calibración
         if (isCalibrating) {
           console.log("Completando calibración");
           forceCalibrationCompletion();
           setIsCalibrating(false);
           
-          // Importante: Establecer calibrationProgress a undefined o con valores 100
-          // para que la UI refleje que ya no está calibrando
           setCalibrationProgress({
             isCalibrating: false,
             progress: {
@@ -194,15 +177,13 @@ const Index = () => {
             }
           });
           
-          // Opcional: vibración si está disponible
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100]);
           }
         }
       }
-    }, 800); // Cada paso dura 800ms (8 segundos en total)
+    }, 800);
     
-    // Temporizador de seguridad
     setTimeout(() => {
       if (isCalibrating) {
         console.log("Forzando finalización de calibración por tiempo límite");
@@ -210,7 +191,6 @@ const Index = () => {
         forceCalibrationCompletion();
         setIsCalibrating(false);
         
-        // Asegurar que se limpie el estado de calibración
         setCalibrationProgress({
           isCalibrating: false,
           progress: {
@@ -224,7 +204,7 @@ const Index = () => {
           }
         });
       }
-    }, 10000); // 10 segundos como máximo
+    }, 10000);
   };
 
   const finalizeMeasurement = () => {
@@ -295,7 +275,6 @@ const Index = () => {
     const videoTrack = stream.getVideoTracks()[0];
     const imageCapture = new ImageCapture(videoTrack);
     
-    // Asegurar que la linterna esté encendida para mediciones de PPG
     if (videoTrack.getCapabilities()?.torch) {
       console.log("Activando linterna para mejorar la señal PPG");
       videoTrack.applyConstraints({
@@ -305,7 +284,6 @@ const Index = () => {
       console.warn("Esta cámara no tiene linterna disponible, la medición puede ser menos precisa");
     }
     
-    // Crear un canvas de tamaño óptimo para el procesamiento
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d', {willReadFrequently: true});
     if (!tempCtx) {
@@ -313,17 +291,15 @@ const Index = () => {
       return;
     }
     
-    // Variables para controlar el rendimiento y la tasa de frames
     let lastProcessTime = 0;
-    const targetFrameInterval = 1000/30; // Apuntar a 30 FPS para precisión
+    const targetFrameInterval = 1000/30;
     let frameCount = 0;
     let lastFpsUpdateTime = Date.now();
     let processingFps = 0;
     
-    // Crearemos un contexto dedicado para el procesamiento de imagen
     const enhanceCanvas = document.createElement('canvas');
     const enhanceCtx = enhanceCanvas.getContext('2d', {willReadFrequently: true});
-    enhanceCanvas.width = 320;  // Tamaño óptimo para procesamiento PPG
+    enhanceCanvas.width = 320;
     enhanceCanvas.height = 240;
     
     const processImage = async () => {
@@ -332,56 +308,41 @@ const Index = () => {
       const now = Date.now();
       const timeSinceLastProcess = now - lastProcessTime;
       
-      // Control de tasa de frames para no sobrecargar el dispositivo
       if (timeSinceLastProcess >= targetFrameInterval) {
         try {
-          // Capturar frame 
           const frame = await imageCapture.grabFrame();
           
-          // Configurar tamaño adecuado del canvas para procesamiento
           const targetWidth = Math.min(320, frame.width);
           const targetHeight = Math.min(240, frame.height);
           
           tempCanvas.width = targetWidth;
           tempCanvas.height = targetHeight;
           
-          // Dibujar el frame en el canvas
           tempCtx.drawImage(
             frame, 
             0, 0, frame.width, frame.height, 
             0, 0, targetWidth, targetHeight
           );
           
-          // Mejorar la imagen para detección PPG
           if (enhanceCtx) {
-            // Resetear canvas
             enhanceCtx.clearRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
-            
-            // Dibujar en el canvas de mejora
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
-            // Opcionales: Ajustes para mejorar la señal roja
             enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
+            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';
             enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             enhanceCtx.globalCompositeOperation = 'source-over';
-          
-            // Obtener datos de la imagen mejorada
-            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             
-            // Procesar el frame mejorado
+            const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
             processFrame(imageData);
           } else {
-            // Fallback a procesamiento normal
             const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
             processFrame(imageData);
           }
           
-          // Actualizar contadores para monitoreo de rendimiento
           frameCount++;
           lastProcessTime = now;
           
-          // Calcular FPS cada segundo
           if (now - lastFpsUpdateTime > 1000) {
             processingFps = frameCount;
             frameCount = 0;
@@ -393,7 +354,6 @@ const Index = () => {
         }
       }
       
-      // Programar el siguiente frame
       if (isMonitoring) {
         requestAnimationFrame(processImage);
       }
@@ -422,7 +382,56 @@ const Index = () => {
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
-  // Nueva función para alternar medición
+  const getRiskLevel = (type: string, value: any): 'low' | 'medium' | 'high' | 'normal' => {
+    if (typeof value === 'string' && (value === '--' || value === '--/--')) return 'normal';
+    
+    switch (type) {
+      case 'heartRate':
+        const hr = Number(value);
+        if (hr > 120 || hr < 50) return 'high';
+        if (hr > 100 || hr < 60) return 'medium';
+        if (hr > 90 || hr < 65) return 'low';
+        return 'normal';
+      
+      case 'spo2':
+        const spo2 = Number(value);
+        if (spo2 < 90) return 'high';
+        if (spo2 < 94) return 'medium';
+        if (spo2 < 96) return 'low';
+        return 'normal';
+      
+      case 'pressure':
+        if (value === '--/--') return 'normal';
+        const [systolic, diastolic] = value.split('/').map(Number);
+        if (systolic > 160 || diastolic > 100) return 'high';
+        if (systolic > 140 || diastolic > 90) return 'medium';
+        if (systolic > 130 || diastolic > 85) return 'low';
+        return 'normal';
+      
+      case 'hemoglobin':
+        const hgb = Number(value);
+        if (hgb < 10 || hgb > 17) return 'high';
+        if (hgb < 12 || hgb > 16) return 'medium';
+        return 'normal';
+      
+      case 'glucose':
+        const glu = Number(value);
+        if (glu > 180 || glu < 70) return 'high';
+        if (glu > 140 || glu < 80) return 'medium';
+        return 'normal';
+      
+      case 'lipids':
+        if (value === '--/--') return 'normal';
+        const [chol, trigl] = value.split('/').map(Number);
+        if (chol > 240 || trigl > 200) return 'high';
+        if (chol > 200 || trigl > 150) return 'medium';
+        return 'normal';
+        
+      default:
+        return 'normal';
+    }
+  };
+
   const handleToggleMonitoring = () => {
     if (isMonitoring) {
       finalizeMeasurement();
@@ -452,7 +461,6 @@ const Index = () => {
         </div>
 
         <div className="relative z-10 h-full flex flex-col">
-          {/* Se agrega header para sensor de calidad y estado de huella digital */}
           <div className="px-4 py-2 flex justify-around items-center bg-black/20">
             <div className="text-white text-lg">
               Calidad: {signalQuality}
@@ -475,7 +483,6 @@ const Index = () => {
             />
           </div>
 
-          {/* Contenedor de los displays ampliado y con mayor espaciamiento */}
           <div className="absolute inset-x-0 top-[55%] bottom-[60px] bg-black/10 px-4 py-6">
             <div className="grid grid-cols-3 gap-4 place-items-center">
               <VitalSign 
@@ -483,41 +490,46 @@ const Index = () => {
                 value={heartRate || "--"}
                 unit="BPM"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('heartRate', heartRate)}
               />
               <VitalSign 
                 label="SPO2"
                 value={vitalSigns.spo2 || "--"}
                 unit="%"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('spo2', vitalSigns.spo2)}
               />
               <VitalSign 
                 label="PRESIÓN ARTERIAL"
                 value={vitalSigns.pressure}
                 unit="mmHg"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('pressure', vitalSigns.pressure)}
               />
               <VitalSign 
                 label="HEMOGLOBINA"
                 value={vitalSigns.hemoglobin || "--"}
                 unit="g/dL"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('hemoglobin', vitalSigns.hemoglobin)}
               />
               <VitalSign 
                 label="GLUCOSA"
                 value={vitalSigns.glucose || "--"}
                 unit="mg/dL"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('glucose', vitalSigns.glucose)}
               />
               <VitalSign 
                 label="COLESTEROL/TRIGL."
                 value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
                 unit="mg/dL"
                 highlighted={showResults}
+                riskLevel={getRiskLevel('lipids', `${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`)}
               />
             </div>
           </div>
 
-          {/* Botonera inferior: botón de iniciar/detener y de reset en fila */}
           <div className="absolute inset-x-0 bottom-4 flex gap-4 px-4">
             <div className="w-1/2">
               <MonitorButton 
@@ -541,4 +553,3 @@ const Index = () => {
 };
 
 export default Index;
-

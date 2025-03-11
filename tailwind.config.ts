@@ -89,14 +89,14 @@ export default {
           "50%": { height: "0.5rem" }
         },
         "value-glow": {
-          "0%, 100%": { textShadow: "0 0 1px rgba(255,255,255,0.2)" },
-          "50%": { textShadow: "0 0 15px rgba(255,255,255,0.8), 0 0 5px rgba(255,255,255,0.4)" }
+          "0%, 100%": { textShadow: "0 0 2px rgba(255,255,255,0.3)" },
+          "50%": { textShadow: "0 0 20px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.6), 0 0 5px rgba(120,190,255,0.8)" }
         }
       },
       animation: {
         "heart-beat": "heart-beat 1s ease-in-out infinite",
         "flip": "card-flip 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards",
-        "value-glow": "value-glow 3s ease-in-out infinite"
+        "value-glow": "value-glow 2.5s ease-in-out infinite"
       }
     },
   },
