@@ -422,6 +422,15 @@ const Index = () => {
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
+  // Nueva función para alternar medición
+  const handleToggleMonitoring = () => {
+    if (isMonitoring) {
+      finalizeMeasurement();
+    } else {
+      startMonitoring();
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
       height: '100vh',
@@ -456,16 +465,8 @@ const Index = () => {
             />
           </div>
 
-          {isCalibrating && (
-            <div className="absolute bottom-[55%] left-0 right-0 text-center">
-              <span className="text-sm font-medium text-gray-400">
-                Calibración {Math.round(calibrationProgress?.progress?.heartRate || 0)}%
-              </span>
-            </div>
-          )}
-
-          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/10 backdrop-blur-sm px-3 py-4">
-            <div className="grid grid-cols-3 gap-3 h-full">
+          <div className="absolute inset-x-0 top-[50%] bottom-[60px] bg-black/10 px-3 py-4">
+            <div className="grid grid-cols-3 gap-3 h-full justify-items-center items-center">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
@@ -503,6 +504,14 @@ const Index = () => {
                 highlighted={showResults}
               />
             </div>
+          </div>
+
+          {/* Se agrega la botonera central */}
+          <div className="absolute inset-x-0 bottom-4 flex justify-center">
+            <MonitorButton 
+              isMonitoring={isMonitoring} 
+              onToggle={handleToggleMonitoring} 
+            />
           </div>
         </div>
       </div>

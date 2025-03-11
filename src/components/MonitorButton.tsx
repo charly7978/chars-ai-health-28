@@ -1,38 +1,17 @@
-
-import React, { useEffect } from 'react';
+import React from 'react';
 
 interface MonitorButtonProps {
   isMonitoring: boolean;
-  onClick: () => void;
+  onToggle: () => void;
 }
 
-const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
-  useEffect(() => {
-    console.log('MonitorButton: Estado actualizado', { isMonitoring, timestamp: new Date().toISOString() });
-  }, [isMonitoring]);
-
-  const handleClick = () => {
-    console.log('MonitorButton: Botón presionado', { 
-      acción: isMonitoring ? 'Detener monitoreo' : 'Iniciar monitoreo', 
-      estadoActual: isMonitoring,
-      timestamp: new Date().toISOString()
-    });
-    onClick();
-  };
-
+const MonitorButton: React.FC<MonitorButtonProps> = ({ isMonitoring, onToggle }) => {
   return (
     <button 
-      onClick={handleClick}
-      className={`w-full h-full text-lg font-bold shadow-md text-white transition-colors duration-200 ${
-        isMonitoring 
-        ? 'bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800' 
-        : 'bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800'
-      }`}
-      style={{
-        textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-      }}
+      onClick={onToggle} 
+      className={`px-4 py-2 rounded transition-colors duration-300 ${isMonitoring ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'} text-white`}
     >
-      {isMonitoring ? 'DETENER' : 'INICIAR'}
+      {isMonitoring ? 'Detener' : 'Iniciar'}
     </button>
   );
 };
