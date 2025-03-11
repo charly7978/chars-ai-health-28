@@ -11,6 +11,7 @@ export class SignalProcessor {
   private readonly SG_NORM = 4.4;
   private readonly WAVELET_THRESHOLD = 0.03;
   private readonly BASELINE_FACTOR = 0.92;
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 0.3;
   private baselineValue: number = 0;
 
   // Parámetros ÓPTIMOS: más fácil detectar dedos reales, eliminar falsos positivos
