@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -593,43 +594,46 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-[60px] grid grid-cols-3 gap-0">
-            <VitalSign 
-              label="FRECUENCIA CARDÍACA"
-              value={heartRate || "--"}
-              unit="BPM"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="SPO2"
-              value={vitalSigns.spo2 || "--"}
-              unit="%"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="PRESIÓN ARTERIAL"
-              value={vitalSigns.pressure}
-              unit="mmHg"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="HEMOGLOBINA"
-              value={vitalSigns.hemoglobin || "--"}
-              unit="g/dL"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="GLUCOSA"
-              value={vitalSigns.glucose || "--"}
-              unit="mg/dL"
-              highlighted={showResults}
-            />
-            <VitalSign 
-              label="COLESTEROL/TRIGL."
-              value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-              unit="mg/dL"
-              highlighted={showResults}
-            />
+          <div className="absolute inset-x-0 bottom-0 mb-[60px]">
+            <div className="background-grid w-full h-full absolute inset-0"></div>
+            <div className="grid grid-cols-3 gap-0">
+              <VitalSign 
+                label="FRECUENCIA CARDÍACA"
+                value={heartRate || "--"}
+                unit="BPM"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="SPO2"
+                value={vitalSigns.spo2 || "--"}
+                unit="%"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="PRESIÓN ARTERIAL"
+                value={vitalSigns.pressure}
+                unit="mmHg"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+            </div>
           </div>
 
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
