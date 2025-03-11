@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface VitalSignProps {
@@ -17,7 +16,7 @@ const VitalSign = ({
   calibrationProgress 
 }: VitalSignProps) => {
   return (
-    <div className="relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-500 border-0">
+    <div className="relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-500 border-0 text-center">
       <div className="text-[11px] font-medium uppercase tracking-wider text-black/70 mb-1">
         {label}
       </div>
