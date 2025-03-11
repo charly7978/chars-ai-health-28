@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -92,11 +93,19 @@
 }
 
 .vital-sign-panel {
-  background: linear-gradient(167deg, rgba(50, 46, 52, 0.05) 0%, rgba(34, 31, 38, 0.05) 100%);
-  border: 1px solid rgba(159, 142, 106, 0.15);
+  background: linear-gradient(167deg, #322E34 0%, #221F26 100%);
+  border: 1px solid #9F8E6A25;
   overflow: hidden;
   backdrop-filter: blur(1px);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.03);
+}
+
+.vital-signs-panel-container {
+  background: linear-gradient(180deg, rgba(20, 18, 22, 0.95) 0%, rgba(32, 29, 36, 0.98) 100%);
+  border-top: 2px solid rgba(159, 142, 106, 0.3);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
 .background-grid {
@@ -126,19 +135,4 @@
 
 .stop-button:active {
   background: linear-gradient(to bottom, #941111, #71110e);
-}
-
-@keyframes pulse-white {
-  0%, 100% {
-    text-shadow: 0 0 5px rgba(255, 255, 255, 0.8), 0 0 10px rgba(255, 255, 255, 0.5);
-    opacity: 1;
-  }
-  50% {
-    text-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 0 0 20px rgba(255, 255, 255, 0.7);
-    opacity: 0.9;
-  }
-}
-
-.animate-pulse-white {
-  animation: pulse-white 2s infinite;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Fingerprint, AlertCircle, Activity } from 'lucide-react';
+import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
 
 interface PPGSignalMeterProps {
@@ -40,7 +40,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = window.innerHeight;
+  const CANVAS_HEIGHT = 400;
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
@@ -92,8 +92,8 @@ const PPGSignalMeter = ({
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
     const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, 'rgba(254, 247, 205, 0.1)');
-    gradient.addColorStop(1, 'rgba(253, 225, 211, 0.1)');
+    gradient.addColorStop(0, '#FEF7CD');
+    gradient.addColorStop(1, '#FDE1D3');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -105,7 +105,7 @@ const PPGSignalMeter = ({
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
       if (x % (GRID_SIZE_X * 4) === 0) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'center';
         ctx.fillText(`${x / 10}ms`, x, CANVAS_HEIGHT - 5);
@@ -117,7 +117,7 @@ const PPGSignalMeter = ({
       ctx.lineTo(CANVAS_WIDTH, y);
       if (y % (GRID_SIZE_Y * 4) === 0) {
         const amplitude = ((CANVAS_HEIGHT / 2) - y) / verticalScale;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillStyle = 'rgba(51, 65, 85, 0.5)';
         ctx.font = '10px Inter';
         ctx.textAlign = 'right';
         ctx.fillText(amplitude.toFixed(1), 25, y + 4);
@@ -126,7 +126,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.2)';
     ctx.lineWidth = 1;
 
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X * 4) {
@@ -141,7 +141,7 @@ const PPGSignalMeter = ({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
     ctx.lineWidth = 1.5;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
@@ -289,7 +289,7 @@ const PPGSignalMeter = ({
 
     if (points.length > 1) {
       ctx.beginPath();
-      ctx.strokeStyle = isFingerDetected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.3)';
+      ctx.strokeStyle = '#0EA5E9';
       ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
@@ -322,7 +322,7 @@ const PPGSignalMeter = ({
           ctx.stroke();
           
           ctx.beginPath();
-          ctx.strokeStyle = isFingerDetected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.3)';
+          ctx.strokeStyle = '#0EA5E9';
           ctx.lineWidth = 2;
           ctx.moveTo(x2, y2);
           firstPoint = true;
@@ -359,7 +359,7 @@ const PPGSignalMeter = ({
           }
 
           ctx.font = 'bold 12px Inter';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillStyle = '#000000';
           ctx.textAlign = 'center';
           ctx.fillText(Math.abs(peak.value / verticalScale).toFixed(2), x, y - 15);
         }
@@ -386,36 +386,21 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[1px]">
-      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
-        <div className="flex items-center gap-2 mr-6">
-          <span className="text-lg font-bold text-white animate-pulse-white">PPG</span>
-          <div className="ml-13 w-[180px] mt-1">
-            <div className="flex items-center space-x-1.5">
-              <Activity size={16} className="text-white" />
-              <div className="relative w-full h-2.5 bg-slate-200/20 rounded-full overflow-hidden shadow-inner">
-                <div 
-                  className={`absolute top-0 left-0 h-full transition-all duration-500 rounded-full bg-gradient-to-r ${getQualityColor(quality)}`}
-                  style={{ 
-                    width: `${isFingerDetected ? quality : 0}%`,
-                    boxShadow: 'inset 0 0 6px rgba(255, 255, 255, 0.6)'
-                  }}
-                />
-              </div>
-              <span className="text-[10px] font-medium text-white w-12 text-right animate-pulse-white">
-                {isFingerDetected ? `${quality}%` : '--%'}
-              </span>
+    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
+      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-white/60 backdrop-blur-sm border-b border-slate-100 shadow-sm pt-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-bold text-slate-700">PPG</span>
+          <div className="w-[180px]">
+            <div className={`h-1 w-full rounded-full bg-gradient-to-r ${getQualityColor(quality)} transition-all duration-1000 ease-in-out`}>
+              <div
+                className="h-full rounded-full bg-white/20 animate-pulse transition-all duration-1000"
+                style={{ width: `${isFingerDetected ? quality : 0}%` }}
+              />
             </div>
-            <div className="flex items-center justify-between mt-0.5">
-              <span className="text-[9px] font-medium text-white">
-                {getQualityText(quality)}
-              </span>
-              {quality <= 50 && isFingerDetected && (
-                <span className="text-[8px] font-medium text-red-500 animate-pulse">
-                  Reposicione su dedo
-                </span>
-              )}
-            </div>
+            <span className="text-[8px] text-center mt-0.5 font-medium transition-colors duration-700 block" 
+                  style={{ color: quality > 60 ? '#0EA5E9' : '#F59E0B' }}>
+              {getQualityText(quality)}
+            </span>
           </div>
         </div>
 
@@ -429,7 +414,7 @@ const PPGSignalMeter = ({
             }`}
             strokeWidth={1.5}
           />
-          <span className="text-[8px] text-center font-medium text-white">
+          <span className="text-[8px] text-center font-medium text-slate-600">
             {isFingerDetected ? "Dedo detectado" : "Ubique su dedo"}
           </span>
         </div>
@@ -439,24 +424,24 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-screen mt-0"
+        className="w-full h-[calc(45vh)] mt-14"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 grid grid-cols-2 gap-px bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 h-[70px] grid grid-cols-2 gap-px bg-gray-100">
         <button 
           onClick={onStartMeasurement}
-          className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
+          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
         >
-          <span className="text-base font-semibold animate-pulse-white">
+          <span className="text-base font-semibold">
             INICIAR/DETENER
           </span>
         </button>
 
         <button 
           onClick={handleReset}
-          className="bg-transparent border-0 text-white/80 hover:text-white active:text-white/60 transition-colors duration-200"
+          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
         >
-          <span className="text-base font-semibold animate-pulse-white">
+          <span className="text-base font-semibold">
             RESETEAR
           </span>
         </button>
