@@ -33,4 +33,5 @@ interface Element {
   msRequestFullscreen?(options?: FullscreenOptions): Promise<void>;
 }
 
+// This export {} is necessary to make this file a module rather than a script
 export {};

@@ -8,9 +8,6 @@ import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
-// Import type definitions (not necessary, but for clarity)
-import "@/types/fullscreen-api";
-
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
@@ -58,7 +55,6 @@ const Index = () => {
       try {
         const element = document.documentElement;
         
-        // Use a type-safe check for fullscreen status
         const isFullscreen = Boolean(
           document.fullscreenElement || 
           document.webkitFullscreenElement || 
@@ -94,7 +90,6 @@ const Index = () => {
     const checkFullscreen = () => {
       fullscreenChangeCount++;
       
-      // Use a type-safe check for fullscreen status
       const isFullscreen = Boolean(
         document.fullscreenElement || 
         document.webkitFullscreenElement || 
@@ -175,7 +170,6 @@ const Index = () => {
         try {
           const element = document.documentElement;
           
-          // Use a type-safe check for fullscreen status
           const isFullscreen = Boolean(
             document.fullscreenElement || 
             document.webkitFullscreenElement || 
