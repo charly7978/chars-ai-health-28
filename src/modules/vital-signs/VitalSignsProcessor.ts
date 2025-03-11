@@ -121,7 +121,7 @@ export class VitalSignsProcessor {
       }
     }, this.CALIBRATION_DURATION_MS);
     
-    console.log("VitalSignsProcessor: Calibración iniciada con parámetros:", {
+    console.log("VitalSignsProcessor: Calibraci��n iniciada con parámetros:", {
       muestrasRequeridas: this.CALIBRATION_REQUIRED_SAMPLES,
       tiempoMáximo: this.CALIBRATION_DURATION_MS,
       inicioCalibración: new Date(this.calibrationStartTime).toISOString()
@@ -345,25 +345,31 @@ export class VitalSignsProcessor {
 
   /**
    * Completa la medición y aplica el procesamiento estadístico final
-   * a la glucosa, devolviendo los resultados finales.
+   * a la glucosa y presión arterial, devolviendo los resultados finales.
    */
   public completeMeasurement(): VitalSignsResult | null {
-    console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final a glucosa");
+    console.log("VitalSignsProcessor: Completando medición, aplicando procesamiento final");
     
-    // Aplica el procesamiento final de la glucosa
+    // Aplicar el procesamiento final de la glucosa
     const finalGlucose = this.glucoseProcessor.completeMeasurement();
     
+    // Aplicar el procesamiento final de la presión arterial (nuevo)
+    const finalBP = this.bpProcessor.completeMeasurement();
+    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
+    
     if (this.lastValidResults) {
-      // Actualizamos el resultado final con el valor final de glucosa
+      // Actualizamos el resultado final con los valores finales de glucosa y presión
       const updatedResults: VitalSignsResult = {
         ...this.lastValidResults,
-        glucose: finalGlucose
+        glucose: finalGlucose,
+        pressure: finalPressure
       };
       
       this.lastValidResults = updatedResults;
       
       console.log("VitalSignsProcessor: Medición completada con éxito", {
         glucosaFinal: finalGlucose,
+        presiónFinal: finalPressure,
         timestamp: new Date().toISOString()
       });
       
@@ -461,4 +467,3 @@ export class VitalSignsProcessor {
     this.lastValidResults = null;
   }
 }
-

@@ -30,26 +30,35 @@ export function calculateStandardDeviation(values: number[]): number {
 /**
  * Finds peaks and valleys in a signal
  */
-export function findPeaksAndValleys(values: number[]) {
+export function findPeaksAndValleys(values: number[], sensitivity: number = 2) {
   const peakIndices: number[] = [];
   const valleyIndices: number[] = [];
 
-  for (let i = 2; i < values.length - 2; i++) {
+  for (let i = sensitivity; i < values.length - sensitivity; i++) {
     const v = values[i];
-    if (
-      v > values[i - 1] &&
-      v > values[i - 2] &&
-      v > values[i + 1] &&
-      v > values[i + 2]
-    ) {
+    let isPeak = true;
+    let isValley = true;
+    
+    // Check if this is a peak
+    for (let j = 1; j <= sensitivity; j++) {
+      if (v <= values[i - j] || v <= values[i + j]) {
+        isPeak = false;
+        break;
+      }
+    }
+    
+    // Check if this is a valley
+    for (let j = 1; j <= sensitivity; j++) {
+      if (v >= values[i - j] || v >= values[i + j]) {
+        isValley = false;
+        break;
+      }
+    }
+    
+    if (isPeak) {
       peakIndices.push(i);
     }
-    if (
-      v < values[i - 1] &&
-      v < values[i - 2] &&
-      v < values[i + 1] &&
-      v < values[i + 2]
-    ) {
+    if (isValley) {
       valleyIndices.push(i);
     }
   }
