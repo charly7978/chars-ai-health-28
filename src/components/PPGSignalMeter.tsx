@@ -43,17 +43,17 @@ const PPGSignalMeter = ({
   const isMonitoring = elapsedTime > 0;
 
   const WINDOW_WIDTH_MS = 3000;
-  const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 800; // Increased height to extend the graph
-  const GRID_SIZE_X = 20;
-  const GRID_SIZE_Y = 20;
+  const CANVAS_WIDTH = 800;
+  const CANVAS_HEIGHT = 1000; // Increased height to extend the graph
+  const GRID_SIZE_X = 10;
+  const GRID_SIZE_Y = 10;
   const verticalScale = 28.0;
   const SMOOTHING_FACTOR = 1.3;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
   
-  const PEAK_DETECTION_WINDOW = 8;
+  const PEAK_DETECTION_WINDOW = 6;
   const PEAK_THRESHOLD = 3;
   const MIN_PEAK_DISTANCE_MS = 250;
   
