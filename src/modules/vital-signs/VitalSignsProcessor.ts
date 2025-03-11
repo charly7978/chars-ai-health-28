@@ -4,6 +4,7 @@ import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
 import { GlucoseProcessor } from './glucose-processor';
 import { LipidProcessor } from './lipid-processor';
+import { applyTimeBasedProcessing } from './utils';
 
 export interface VitalSignsResult {
   spo2: number;
@@ -76,6 +77,14 @@ export class VitalSignsProcessor {
   private cholesterolBuffer: number[] = [];
   private triglyceridesBuffer: number[] = [];
   private hemoglobinBuffer: number[] = [];
+
+  private lipidBuffer = {
+    totalCholesterol: [] as number[],
+    triglycerides: [] as number[]
+  };
+  
+  // Kalman filter state
+  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -243,13 +252,32 @@ export class VitalSignsProcessor {
       }
     }
   }
+
+  // Método de filtro de Kalman para optimizar el suavizado de la señal
+  private applyKalmanFilter(value: number): number {
+    const Q = 0.01; // Varianza del proceso (puede afinarse)
+    const R = 1;    // Varianza de la medición
+    // Predicción
+    const prediction = this.kalmanState.estimate;
+    const predictionError = this.kalmanState.errorCovariance + Q;
+    // Cálculo de ganancia
+    const K = predictionError / (predictionError + R);
+    // Actualización
+    const updatedEstimate = prediction + K * (value - prediction);
+    const updatedErrorCovariance = (1 - K) * predictionError;
+    // Guardar valores actualizados
+    this.kalmanState.estimate = updatedEstimate;
+    this.kalmanState.errorCovariance = updatedErrorCovariance;
+    return updatedEstimate;
+  }
   
   /**
    * Procesa la señal PPG y devuelve los resultados procesados con filtro de mediana
    */
   public processSignal(
     ppgValue: number,
-    rrData?: { intervals: number[]; lastPeakTime: number | null }
+    rrData?: { intervals: number[]; lastPeakTime: number | null },
+    elapsedTimeRef?: { current: number }
   ): VitalSignsResult {
     if (this.isCalibrating) {
       this.calibrationSamples++;

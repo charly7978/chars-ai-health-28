@@ -79,3 +79,28 @@ export function calculateAmplitude(
   const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
   return mean;
 }
+
+/**
+ * Applies time-based processing to data values
+ * @param values Array of collected values
+ * @param currentTime Current elapsed time in seconds
+ * @param thresholdTime Time threshold in seconds
+ * @returns Processed value
+ */
+export function applyTimeBasedProcessing(
+  values: number[],
+  currentTime: number,
+  thresholdTime: number
+): number {
+  if (values.length === 0) return 0;
+  
+  // Simple processing for now - take an average of the last few values
+  // More complex algorithms can be implemented here
+  const recentValues = values.slice(-5);
+  const avg = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
+  
+  // Apply a time-based factor if we're past the threshold
+  const factor = currentTime >= thresholdTime ? 1.05 : 1.0;
+  
+  return avg * factor;
+}
