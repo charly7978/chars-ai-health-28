@@ -28,14 +28,29 @@ const CameraView = ({
   const restartAttemptRef = useRef<number>(0);
   const lastTorchToggleRef = useRef<number>(0);
   const cameraStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const startCameraTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const streamOperationInProgressRef = useRef<boolean>(false);
 
   const stopCamera = useCallback(async () => {
     console.log("Deteniendo cámara...");
+    
+    // Prevent concurrent operations
+    if (streamOperationInProgressRef.current) {
+      console.log("Ya hay una operación en progreso, esperando...");
+      return;
+    }
+    
+    streamOperationInProgressRef.current = true;
     
     // Clean up any pending timeouts
     if (cameraStopTimeoutRef.current) {
       clearTimeout(cameraStopTimeoutRef.current);
       cameraStopTimeoutRef.current = null;
+    }
+    
+    if (startCameraTimeoutRef.current) {
+      clearTimeout(startCameraTimeoutRef.current);
+      startCameraTimeoutRef.current = null;
     }
     
     // Clear any pending torch toggle interval
@@ -83,17 +98,23 @@ const CameraView = ({
     } else {
       console.log("No hay stream para detener");
     }
+    
+    // Add a delay before allowing new camera operations
+    setTimeout(() => {
+      streamOperationInProgressRef.current = false;
+    }, 500);
   }, [stream, torchEnabled]);
 
   const startCamera = useCallback(async () => {
     try {
-      // Prevent concurrent startCamera calls
-      if (isCameraInitializing) {
-        console.log("Cámara ya se está inicializando, ignorando llamada duplicada");
+      // Prevent concurrent startCamera calls or overlapping with stop operations
+      if (isCameraInitializing || streamOperationInProgressRef.current) {
+        console.log("Cámara ya se está inicializando o hay otra operación en progreso, ignorando llamada duplicada");
         return;
       }
       
       setIsCameraInitializing(true);
+      streamOperationInProgressRef.current = true;
       setPermissionDenied(false);
       console.log("Iniciando cámara...");
       
@@ -104,9 +125,9 @@ const CameraView = ({
       // Stop any existing stream first to prevent resource conflicts
       await stopCamera();
       
-      // Add a small delay after stopping the camera before starting it again
-      // This helps prevent the camera from flickering
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Add a substantial delay after stopping the camera before starting it again
+      // This helps prevent the camera from flickering and resource conflicts
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       // Check for permissions first
       try {
@@ -116,6 +137,8 @@ const CameraView = ({
         
         if (permissionStatus.state === 'denied') {
           setPermissionDenied(true);
+          streamOperationInProgressRef.current = false;
+          setIsCameraInitializing(false);
           throw new Error("Permiso de cámara denegado");
         }
       } catch (err) {
@@ -146,6 +169,12 @@ const CameraView = ({
       }
       
       console.log(`Video track obtained: ID: ${videoTrack.id}, label: ${videoTrack.label}`);
+      
+      // Verify track is in good state before proceeding
+      if (videoTrack.readyState !== 'live') {
+        console.error("Video track is not in live state", videoTrack.readyState);
+        throw new Error("El track de video no está activo");
+      }
       
       // Make video element visible
       if (videoRef.current) {
@@ -188,13 +217,13 @@ const CameraView = ({
       
       console.log("Cámara iniciada correctamente");
       
-      // Enable the torch after a longer delay to ensure camera is ready
+      // Enable the torch after a longer delay to ensure camera is fully initialized
       setTimeout(() => {
         console.log("Attempting to enable torch after camera start");
         if (isMonitoring && isFingerDetected) {
           enableTorch(videoTrack);
         }
-      }, 2000); // Increased delay to 2 seconds
+      }, 3000); // Increased delay to 3 seconds
       
       // Initialize canvas for frame capture
       if (canvasRef.current) {
@@ -203,6 +232,11 @@ const CameraView = ({
       
       startFrameProcessing();
       setIsCameraInitializing(false);
+      
+      // Add a delay before allowing new camera operations
+      setTimeout(() => {
+        streamOperationInProgressRef.current = false;
+      }, 500);
     } catch (err) {
       console.error("Error al iniciar la cámara:", err);
       
@@ -216,22 +250,25 @@ const CameraView = ({
       
       setHasActiveTrack(false);
       setIsCameraInitializing(false);
+      streamOperationInProgressRef.current = false;
       restartAttemptRef.current++;
       
       // If we've tried restarting a few times without success, wait longer
-      const restartDelay = restartAttemptRef.current > 3 ? 3000 : 1000;
+      const restartDelay = restartAttemptRef.current > 3 ? 3000 : 1500;
       
       // Try again after a delay (but not if permission denied)
       if (!permissionDenied && isMonitoring) {
-        setTimeout(() => {
+        // Use a ref to track the timeout so we can clear it if needed
+        startCameraTimeoutRef.current = setTimeout(() => {
           if (isMonitoring) {
             console.log(`Retry ${restartAttemptRef.current}: Restarting camera after failure...`);
             startCamera();
           }
+          startCameraTimeoutRef.current = null;
         }, restartDelay);
       }
     }
-  }, [stopCamera, onStreamReady, isMonitoring, permissionDenied, isFingerDetected]);
+  }, [stopCamera, onStreamReady, isMonitoring, permissionDenied, isFingerDetected, enableTorch]);
 
   const enableTorch = useCallback((videoTrack?: MediaStreamTrack) => {
     const now = Date.now();
@@ -393,15 +430,15 @@ const CameraView = ({
           setHasActiveTrack(false);
           // Add small delay before restart to allow resources to be freed
           setTimeout(() => {
-            if (isMonitoring) {
+            if (isMonitoring && !streamOperationInProgressRef.current) {
               startCamera();
             }
-          }, 500);
+          }, 1000);
         }
       }
     };
     
-    const trackCheckInterval = setInterval(checkTrackStatus, 2000);
+    const trackCheckInterval = setInterval(checkTrackStatus, 3000);
     
     return () => {
       clearInterval(trackCheckInterval);
@@ -412,29 +449,43 @@ const CameraView = ({
   useEffect(() => {
     console.log("CameraView effect - isMonitoring:", isMonitoring, "stream:", !!stream, "hasActiveTrack:", hasActiveTrack);
     
+    // Clear any pending timeouts to prevent race conditions
+    if (cameraStopTimeoutRef.current) {
+      clearTimeout(cameraStopTimeoutRef.current);
+      cameraStopTimeoutRef.current = null;
+    }
+    
+    if (startCameraTimeoutRef.current) {
+      clearTimeout(startCameraTimeoutRef.current);
+      startCameraTimeoutRef.current = null;
+    }
+    
     // Add proper cleanup logic when component unmounts or when monitoring status changes
-    if (isMonitoring && (!stream || !hasActiveTrack) && !isCameraInitializing) {
+    if (isMonitoring && (!stream || !hasActiveTrack) && !isCameraInitializing && !streamOperationInProgressRef.current) {
       console.log("Starting camera because monitoring is enabled and no active stream");
-      startCamera();
+      // Add a small delay before starting camera to prevent rapid cycling
+      startCameraTimeoutRef.current = setTimeout(() => {
+        startCamera();
+        startCameraTimeoutRef.current = null;
+      }, 300);
     } else if (!isMonitoring && stream) {
       console.log("Scheduling camera stop because monitoring is disabled");
       
       // Use a timeout to prevent rapid start/stop cycles that can cause flickering
-      if (cameraStopTimeoutRef.current) {
-        clearTimeout(cameraStopTimeoutRef.current);
-      }
-      
       cameraStopTimeoutRef.current = setTimeout(() => {
         console.log("Executing delayed camera stop");
         stopCamera();
         cameraStopTimeoutRef.current = null;
-      }, 300); // Short delay to prevent rapid cycling
+      }, 500); // Longer delay to prevent rapid cycling
     }
     
     return () => {
       console.log("Componente CameraView desmontándose");
       if (cameraStopTimeoutRef.current) {
         clearTimeout(cameraStopTimeoutRef.current);
+      }
+      if (startCameraTimeoutRef.current) {
+        clearTimeout(startCameraTimeoutRef.current);
       }
       stopCamera();
     };
@@ -503,4 +554,3 @@ const CameraView = ({
 };
 
 export default CameraView;
-
