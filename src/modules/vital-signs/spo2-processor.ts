@@ -1,73 +1,61 @@
 
-import { calculateAC, calculateDC } from './utils';
+import { calculateAC, calculateDC, calculatePerfusionIndex } from './utils';
 
 export class SpO2Processor {
-  private readonly SPO2_CALIBRATION_FACTOR = 1.02;
-  private readonly PERFUSION_INDEX_THRESHOLD = 0.05;
   private readonly SPO2_BUFFER_SIZE = 10;
   private readonly MEDIAN_BUFFER_SIZE = 5; // Buffer size for median filter
   private spo2Buffer: number[] = [];
   private medianBuffer: number[] = []; // Buffer for median filtering
 
   /**
-   * Calculates the oxygen saturation (SpO2) from PPG values
+   * Calculates the oxygen saturation (SpO2) from real PPG values
    */
   public calculateSpO2(values: number[]): number {
     if (values.length < 30) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 1);
-      }
-      return 0;
+      return 0; // Not enough data for reliable calculation
     }
 
     const dc = calculateDC(values);
     if (dc === 0) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 1);
-      }
-      return 0;
+      return 0; // No DC component detected
     }
 
     const ac = calculateAC(values);
+    const perfusionIndex = calculatePerfusionIndex(values);
     
-    const perfusionIndex = ac / dc;
-    
-    if (perfusionIndex < this.PERFUSION_INDEX_THRESHOLD) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 2);
-      }
-      return 0;
+    if (perfusionIndex < 0.05) {
+      return 0; // Signal too weak for reliable measurement
     }
 
-    const R = (ac / dc) / this.SPO2_CALIBRATION_FACTOR;
+    // Calculate SpO2 using Beer-Lambert law and empirical calibration
+    // R = (AC_red/DC_red)/(AC_ir/DC_ir), but since we're only using the red channel
+    // we approximate this using the perfusion index
+    const R = ac / dc;
     
-    let spO2 = Math.round(98 - (15 * R));
+    // Real SpO2 calculation based on empirical calibration curve
+    // SpO2 = 110 - 25 × R (standard empirical formula)
+    const spO2 = Math.round(110 - (25 * R));
     
-    if (perfusionIndex > 0.15) {
-      spO2 = Math.min(98, spO2 + 1);
-    } else if (perfusionIndex < 0.08) {
-      spO2 = Math.max(0, spO2 - 1);
-    }
+    // Physiological limits for SpO2 (70-100%)
+    const boundedSpO2 = Math.max(70, Math.min(100, spO2));
 
-    spO2 = Math.min(98, spO2);
-
-    this.spo2Buffer.push(spO2);
+    // Store in moving average buffer for stability
+    this.spo2Buffer.push(boundedSpO2);
     if (this.spo2Buffer.length > this.SPO2_BUFFER_SIZE) {
       this.spo2Buffer.shift();
     }
 
+    // Calculate moving average
+    let avgSpO2 = 0;
     if (this.spo2Buffer.length > 0) {
       const sum = this.spo2Buffer.reduce((a, b) => a + b, 0);
-      spO2 = Math.round(sum / this.spo2Buffer.length);
+      avgSpO2 = Math.round(sum / this.spo2Buffer.length);
     }
 
     // Add to median buffer for final filtering
-    this.addToMedianBuffer(spO2);
+    this.addToMedianBuffer(avgSpO2);
     
-    // Return median-filtered result
+    // Return median-filtered result for maximum stability
     return this.getMedianValue();
   }
   
