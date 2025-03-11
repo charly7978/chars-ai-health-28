@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 
@@ -23,8 +24,9 @@ const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({
   preserveResults = false
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pointsRef = useRef<{x: number, y: number}[]>([]);
-  
+  const prevXRef = useRef<number>(0);
+  const prevYRef = useRef<number>(0);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -32,72 +34,52 @@ const PPGSignalMeter: React.FC<PPGSignalMeterProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas dimensions to match its display size
+    // Set canvas dimensions only if they've changed
     if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
       canvas.width = canvas.clientWidth;
       canvas.height = canvas.clientHeight;
     }
 
-    // Clear the canvas
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // If no finger or preserving results, keep current points
+    // Start with a black background
     if (!isFingerDetected && !preserveResults) {
-      pointsRef.current = [];
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      prevXRef.current = 0;
+      prevYRef.current = canvas.height / 2;
       return;
     }
 
-    // Calculate the y position for this value (centered, scaled)
+    // Calculate new coordinates
+    let x = prevXRef.current + 2;
     const y = canvas.height / 2 - (value * 50);
-    
-    // Add new point
-    if (isFingerDetected || preserveResults) {
-      // If we've been drawing, add the next point
-      if (pointsRef.current.length > 0) {
-        // Get the last X position and increment it
-        const lastX = pointsRef.current[pointsRef.current.length - 1].x;
-        const x = lastX + 2;
-        
-        // If we're at the right edge, shift everything left
-        if (x > canvas.width) {
-          // Shift all points left
-          pointsRef.current = pointsRef.current.map(point => ({
-            x: point.x - 4,
-            y: point.y
-          })).filter(point => point.x >= 0);
-          
-          // Add new point at the rightmost position
-          pointsRef.current.push({
-            x: canvas.width - 2,
-            y
-          });
-        } else {
-          // Just add the new point
-          pointsRef.current.push({ x, y });
-        }
-      } else {
-        // First point, start at the left
-        pointsRef.current.push({ x: 0, y });
-      }
+
+    // If we reach the right edge, scroll the waveform left
+    if (x >= canvas.width) {
+      // Save the current display
+      const imageData = ctx.getImageData(4, 0, canvas.width - 4, canvas.height);
+      
+      // Clear canvas
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw previous content shifted left
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Update x to draw at the right edge
+      x = canvas.width - 2;
     }
 
-    // Draw the waveform
-    if (pointsRef.current.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      
-      // Move to the first point
-      ctx.moveTo(pointsRef.current[0].x, pointsRef.current[0].y);
-      
-      // Draw lines to each subsequent point
-      for (let i = 1; i < pointsRef.current.length; i++) {
-        ctx.lineTo(pointsRef.current[i].x, pointsRef.current[i].y);
-      }
-      
-      ctx.stroke();
-    }
+    // Draw new line segment
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.moveTo(prevXRef.current, prevYRef.current);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    // Update position references for next frame
+    prevXRef.current = x;
+    prevYRef.current = y;
   }, [value, isFingerDetected, preserveResults]);
 
   return (
