@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -594,17 +593,13 @@ const Index = () => {
             </div>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 mb-[60px] relative">
-            {/* Add grid background as a proper background layer */}
+          <div className="fixed inset-x-0 bottom-[60px]" style={{ height: '230px' }}>
             <div className="background-grid absolute inset-0" style={{
-              opacity: 0.7,
-              zIndex: 0,
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
+              opacity: 0.8,
+              zIndex: 1,
             }}></div>
             
-            <div className="grid grid-cols-3 gap-0 relative z-10">
+            <div className="grid grid-cols-3 grid-rows-2 gap-0 h-full relative z-10">
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
