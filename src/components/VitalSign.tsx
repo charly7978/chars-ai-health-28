@@ -105,27 +105,15 @@ const VitalSign: React.FC<VitalSignProps> = ({
     }
     
     if (isPressureDisplay) {
-      if (value === "--/--" || value === "0/0") {
+      if (value === "--/--") {
         return { text: "--/--", color: "text-white", status: "" };
       }
       
-      const parts = String(value).split('/');
-      if (parts.length !== 2) {
-        return { text: String(value), color: "text-white", status: "" };
-      }
+      const [systolic, diastolic] = String(value).split('/').map(Number);
       
-      const systolic = parseInt(parts[0]);
-      const diastolic = parseInt(parts[1]);
-      
-      if (isNaN(systolic) || isNaN(diastolic) || systolic <= 0 || diastolic <= 0) {
-        return { text: "--/--", color: "text-white", status: "" };
-      }
-      
-      // Expanded ranges to accommodate the wider measurement capabilities
-      if (systolic >= 300 || diastolic >= 200) {
-        return { text: String(value), color: "text-purple-800", status: "Crisis Extrema" };
-      } else if (systolic >= 230 || diastolic >= 150) {
-        return { text: String(value), color: "text-purple-600", status: "Crisis Severa" };
+      // Expanded blood pressure classification
+      if (systolic >= 230 || diastolic >= 130) {
+        return { text: String(value), color: "text-purple-600", status: "Crisis Extrema" };
       } else if (systolic >= 180 || diastolic >= 120) {
         return { text: String(value), color: "text-red-600", status: "Crisis Hipertensiva" };
       } else if (systolic >= 160 || diastolic >= 100) {
@@ -134,7 +122,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
         return { text: String(value), color: "text-orange-500", status: "Hipertensión Leve" };
       } else if (systolic >= 120 || diastolic >= 80) {
         return { text: String(value), color: "text-yellow-500", status: "Prehipertensión" };
-      } else if (systolic <= 60 || diastolic <= 30) {
+      } else if (systolic <= 70 || diastolic <= 40) {
         return { text: String(value), color: "text-purple-500", status: "Hipotensión Severa" };
       } else if (systolic < 90 || diastolic < 60) {
         return { text: String(value), color: "text-blue-500", status: "Hipotensión" };
@@ -146,9 +134,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
     if (isArrhythmiaDisplay) {
       if (value === "--") {
         return { 
-          text: "--", 
-          color: "text-white",
-          status: ""
+          text: "--/--", 
+          color: "text-white" 
         };
       }
       
@@ -158,24 +145,21 @@ const VitalSign: React.FC<VitalSignProps> = ({
         const displayCount = count ? `(${count})` : "";
         return {
           text: `ARRITMIA DETECTADA ${displayCount}`.trim(),
-          color: "text-red-500",
-          status: ""
+          color: "text-red-500"
         };
       }
       
       if (status === "CALIBRANDO...") {
         return {
           text: status,
-          color: "text-yellow-500",
-          status: ""
+          color: "text-yellow-500"
         };
       }
       
       const noArrhythmiaCount = count ? `(${count})` : "";
       return {
         text: `SIN ARRITMIAS ${noArrhythmiaCount}`.trim(),
-        color: "text-cyan-500",
-        status: ""
+        color: "text-cyan-500"
       };
     }
     

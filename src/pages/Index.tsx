@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -271,50 +270,10 @@ const Index = () => {
       measurementTimerRef.current = null;
     }
     
-    console.log("Aplicando procesamiento estadístico final para glucosa y presión arterial");
-    const finalResults = useVitalSignsProcessor().completeMeasurement();
-    console.log("Resultados finales obtenidos:", finalResults);
-    
-    if (finalResults) {
-      console.log("Aplicando resultados finales a la UI:", {
-        pressure: finalResults.pressure,
-        glucose: finalResults.glucose
-      });
-      
-      // Validate pressure format before updating the UI
-      if (typeof finalResults.pressure === 'string' && 
-          finalResults.pressure.includes('/') &&
-          finalResults.pressure !== '--/--' &&
-          finalResults.pressure !== '0/0') {
-        const [systolic, diastolic] = finalResults.pressure.split('/').map(Number);
-        
-        // Ensure we have valid blood pressure values
-        if (isNaN(systolic) || isNaN(diastolic) || systolic <= 0 || diastolic <= 0 || systolic <= diastolic) {
-          console.warn("Presión arterial inválida en resultados finales:", finalResults.pressure);
-          
-          // Try to find valid pressure from the current state if available
-          if (vitalSigns.pressure && 
-              vitalSigns.pressure !== '--/--' && 
-              vitalSigns.pressure !== '0/0') {
-            finalResults.pressure = vitalSigns.pressure;
-            console.log("Usando presión arterial del estado actual:", vitalSigns.pressure);
-          }
-        }
-      }
-      
-      setVitalSigns(finalResults);
+    const savedResults = resetVitalSigns();
+    if (savedResults) {
+      setVitalSigns(savedResults);
       setShowResults(true);
-      console.log("Medición finalizada con resultados procesados:", {
-        glucosa: finalResults.glucose,
-        presión: finalResults.pressure
-      });
-    } else {
-      console.warn("No se obtuvieron resultados finales, usando último valor válido");
-      const savedResults = resetVitalSigns();
-      if (savedResults) {
-        setVitalSigns(savedResults);
-        setShowResults(true);
-      }
     }
     
     setElapsedTime(0);
@@ -554,21 +513,8 @@ const Index = () => {
             newState.spo2 = vitals.spo2;
           }
           
-          if (vitals.pressure && vitals.pressure !== "--/--" && vitals.pressure !== "0/0") {
-            // Basic validation for pressure format
-            if (typeof vitals.pressure === 'string' && vitals.pressure.includes('/')) {
-              const [systolic, diastolic] = vitals.pressure.split('/').map(Number);
-              
-              // Only update if values are valid and systolic > diastolic
-              if (!isNaN(systolic) && !isNaN(diastolic) && 
-                  systolic > 0 && diastolic > 0 && 
-                  systolic > diastolic) {
-                console.log("Actualizando presión arterial válida:", vitals.pressure);
-                newState.pressure = vitals.pressure;
-              } else {
-                console.warn("Ignorando valores de presión arterial inválidos:", vitals.pressure);
-              }
-            }
+          if (vitals.pressure && vitals.pressure !== "--/--") {
+            newState.pressure = vitals.pressure;
           }
           
           if (vitals.arrhythmiaStatus) {
