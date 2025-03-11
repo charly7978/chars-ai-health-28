@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
@@ -39,10 +40,10 @@ const PPGSignalMeter = ({
   const [showArrhythmiaAlert, setShowArrhythmiaAlert] = useState(false);
 
   const WINDOW_WIDTH_MS = 2800;
-  const CANVAS_WIDTH = 700;
+  const CANVAS_WIDTH = 1000; // Increased for better resolution
   const CANVAS_HEIGHT = 900;
-  const GRID_SIZE_X = 45;
-  const GRID_SIZE_Y = 90;
+  const GRID_SIZE_X = 40; // More dense grid
+  const GRID_SIZE_Y = 45; // More dense grid
   const verticalScale = 28.0;
   const SMOOTHING_FACTOR = 1.5;
   const TARGET_FPS = 60;
@@ -91,31 +92,33 @@ const PPGSignalMeter = ({
   }, []);
 
   const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.fillStyle = '#FDF5E6';
+    ctx.fillStyle = '#FDF5E6'; // Cream background
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(100, 100, 100, 0.2)';
-    ctx.lineWidth = 0.4;
+    ctx.strokeStyle = 'rgba(60, 60, 60, 0.3)'; // Darker grid lines
+    ctx.lineWidth = 0.5;
 
+    // Draw vertical grid lines
     for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE_X) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, CANVAS_HEIGHT);
       
-      if (x % (GRID_SIZE_X * 2) === 0) {
-        ctx.fillStyle = 'rgba(80, 80, 80, 0.7)';
+      if (x % (GRID_SIZE_X * 5) === 0) {
+        ctx.fillStyle = 'rgba(50, 50, 50, 0.8)'; // Darker numbers
         ctx.font = '10px Inter';
         ctx.textAlign = 'center';
         ctx.fillText(x.toString(), x, CANVAS_HEIGHT - 5);
       }
     }
 
+    // Draw horizontal grid lines
     for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE_Y) {
       ctx.moveTo(0, y);
       ctx.lineTo(CANVAS_WIDTH, y);
       
-      if (y % (GRID_SIZE_Y * 2) === 0) {
-        ctx.fillStyle = 'rgba(80, 80, 80, 0.7)';
+      if (y % (GRID_SIZE_Y * 5) === 0) {
+        ctx.fillStyle = 'rgba(50, 50, 50, 0.8)'; // Darker numbers
         ctx.font = '10px Inter';
         ctx.textAlign = 'right';
         ctx.fillText(y.toString(), 15, y + 3);
@@ -123,13 +126,15 @@ const PPGSignalMeter = ({
     }
     ctx.stroke();
 
+    // Draw center line (baseline)
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(80, 80, 80, 0.4)';
+    ctx.strokeStyle = 'rgba(40, 40, 40, 0.5)'; // Darker center line
     ctx.lineWidth = 1;
     ctx.moveTo(0, CANVAS_HEIGHT / 2);
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT / 2);
     ctx.stroke();
 
+    // Draw arrhythmia status if present
     if (arrhythmiaStatus) {
       const [status, count] = arrhythmiaStatus.split('|');
       
@@ -148,8 +153,6 @@ const PPGSignalMeter = ({
         ctx.fillText(`Arritmias detectadas: ${redPeaksCount}`, 45, 35);
       }
     }
-    
-    ctx.stroke();
   }, [arrhythmiaStatus, showArrhythmiaAlert]);
 
   const detectPeaks = useCallback((points: PPGDataPoint[], now: number) => {
@@ -367,7 +370,7 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-black/10 backdrop-blur-sm">
+    <div className="fixed inset-0 bg-black/5 backdrop-blur-[1px]">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
