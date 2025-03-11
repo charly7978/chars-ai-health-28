@@ -20,7 +20,7 @@ const Index = () => {
   const [arrhythmiaCount, setArrhythmiaCount] = useState("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const measurementTimerRef = useRef(null);
-  const [showResults, setShowResults] = useState(false);
+  const [showResults, setShowResults] = useState(true);
 
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { processSignal: processHeartBeat } = useHeartBeatProcessor();
@@ -87,6 +87,7 @@ const Index = () => {
         return prev + 1;
       });
     }, 1000);
+    setShowResults(false);
   };
 
   const stopMonitoring = () => {
@@ -108,6 +109,7 @@ const Index = () => {
       clearInterval(measurementTimerRef.current);
       measurementTimerRef.current = null;
     }
+    setShowResults(true);
   };
 
   const handleStreamReady = (stream) => {
@@ -260,11 +262,9 @@ const Index = () => {
                 />
               </div>
               
-              {showResults && (
-                <div className="mt-4 flex justify-center">
-                  <ShareButton onShare={handleShare} />
-                </div>
-              )}
+              <div className="mt-4 flex justify-center">
+                <ShareButton onShare={handleShare} />
+              </div>
             </div>
           </div>
 
