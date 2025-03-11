@@ -454,19 +454,19 @@ const PPGSignalMeter = ({
         />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 h-[80px] grid grid-cols-2 gap-px bg-transparent">
+      <div className="fixed bottom-0 left-0 right-0 h-[120px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
           className="bg-transparent soft-button text-white transition-colors duration-200 flex items-center justify-center"
-          style={{ fontSize: '1.5rem', padding: '1rem', height: '80px' }}
+          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
           <div className="flex items-center justify-center gap-2">
             {isMonitoring ? (
               <>
-                <span className="text-2xl font-semibold">{30 - elapsedTime}s</span>
+                <span className="text-4xl font-semibold">{30 - elapsedTime}s</span>
               </>
             ) : (
-              <span className="text-2xl font-semibold">INICIAR</span>
+              <span className="text-4xl font-semibold">INICIAR</span>
             )}
           </div>
         </button>
@@ -474,9 +474,9 @@ const PPGSignalMeter = ({
         <button 
           onClick={handleReset}
           className="bg-transparent soft-button text-white hover:bg-red-500/20 transition-colors duration-200"
-          style={{ fontSize: '1.5rem', padding: '1rem', height: '80px' }}
+          style={{ fontSize: '2rem', padding: '1.5rem', height: '120px' }}
         >
-          <span className="text-2xl font-semibold">
+          <span className="text-4xl font-semibold">
             RESETEAR
           </span>
         </button>

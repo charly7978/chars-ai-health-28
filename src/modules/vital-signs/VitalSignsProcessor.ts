@@ -82,8 +82,8 @@ export class VitalSignsProcessor {
     totalCholesterol: [] as number[],
     triglycerides: [] as number[]
   };
-  
-  private kalmanState: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
+
+  constructor() {tate: { estimate: number; errorCovariance: number } = { estimate: 0, errorCovariance: 1 };
 
   constructor() {
     this.spo2Processor = new SpO2Processor();
@@ -414,7 +414,7 @@ export class VitalSignsProcessor {
     
     // Aplicar el procesamiento final de la presión arterial (nuevo)
     const finalBP = this.bpProcessor.completeMeasurement();
-    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;\
+    const finalPressure = `${finalBP.systolic}/${finalBP.diastolic}`;
     
     if (this.lastValidResults) {
       // Actualizamos el resultado final con los valores finales de glucosa y presión
