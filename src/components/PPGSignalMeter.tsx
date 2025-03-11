@@ -40,7 +40,7 @@ const PPGSignalMeter = ({
 
   const WINDOW_WIDTH_MS = 3000;
   const CANVAS_WIDTH = 600;
-  const CANVAS_HEIGHT = 480;
+  const CANVAS_HEIGHT = window.innerHeight - 74;
   const GRID_SIZE_X = 20;
   const GRID_SIZE_Y = 5;
   const verticalScale = 28.0;
@@ -386,7 +386,7 @@ const PPGSignalMeter = ({
   }, [onReset]);
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-b from-white to-slate-50/30">
+    <div className="fixed inset-0 bg-gradient-to-b from-white/5 to-slate-50/5">
       <div className="absolute top-0 left-0 right-0 p-1 flex justify-between items-center bg-transparent pt-6 z-10">
         <div className="flex items-center gap-2 mr-6">
           <span className="text-lg font-bold text-slate-700">PPG</span>
@@ -439,13 +439,13 @@ const PPGSignalMeter = ({
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full h-[calc(55vh)] mt-0"
+        className="w-full h-[calc(100vh-74px)] mt-0"
       />
 
-      <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-gray-100">
+      <div className="fixed bottom-0 left-0 right-0 h-[74px] grid grid-cols-2 gap-px bg-transparent">
         <button 
           onClick={onStartMeasurement}
-          className="bg-gradient-to-b from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 transition-colors duration-200 shadow-md"
+          className="bg-transparent backdrop-blur-sm border border-white/10 text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
           <span className="text-base font-semibold">
             INICIAR/DETENER
@@ -454,7 +454,7 @@ const PPGSignalMeter = ({
 
         <button 
           onClick={handleReset}
-          className="bg-gradient-to-b from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 active:from-gray-700 active:to-gray-800 transition-colors duration-200 shadow-md"
+          className="bg-transparent backdrop-blur-sm border border-white/10 text-white hover:bg-white/5 active:bg-white/10 transition-colors duration-200"
         >
           <span className="text-base font-semibold">
             RESETEAR

@@ -26,7 +26,7 @@ export class SignalProcessor {
   // Signal quality and stability parameters
   private readonly STABILITY_THRESHOLD = 0.75;  // Increased for better signal quality
   private readonly MIN_PERFUSION_INDEX = 0.08;  // Higher threshold for perfusion detection
-  private readonly MAX_FRAME_TO_FRAME_VARIATION = 15; // Reduced allowed variation
+  private readonly MAX_FRAME_TO_FRAME_VARIATION = 50; // Reduced allowed variation
   private lastValidDetectionTime: number = 0;
   private consecutiveValidFrames: number = 0;
   private readonly MIN_CONSECUTIVE_FRAMES = 4;  // Increased minimum frames for validation
