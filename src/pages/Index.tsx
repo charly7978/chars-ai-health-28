@@ -162,6 +162,7 @@ const Index = () => {
   }, [lastValidResults, isMonitoring]);
 
   const startMonitoring = () => {
+    console.log("Iniciando monitoreo");
     requestAnimationFrame(() => {
       try {
         const element = document.documentElement;
@@ -214,12 +215,41 @@ const Index = () => {
         console.log(`Tiempo transcurrido: ${newTime}s`);
         
         if (newTime >= 30) {
-          finalizeMeasurement();
+          stopMonitoring();
           return 30;
         }
         return newTime;
       });
     }, 1000);
+  };
+
+  const stopMonitoring = () => {
+    console.log("Deteniendo monitoreo");
+    
+    if (isCalibrating) {
+      console.log("Calibración en progreso al finalizar, forzando finalización");
+      forceCalibrationCompletion();
+    }
+    
+    setIsMonitoring(false);
+    setIsCameraOn(false);
+    setIsCalibrating(false);
+    stopProcessing();
+    
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+      measurementTimerRef.current = null;
+    }
+    
+    const savedResults = resetVitalSigns();
+    if (savedResults) {
+      setVitalSigns(savedResults);
+      setShowResults(true);
+    }
+    
+    setElapsedTime(0);
+    setSignalQuality(0);
+    setCalibrationProgress(undefined);
   };
 
   const finalizeMeasurement = () => {
@@ -604,7 +634,7 @@ const Index = () => {
 
           <div className="h-[60px] grid grid-cols-2 gap-0 mt-auto">
             <button 
-              onClick={handleMonitoringButton}
+              onClick={isMonitoring ? stopMonitoring : startMonitoring}
               className={`w-full h-full text-xl font-bold text-white transition-colors duration-200 ${
                 isMonitoring 
                   ? 'bg-gradient-to-b from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 active:from-red-800 active:to-red-950' 
