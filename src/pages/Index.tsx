@@ -8,6 +8,9 @@ import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 
+// Import type definitions (not necessary, but for clarity)
+import "@/types/fullscreen-api";
+
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
@@ -55,21 +58,25 @@ const Index = () => {
       try {
         const element = document.documentElement;
         
-        if (!document.fullscreenElement && 
-            !document.webkitFullscreenElement && 
-            !document.mozFullScreenElement && 
-            !document.msFullscreenElement) {
-          
+        // Use a type-safe check for fullscreen status
+        const isFullscreen = Boolean(
+          document.fullscreenElement || 
+          document.webkitFullscreenElement || 
+          document.mozFullScreenElement || 
+          document.msFullscreenElement
+        );
+        
+        if (!isFullscreen) {
           console.log("Attempting fullscreen entry");
           
           if (element.requestFullscreen) {
             element.requestFullscreen();
-          } else if ((element as any).webkitRequestFullscreen) {
-            (element as any).webkitRequestFullscreen();
-          } else if ((element as any).mozRequestFullScreen) {
-            (element as any).mozRequestFullScreen();
-          } else if ((element as any).msRequestFullscreen) {
-            (element as any).msRequestFullscreen();
+          } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+          } else if (element.mozRequestFullScreen) {
+            element.mozRequestFullScreen();
+          } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
           }
           
           setTimeout(() => {
@@ -87,11 +94,15 @@ const Index = () => {
     const checkFullscreen = () => {
       fullscreenChangeCount++;
       
-      if (!document.fullscreenElement && 
-          !document.webkitFullscreenElement && 
-          !document.mozFullScreenElement && 
-          !document.msFullscreenElement) {
-        
+      // Use a type-safe check for fullscreen status
+      const isFullscreen = Boolean(
+        document.fullscreenElement || 
+        document.webkitFullscreenElement || 
+        document.mozFullScreenElement || 
+        document.msFullscreenElement
+      );
+      
+      if (!isFullscreen) {
         console.log(`Not in fullscreen, attempt ${fullscreenChangeCount}/${maxAttempts}`);
         
         if (fullscreenChangeCount < maxAttempts) {
@@ -164,19 +175,23 @@ const Index = () => {
         try {
           const element = document.documentElement;
           
-          if (!document.fullscreenElement && 
-              !document.webkitFullscreenElement && 
-              !document.mozFullScreenElement && 
-              !document.msFullscreenElement) {
-            
+          // Use a type-safe check for fullscreen status
+          const isFullscreen = Boolean(
+            document.fullscreenElement || 
+            document.webkitFullscreenElement || 
+            document.mozFullScreenElement || 
+            document.msFullscreenElement
+          );
+          
+          if (!isFullscreen) {
             if (element.requestFullscreen) {
               element.requestFullscreen();
-            } else if ((element as any).webkitRequestFullscreen) {
-              (element as any).webkitRequestFullscreen();
-            } else if ((element as any).mozRequestFullScreen) {
-              (element as any).mozRequestFullScreen();
-            } else if ((element as any).msRequestFullscreen) {
-              (element as any).msRequestFullscreen();
+            } else if (element.webkitRequestFullscreen) {
+              element.webkitRequestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+              element.mozRequestFullScreen();
+            } else if (element.msRequestFullscreen) {
+              element.msRequestFullscreen();
             }
           }
         } catch (e) {
