@@ -79,3 +79,40 @@ export function calculateAmplitude(
   const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
   return mean;
 }
+
+/**
+ * Applies time-based processing to a series of measurements
+ * @param values Array of values to process
+ * @param currentTime Current elapsed time in seconds
+ * @param targetTime Target time in seconds for processing completion
+ * @returns Processed value
+ */
+export function applyTimeBasedProcessing(
+  values: number[],
+  currentTime: number,
+  targetTime: number
+): number {
+  if (values.length === 0) return 0;
+  
+  // If we're at the target time, apply weighted averaging
+  if (currentTime >= targetTime) {
+    const recentValues = values.slice(-5); // Last 5 values
+    const olderValues = values.slice(0, -5);
+    
+    if (recentValues.length === 0) return 0;
+    
+    const recentAvg = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
+    
+    // If we have older values, blend them with recent ones
+    if (olderValues.length > 0) {
+      const olderAvg = olderValues.reduce((a, b) => a + b, 0) / olderValues.length;
+      // Recent values have more weight (70%)
+      return recentAvg * 0.7 + olderAvg * 0.3;
+    }
+    
+    return recentAvg;
+  }
+  
+  // If we're not at the target time yet, just return the average
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
