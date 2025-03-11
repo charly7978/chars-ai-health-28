@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
@@ -593,8 +594,9 @@ const Index = () => {
             </div>
           )}
 
+          {/* Modificamos esta sección para extender el bloque de displays 8mm hacia arriba */}
           <div className="absolute inset-x-0 bottom-0 mb-[58px]">
-            <div className="grid grid-cols-3 gap-0" style={{ minHeight: "210px" }}>
+            <div className="grid grid-cols-3 gap-0" style={{ minHeight: "226px" }}>
               <VitalSign 
                 label="FRECUENCIA CARDÍACA"
                 value={heartRate || "--"}
