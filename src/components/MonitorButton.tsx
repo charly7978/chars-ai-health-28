@@ -23,13 +23,13 @@ const MonitorButton = ({ isMonitoring, onClick }: MonitorButtonProps) => {
   return (
     <button 
       onClick={handleClick}
-      className={`w-full h-full text-xl font-bold text-white transition-all duration-300`}
+      className={`w-full h-full text-lg font-bold shadow-md text-white transition-colors duration-200 ${
+        isMonitoring 
+        ? 'bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800' 
+        : 'bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800'
+      }`}
       style={{
-        backgroundColor: isMonitoring ? '#ef4444' : '#10b981',
-        textShadow: '0 1px 2px rgba(0,0,0,0.2)',
-        borderRadius: '0',
-        border: 'none',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+        textShadow: '0 1px 2px rgba(0,0,0,0.2)'
       }}
     >
       {isMonitoring ? 'DETENER' : 'INICIAR'}

@@ -5,7 +5,6 @@ import { useSignalProcessor } from "@/hooks/useSignalProcessor";
 import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
-import MonitorButton from "@/components/MonitorButton";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -155,12 +154,15 @@ const Index = () => {
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      // Process real heart rate from signal
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       const calculatedHeartRate = heartBeatResult.bpm > 0 ? heartBeatResult.bpm : 0;
       setHeartRate(calculatedHeartRate);
       
+      // Process real vital signs from signal
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
+        // Solo actualizar cuando tengamos valores reales
         setVitalSigns({
           spo2: vitals.spo2 > 0 ? vitals.spo2 : 0,
           pressure: vitals.pressure || "--/--",
@@ -171,6 +173,7 @@ const Index = () => {
       
       setSignalQuality(lastSignal.quality);
     } else {
+      // Si no hay señal válida, resetear valores
       setHeartRate(0);
       setVitalSigns({ 
         spo2: 0, 
@@ -182,20 +185,10 @@ const Index = () => {
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
 
-  const toggleMonitoring = () => {
-    console.log('Toggle monitoring called, current state:', isMonitoring);
-    if (isMonitoring) {
-      stopMonitoring();
-    } else {
-      startMonitoring();
-    }
-  };
-
   return (
     <div 
-      className="fixed inset-0 flex flex-col" 
+      className="fixed inset-0 flex flex-col bg-black" 
       style={{ 
-        backgroundColor: '#000',
         height: 'calc(100vh + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)'
@@ -224,10 +217,7 @@ const Index = () => {
           </div>
 
           <div className="absolute bottom-[200px] left-0 right-0 px-4">
-            <div className="p-4" style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(8px)'
-            }}>
+            <div className="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
               <div className="grid grid-cols-4 gap-2">
                 <VitalSign 
                   label="FRECUENCIA CARDÍACA"
@@ -258,24 +248,16 @@ const Index = () => {
             </div>
           )}
 
-          <div className="h-[80px] grid grid-cols-2 mt-auto" style={{
-            backgroundColor: '#000'
-          }}>
-            <div className="w-full h-full">
-              <MonitorButton 
-                isMonitoring={isMonitoring} 
-                onClick={toggleMonitoring} 
-              />
-            </div>
+          <div className="h-[80px] grid grid-cols-2 gap-px bg-gray-900 mt-auto">
+            <button 
+              onClick={startMonitoring}
+              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
+            >
+              INICIAR
+            </button>
             <button 
               onClick={stopMonitoring}
-              className="w-full h-full text-2xl font-bold text-white"
-              style={{
-                backgroundColor: '#4b5563',
-                borderRadius: '0',
-                border: 'none',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
-              }}
+              className="w-full h-full bg-black/80 text-2xl font-bold text-white active:bg-gray-800"
             >
               RESET
             </button>

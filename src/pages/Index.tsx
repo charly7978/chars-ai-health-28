@@ -77,7 +77,7 @@ const Index = () => {
     if (isMonitoring) {
       finalizeMeasurement();
     } else {
-      enterFullScreen();
+      // enterFullScreen(); // Comentado temporalmente para pruebas
       setIsMonitoring(true);
       setIsCameraOn(true);
       setShowResults(false);
@@ -119,6 +119,12 @@ const Index = () => {
   };
 
   const startAutoCalibration = () => {
+    // Si ya está calibrando, no iniciar otro proceso
+    if (isCalibrating) {
+      console.log("Ya hay una calibración en progreso, ignorando nueva solicitud");
+      return;
+    }
+
     console.log("Iniciando auto-calibración real con indicadores visuales");
     setIsCalibrating(true);
     
@@ -126,7 +132,6 @@ const Index = () => {
     startCalibration();
     
     // Establecer explícitamente valores iniciales de calibración para CADA vital sign
-    // Esto garantiza que el estado comience correctamente
     console.log("Estableciendo valores iniciales de calibración");
     setCalibrationProgress({
       isCalibrating: true,
@@ -141,47 +146,47 @@ const Index = () => {
       }
     });
     
-    // Logear para verificar que el estado se estableció
-    setTimeout(() => {
-      console.log("Estado de calibración establecido:", calibrationProgress);
-    }, 100);
-    
     // Actualizar el progreso visualmente en intervalos regulares
     let step = 0;
     const calibrationInterval = setInterval(() => {
+      if (!isCalibrating) {
+        console.log("Calibración cancelada externamente");
+        clearInterval(calibrationInterval);
+        return;
+      }
+
       step += 1;
       
       // Actualizar progreso visual (10 pasos en total)
       if (step <= 10) {
-        const progressPercent = step * 10; // 0-100%
+        const progressPercent = step * 10;
         console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
         
-        // Actualizar cada valor individualmente para asegurar que se renderice
-        setCalibrationProgress({
-          isCalibrating: true,
-          progress: {
-            heartRate: progressPercent,
-            spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 20),
-            arrhythmia: Math.max(0, progressPercent - 15),
-            glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 25),
-            hemoglobin: Math.max(0, progressPercent - 30)
-          }
+        setCalibrationProgress(prev => {
+          if (!prev?.isCalibrating) return prev;
+          return {
+            isCalibrating: true,
+            progress: {
+              heartRate: progressPercent,
+              spo2: Math.max(0, progressPercent - 10),
+              pressure: Math.max(0, progressPercent - 20),
+              arrhythmia: Math.max(0, progressPercent - 15),
+              glucose: Math.max(0, progressPercent - 5),
+              lipids: Math.max(0, progressPercent - 25),
+              hemoglobin: Math.max(0, progressPercent - 30)
+            }
+          };
         });
       } else {
         // Al finalizar, detener el intervalo
         console.log("Finalizando animación de calibración");
         clearInterval(calibrationInterval);
         
-        // Completar calibración
         if (isCalibrating) {
           console.log("Completando calibración");
           forceCalibrationCompletion();
           setIsCalibrating(false);
           
-          // Importante: Establecer calibrationProgress a undefined o con valores 100
-          // para que la UI refleje que ya no está calibrando
           setCalibrationProgress({
             isCalibrating: false,
             progress: {
@@ -195,37 +200,12 @@ const Index = () => {
             }
           });
           
-          // Opcional: vibración si está disponible
           if (navigator.vibrate) {
             navigator.vibrate([100, 50, 100]);
           }
         }
       }
-    }, 800); // Cada paso dura 800ms (8 segundos en total)
-    
-    // Temporizador de seguridad
-    setTimeout(() => {
-      if (isCalibrating) {
-        console.log("Forzando finalización de calibración por tiempo límite");
-        clearInterval(calibrationInterval);
-        forceCalibrationCompletion();
-        setIsCalibrating(false);
-        
-        // Asegurar que se limpie el estado de calibración
-        setCalibrationProgress({
-          isCalibrating: false,
-          progress: {
-            heartRate: 100,
-            spo2: 100,
-            pressure: 100,
-            arrhythmia: 100,
-            glucose: 100,
-            lipids: 100,
-            hemoglobin: 100
-          }
-        });
-      }
-    }, 10000); // 10 segundos como máximo
+    }, 800);
   };
 
   const finalizeMeasurement = () => {
@@ -410,7 +390,47 @@ const Index = () => {
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
-        setVitalSigns(vitals);
+        // Solo actualizar valores válidos
+        setVitalSigns(prevState => {
+          const newState = { ...prevState };
+          
+          // Actualizar SpO2 solo si es un valor válido
+          if (vitals.spo2 && vitals.spo2 > 0) {
+            newState.spo2 = vitals.spo2;
+          }
+          
+          // Actualizar presión arterial si es válida
+          if (vitals.pressure && vitals.pressure !== "--/--") {
+            newState.pressure = vitals.pressure;
+          }
+          
+          // Actualizar estado de arritmia
+          if (vitals.arrhythmiaStatus) {
+            newState.arrhythmiaStatus = vitals.arrhythmiaStatus;
+          }
+          
+          // Actualizar glucosa si es válida
+          if (vitals.glucose && vitals.glucose > 0) {
+            newState.glucose = vitals.glucose;
+          }
+          
+          // Actualizar lípidos si son válidos
+          if (vitals.lipids) {
+            if (vitals.lipids.totalCholesterol > 0) {
+              newState.lipids.totalCholesterol = vitals.lipids.totalCholesterol;
+            }
+            if (vitals.lipids.triglycerides > 0) {
+              newState.lipids.triglycerides = vitals.lipids.triglycerides;
+            }
+          }
+          
+          // Actualizar hemoglobina si es válida
+          if (vitals.hemoglobin && vitals.hemoglobin > 0) {
+            newState.hemoglobin = vitals.hemoglobin;
+          }
+          
+          return newState;
+        });
         
         if (vitals.lastArrhythmiaData) {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);

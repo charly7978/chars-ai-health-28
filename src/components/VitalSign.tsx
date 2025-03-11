@@ -68,6 +68,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
       const numValue = Number(value);
       if (numValue === 0) return { text: "--", color: "text-white", status: "" };
       
+      // Expanded glucose ranges
       if (numValue < 40) return { text: String(value), color: "text-red-500", status: "Hipoglucemia Crítica" };
       if (numValue < 60) return { text: String(value), color: "text-red-400", status: "Hipoglucemia Severa" };
       if (numValue < 70) return { text: String(value), color: "text-orange-500", status: "Hipoglucemia Leve" };
@@ -165,14 +166,8 @@ const VitalSign: React.FC<VitalSignProps> = ({
   const { text, color, status } = getDisplayContent();
 
   return (
-    <div className="relative overflow-hidden flex flex-col h-full transition-all duration-300"
-         style={{
-           backgroundColor: '#1E3A8A',
-           borderRadius: '0.5rem',
-           boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
-           border: 'none'
-         }}>
-      <div className="flex flex-col items-center justify-center flex-1 gap-2 p-3">
+    <div className="relative overflow-hidden bg-black backdrop-blur-md rounded-lg p-3 transition-all duration-300 flex flex-col h-full">
+      <div className="flex flex-col items-center justify-center flex-1 gap-2">
         <h3 className="text-white text-[12px] font-medium text-center w-full leading-tight tracking-tight break-words px-1 min-h-[32px] flex items-center justify-center">
           {label}
         </h3>
@@ -189,7 +184,7 @@ const VitalSign: React.FC<VitalSignProps> = ({
             </span>
             
             {!isArrhythmiaDisplay && !isLipidsDisplay && unit && (
-              <span className="text-white text-[13px] font-medium">
+              <span className="text-gray-400/90 text-[13px] font-medium">
                 {unit}
               </span>
             )}
