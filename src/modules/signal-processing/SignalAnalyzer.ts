@@ -160,11 +160,11 @@ export class SignalAnalyzer {
     filtered: number, 
     trendResult: 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological'
   ): DetectionResult {
-    // UMBRALES AJUSTADOS para mayor robustez:
+    // UMBRALES AJUSTADOS para mayor sensibilidad y robustez:
     // Puedes calibrar aquí según tu hardware/condiciones:
-    const rojoOk = this.detectorScores.redChannel > 0.06; // Antes 0.04
-    const pulsoOk = this.detectorScores.pulsatility > 0.12; // Antes 0.08
-    const estabilidadOk = this.detectorScores.stability > 0.15; // Igual
+    const rojoOk = this.detectorScores.redChannel > 0.045; // Más permisivo
+    const pulsoOk = this.detectorScores.pulsatility > 0.08; // Más permisivo
+    const estabilidadOk = this.detectorScores.stability > 0.13; // Más permisivo
     if (!rojoOk || !pulsoOk || !estabilidadOk) {
       this.isCurrentlyDetected = false;
       this.consecutiveDetections = 0;

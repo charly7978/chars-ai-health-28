@@ -1,4 +1,3 @@
-
 /**
  * Clase para validación de señales biofísicamente plausibles
  * Aplica restricciones fisiológicas a las señales PPG
@@ -7,7 +6,7 @@
 export class BiophysicalValidator {
   private lastPulsatilityValues: number[] = [];
   private readonly MAX_PULSATILITY_HISTORY = 30;
-  private readonly MIN_PULSATILITY = 0.15; // Increased threshold for more accurate detection
+  private readonly MIN_PULSATILITY = 0.08; // Antes 0.15, más permisivo para hardware débil
   private readonly MAX_PULSATILITY = 8.0;
   private lastRawValues: number[] = []; // Raw values for trend analysis
   private lastTimeStamps: number[] = []; // Timestamps for temporal analysis
@@ -47,7 +46,7 @@ export class BiophysicalValidator {
     
     // If not enough values, return conservative pulsatility
     if (this.lastPulsatilityValues.length < 15) {
-      return 0.1; // More conservative initial value
+      return 0.08; // Antes 0.1, más permisivo para arranque
     }
     
     // Calculate variability (difference between recent max and min)
