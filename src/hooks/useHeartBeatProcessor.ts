@@ -72,7 +72,7 @@ export const useHeartBeatProcessor = () => {
     };
   }, []);
 
-  const processSignal = useCallback((value: number): HeartBeatResult => {
+  const processSignal = useCallback((value: number, fingerDetected: boolean = true): HeartBeatResult => {
     if (!processorRef.current) {
       console.warn('useHeartBeatProcessor: Processor no inicializado', {
         sessionId: sessionId.current,
@@ -91,11 +91,34 @@ export const useHeartBeatProcessor = () => {
       };
     }
 
-    console.log('useHeartBeatProcessor - processSignal detallado:', {
+    // Si no hay dedo detectado, no procesar la señal
+    if (!fingerDetected) {
+      console.log('useHeartBeatProcessor: Dedo no detectado, omitiendo procesamiento', {
+        timestamp: new Date().toISOString()
+      });
+      
+      // Si no hay dedo, resetear los valores actuales
+      if (currentBPM > 0) {
+        setCurrentBPM(0);
+        setConfidence(0);
+      }
+      
+      return {
+        bpm: 0,
+        confidence: 0,
+        isPeak: false,
+        arrhythmiaCount: 0,
+        rrData: {
+          intervals: [],
+          lastPeakTime: null
+        }
+      };
+    }
+
+    console.log('useHeartBeatProcessor - processSignal:', {
       inputValue: value,
       normalizadoValue: value.toFixed(2),
-      currentProcessor: !!processorRef.current,
-      processorMethods: processorRef.current ? Object.getOwnPropertyNames(Object.getPrototypeOf(processorRef.current)) : [],
+      fingerDetected,
       sessionId: sessionId.current,
       timestamp: new Date().toISOString()
     });
@@ -103,13 +126,12 @@ export const useHeartBeatProcessor = () => {
     const result = processorRef.current.processSignal(value);
     const rrData = processorRef.current.getRRIntervals();
 
-    console.log('useHeartBeatProcessor - resultado detallado:', {
+    console.log('useHeartBeatProcessor - resultado:', {
       bpm: result.bpm,
       confidence: result.confidence,
       isPeak: result.isPeak,
       arrhythmiaCount: result.arrhythmiaCount,
-      rrIntervals: JSON.stringify(rrData.intervals),
-      ultimosIntervalos: rrData.intervals.slice(-5),
+      rrIntervals: JSON.stringify(rrData.intervals.slice(-5)),
       ultimoPico: rrData.lastPeakTime,
       tiempoDesdeUltimoPico: rrData.lastPeakTime ? Date.now() - rrData.lastPeakTime : null,
       sessionId: sessionId.current,
