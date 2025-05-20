@@ -1,4 +1,3 @@
-
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -49,6 +48,7 @@ export class HeartBeatProcessor {
   private readonly BPM_ALPHA = 0.2;
   private peakCandidateIndex: number | null = null;
   private peakCandidateValue: number = 0;
+  private isArrhythmiaDetected: boolean = false; // Nuevo: indica si se detectó una arritmia
 
   constructor() {
     this.initAudio();
@@ -95,7 +95,8 @@ export class HeartBeatProcessor {
     }
   }
 
-  private async playHeartSound(volume: number = this.BEEP_VOLUME) {
+  // Nuevo método para reproducir el sonido de latido con opción de arritmia
+  private async playHeartSound(volume: number = this.BEEP_VOLUME, isArrhythmic: boolean = false) {
     if (!this.audioContext || this.isInWarmup()) {
       console.log("HeartBeatProcessor: No se puede reproducir - AudioContext no disponible o en warmup");
       return;
@@ -108,14 +109,13 @@ export class HeartBeatProcessor {
     }
 
     try {
-      console.log("HeartBeatProcessor: Reproduciendo sonido de latido con volumen:", volume);
+      console.log(`HeartBeatProcessor: Reproduciendo sonido de latido ${isArrhythmic ? 'arrítmico' : 'normal'} con volumen:`, volume);
       
       // Vibrar el dispositivo
       if (navigator.vibrate) {
         navigator.vibrate(this.VIBRATION_PATTERN);
       }
 
-      // Implementación mejorada y más audible del sonido de latido
       // Primera parte del latido ("LUB")
       const oscillator1 = this.audioContext.createOscillator();
       const gainNode1 = this.audioContext.createGain();
@@ -149,6 +149,28 @@ export class HeartBeatProcessor {
       
       oscillator2.start(this.audioContext.currentTime + 0.1);
       oscillator2.stop(this.audioContext.currentTime + 0.35);
+      
+      // Tercer sonido para arritmias (si corresponde)
+      if (isArrhythmic) {
+        const oscillator3 = this.audioContext.createOscillator();
+        const gainNode3 = this.audioContext.createGain();
+        
+        // Usar una onda diferente para el sonido de arritmia
+        oscillator3.type = 'sawtooth'; // Tipo de onda distintiva
+        oscillator3.frequency.value = 180; // Frecuencia más alta para llamar la atención
+        
+        gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime + 0.2);
+        gainNode3.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.23); // Volumen más alto
+        gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.45);
+        
+        oscillator3.connect(gainNode3);
+        gainNode3.connect(this.audioContext.destination);
+        
+        oscillator3.start(this.audioContext.currentTime + 0.2);
+        oscillator3.stop(this.audioContext.currentTime + 0.5);
+        
+        console.log("HeartBeatProcessor: Sonido de arritmia adicional reproducido");
+      }
       
       console.log("HeartBeatProcessor: Sonido de latido reproducido correctamente");
       this.lastBeepTime = now;
@@ -242,9 +264,9 @@ export class HeartBeatProcessor {
         this.previousPeakTime = this.lastPeakTime;
         this.lastPeakTime = now;
         
-        // Intentar reproducir el sonido y registrar si tuvo éxito
+        // Reproducir sonido con indicación de arritmia si está marcado
         console.log("HeartBeatProcessor: Pico detectado, intentando reproducir sonido");
-        this.playHeartSound(0.9); // Aumentado volumen a 0.9
+        this.playHeartSound(0.9, this.isArrhythmiaDetected); // Pasar el estado de arritmia detectada
         
         this.updateBPM();
       }
@@ -257,6 +279,12 @@ export class HeartBeatProcessor {
       filteredValue: smoothed,
       arrhythmiaCount: 0
     };
+  }
+
+  // Método para establecer externamente si se detectó una arritmia
+  public setArrhythmiaDetected(isDetected: boolean): void {
+    this.isArrhythmiaDetected = isDetected;
+    console.log(`HeartBeatProcessor: Estado de arritmia establecido a ${isDetected}`);
   }
 
   private autoResetIfSignalIsLow(amplitude: number) {

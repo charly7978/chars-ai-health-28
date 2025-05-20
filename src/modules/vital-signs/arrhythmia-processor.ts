@@ -1,3 +1,4 @@
+
 /**
  * Advanced Arrhythmia Processor based on peer-reviewed cardiac research
  */
@@ -35,9 +36,19 @@ export class ArrhythmiaProcessor {
   private sampleEntropy: number = 0;
   private pnnX: number = 0;
 
+  // Callback para notificar estados de arritmia
+  private onArrhythmiaDetection?: (isDetected: boolean) => void;
+
   /**
-   * Processes heart beat data to detect arrhythmias using advanced HRV analysis
-   * Based on techniques from "New frontiers in heart rate variability analysis"
+   * Define una función de callback para notificar cuando se detecta una arritmia
+   */
+  public setArrhythmiaDetectionCallback(callback: (isDetected: boolean) => void): void {
+    this.onArrhythmiaDetection = callback;
+    console.log("ArrhythmiaProcessor: Callback de detección establecido");
+  }
+
+  /**
+   * Procesa datos de latido cardíaco para detectar arritmias usando análisis avanzado de VRC
    */
   public processRRData(rrData?: { intervals: number[]; lastPeakTime: number | null }): {
     arrhythmiaStatus: string;
@@ -93,8 +104,7 @@ export class ArrhythmiaProcessor {
   }
 
   /**
-   * Detects arrhythmia using multiple advanced HRV metrics
-   * Based on ESC Guidelines for arrhythmia detection
+   * Detecta arritmias usando múltiples métricas avanzadas de VRC
    */
   private detectArrhythmia(): void {
     if (this.rrIntervals.length < this.RR_WINDOW_SIZE) return;
@@ -162,6 +172,14 @@ export class ArrhythmiaProcessor {
          coefficientOfVariation > 0.25 && 
          this.sampleEntropy > this.SAMPLE_ENTROPY_THRESHOLD)
       );
+
+    // Notificar cambios en el estado de arritmia
+    if (newArrhythmiaState !== this.arrhythmiaDetected) {
+      if (this.onArrhythmiaDetection) {
+        this.onArrhythmiaDetection(newArrhythmiaState);
+        console.log(`ArrhythmiaProcessor: Notificando cambio de estado de arritmia a ${newArrhythmiaState}`);
+      }
+    }
 
     // If it's a new arrhythmia and enough time has passed since the last one
     if (newArrhythmiaState && 
@@ -276,5 +294,10 @@ export class ArrhythmiaProcessor {
     this.shannonEntropy = 0;
     this.sampleEntropy = 0;
     this.pnnX = 0;
+    
+    // Notificar reset del estado de arritmia
+    if (this.onArrhythmiaDetection) {
+      this.onArrhythmiaDetection(false);
+    }
   }
 }

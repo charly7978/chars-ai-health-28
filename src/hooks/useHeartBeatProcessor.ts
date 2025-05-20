@@ -173,10 +173,25 @@ export const useHeartBeatProcessor = () => {
     setConfidence(0);
   }, [currentBPM, confidence]);
 
+  // Nuevo método para establecer el estado de arritmia en el procesador
+  const setArrhythmiaState = useCallback((isArrhythmiaDetected: boolean) => {
+    console.log('useHeartBeatProcessor: Estableciendo estado de arritmia', {
+      isArrhythmiaDetected,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (processorRef.current) {
+      processorRef.current.setArrhythmiaDetected(isArrhythmiaDetected);
+    } else {
+      console.warn('useHeartBeatProcessor: No se pudo establecer estado de arritmia - processor no existe');
+    }
+  }, []);
+
   return {
     currentBPM,
     confidence,
     processSignal,
-    reset
+    reset,
+    setArrhythmiaState // Exponemos la nueva función
   };
 };

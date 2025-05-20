@@ -7,6 +7,7 @@ import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
+import { toast } from "@/components/ui/use-toast";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -37,7 +38,10 @@ const Index = () => {
   } | null>(null);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
-  const { processSignal: processHeartBeat } = useHeartBeatProcessor();
+  const { 
+    processSignal: processHeartBeat, 
+    setArrhythmiaState 
+  } = useHeartBeatProcessor();
   const { 
     processSignal: processVitalSigns, 
     reset: resetVitalSigns,
@@ -415,13 +419,36 @@ const Index = () => {
           setLastArrhythmiaData(vitals.lastArrhythmiaData);
           const [status, count] = vitals.arrhythmiaStatus.split('|');
           setArrhythmiaCount(count || "0");
+          
+          // Aquí detectamos si hay arritmia y enviamos la señal al HeartBeatProcessor
+          const isArrhythmiaDetected = status === "ARRITMIA DETECTADA";
+          
+          // Solo actualizamos cuando cambia el estado para no sobrecargar
+          if (isArrhythmiaDetected !== arrhythmiaDetectedRef.current) {
+            arrhythmiaDetectedRef.current = isArrhythmiaDetected;
+            setArrhythmiaState(isArrhythmiaDetected);
+            
+            // Mostrar un toast cuando se detecta arritmia por primera vez
+            if (isArrhythmiaDetected) {
+              console.log("Arritmia detectada - Activando sonido distintivo");
+              toast({
+                title: "¡Arritmia detectada!",
+                description: "Se activará un sonido distintivo con los latidos.",
+                variant: "destructive",
+                duration: 3000,
+              });
+            }
+          }
         }
       }
       
       setSignalQuality(lastSignal.quality);
     }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns]);
+  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, setArrhythmiaState]);
 
+  // Referencia para activar o desactivar el sonido de arritmia
+  const arrhythmiaDetectedRef = useRef(false);
+  
   // Nueva función para alternar medición
   const handleToggleMonitoring = () => {
     if (isMonitoring) {
@@ -541,4 +568,3 @@ const Index = () => {
 };
 
 export default Index;
-
