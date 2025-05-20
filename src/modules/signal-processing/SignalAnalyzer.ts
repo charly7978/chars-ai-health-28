@@ -206,12 +206,12 @@ export class SignalAnalyzer {
     
     // Nueva lógica: solo permitir detección si hay suficiente rojo y pulsatility
     const rojoOk = this.detectorScores.redChannel > 0.04;
-    // Ajuste 1: Aumentar umbral de pulsatility
-    const pulsoOk = this.detectorScores.pulsatility > 0.15; // Antes 0.05
+    // Ajuste 1: Umbral de pulsatility intermedio
+    const pulsoOk = this.detectorScores.pulsatility > 0.08; // Antes 0.15
     // Ajuste 2: Penalizar frames con textura anómala (ruido sin dedo)
     const texturaOk = typeof this.detectorScores.textureScore === 'undefined' || (this.detectorScores.textureScore > 0.38 && this.detectorScores.textureScore < 0.95);
-    // Ajuste 3: Aumentar mínimo de frames consecutivos para confirmar dedo
-    this.CONFIG.MIN_CONSECUTIVE_DETECTIONS = 10; // Antes 6
+    // Ajuste 3: Mínimo de frames consecutivos más balanceado
+    this.CONFIG.MIN_CONSECUTIVE_DETECTIONS = 7; // Antes 10
     // Si el rojo es bajo, nunca detectar dedo aunque haya variabilidad
     if (!rojoOk || !pulsoOk || !texturaOk) {
       this.isCurrentlyDetected = false;
