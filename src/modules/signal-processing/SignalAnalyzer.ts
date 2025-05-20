@@ -102,152 +102,39 @@ export class SignalAnalyzer {
     // Implement real finger detection logic with appropriate medical thresholds
     const currentTime = Date.now();
     
-    // Apply trend analysis results - penalties más suaves para tendencias inestables
-    let trendMultiplier = 1.0;
-    switch(trendResult) {
-      case 'highly_stable':
-        trendMultiplier = 1.2;
-        break;
-      case 'stable':
-        trendMultiplier = 1.1;
-        break;
-      case 'moderately_stable':
-        trendMultiplier = 1.0;
-        break;
-      case 'unstable':
-        trendMultiplier = 0.8; // Penalización más suave (antes 0.7)
-        break;
-      case 'highly_unstable':
-        trendMultiplier = 0.6; // Penalización más suave (antes 0.5)
-        break;
-      case 'non_physiological':
-        trendMultiplier = 0.3; // Penalización más suave (antes 0.2)
-        break;
-    }
-    
-    // Ponderación más permisiva para facilitar detección
-    const redScore = this.detectorScores.redChannel * 0.35; // Antes 0.25
-    const stabilityScore = this.detectorScores.stability * 0.25; // Antes 0.20
-    const pulsatilityScore = this.detectorScores.pulsatility * 0.30; // Antes 0.25
-    const biophysicalScore = this.detectorScores.biophysical * 0.07; // Antes 0.20
-    const periodicityScore = this.detectorScores.periodicity * 0.03; // Antes 0.10
-    
-    // Apply trend multiplier from signal analysis
-    const normalizedScore = (redScore + stabilityScore + pulsatilityScore + 
-                           biophysicalScore + periodicityScore) * trendMultiplier;
-    
-    // Penalización más suave por artefactos de movimiento
-    const finalScore = this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD ? 
-                      normalizedScore * 0.6 : normalizedScore; // Antes 0.5
-    
-    // Umbral de detección aún más bajo para máxima sensibilidad
-    const detectionThreshold = 0.03; // Antes 0.5
-    const isFingerDetected = finalScore >= detectionThreshold || (this.detectorScores.redChannel > 0.05 && this.detectorScores.pulsatility > 0.05);
-    
-    // Update consecutive detection counters
-    if (isFingerDetected) {
-      this.consecutiveDetections++;
-      this.consecutiveNoDetections = 0;
-      this.lastDetectionTime = currentTime;
-    } else {
-      this.consecutiveDetections = 0;
-      this.consecutiveNoDetections++;
-    }
-    
-    // Histéresis más suave para prevenir parpadeo de detección
-    if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
-      this.isCurrentlyDetected = true;
-      console.log("SignalAnalyzer: Finger DETECTED after consistent readings");
-    } else if (this.isCurrentlyDetected && 
-              (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS ||
-               currentTime - this.lastDetectionTime > this.DETECTION_TIMEOUT)) {
-      this.isCurrentlyDetected = false;
-      console.log("SignalAnalyzer: Finger LOST after consistent absence");
-    }
-    
-    // Auto-reset en cambios extremos de señal - más tolerante
-    if (this.isCurrentlyDetected && this.motionArtifactScore > 0.85) { // Umbral aumentado (antes 0.8)
-      this.consecutiveNoDetections += 1; // Incremento más lento (antes +2)
-    }
-    
-    // Calcular calidad basada en puntuaciones ponderadas
-    let qualityValue = Math.round(finalScore * this.CONFIG.QUALITY_LEVELS);
-    
-    // Asignar calidad mínima cuando se detecta dedo pero con señal débil
-    if (this.isCurrentlyDetected && qualityValue < 1) {
-      qualityValue = 10; // Garantizar calidad mínima para dedos detectados
-    }
-    
-    // Suavizado de calidad con historial
-    if (qualityValue > 0) {
-      this.qualityHistory.push(qualityValue);
-      if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
-        this.qualityHistory.shift();
-      }
-    }
-    
-    const finalQuality = this.isCurrentlyDetected ? 
-      Math.round(this.qualityHistory.reduce((a, b) => a + b, 0) / Math.max(1, this.qualityHistory.length)) : 0;
-    
-    // Convertir a porcentaje
-    const quality = Math.max(0, Math.min(100, (finalQuality / this.CONFIG.QUALITY_LEVELS) * 100));
-    
-    console.log("SignalAnalyzer: Detection result:", {
-      normalizedScore: normalizedScore.toFixed(2),
-      finalScore: finalScore.toFixed(2),
-      trendMultiplier: trendMultiplier.toFixed(2),
-      motionArtifact: this.motionArtifactScore.toFixed(2),
-      consecutiveDetections: this.consecutiveDetections,
-      isFingerDetected: this.isCurrentlyDetected,
-      quality,
-      trendResult,
-      detectionThreshold
-    });
-    
-    // Nueva lógica: solo permitir detección si hay suficiente rojo y pulsatility
+    // SIMPLIFICACIÓN: Solo tres lógicas principales
     const rojoOk = this.detectorScores.redChannel > 0.04;
-    // Ajuste 1: Umbral de pulsatility intermedio
-    const pulsoOk = this.detectorScores.pulsatility > 0.08; // Antes 0.15
-    // Ajuste 2: Penalizar frames con textura anómala (ruido sin dedo)
-    const texturaOk = typeof this.detectorScores.textureScore === 'undefined' || (this.detectorScores.textureScore > 0.38 && this.detectorScores.textureScore < 0.95);
-    // Ajuste 3: Mínimo de frames consecutivos más balanceado
-    this.CONFIG.MIN_CONSECUTIVE_DETECTIONS = 7; // Antes 10
-    // Si el rojo es bajo, nunca detectar dedo aunque haya variabilidad
-    if (!rojoOk || !pulsoOk || !texturaOk) {
+    const pulsoOk = this.detectorScores.pulsatility > 0.08;
+    const estabilidadOk = this.detectorScores.stability > 0.15;
+    // Eliminar lógica de periodicidad, consistencia y tendencia fisiológica
+    if (!rojoOk || !pulsoOk || !estabilidadOk) {
       this.isCurrentlyDetected = false;
       return {
         isFingerDetected: false,
         quality: 0,
         detectorDetails: {
           ...this.detectorScores,
-          normalizedScore,
-          trendType: trendResult,
-          reason: 'Condición insuficiente (rojo, pulso o textura)'
+          reason: 'Condición insuficiente (rojo, pulso o estabilidad)'
         }
       };
     }
-    // Si la señal es fisiológicamente absurda pero hay rojo, solo rechazar si la periodicidad es absurda
-    if (trendResult === 'non_physiological' && (!pulsoOk || !rojoOk)) {
-      this.isCurrentlyDetected = false;
-      return {
-        isFingerDetected: false,
-        quality: 0,
-        detectorDetails: {
-          ...this.detectorScores,
-          normalizedScore,
-          trendType: trendResult,
-          reason: 'Tendencia no fisiológica y sin pulso'
-        }
-      };
+    // Si pasa los tres checks, detectar dedo
+    this.consecutiveDetections++;
+    this.consecutiveNoDetections = 0;
+    if (this.consecutiveDetections >= 5) { // 5 frames consecutivos para robustez
+      this.isCurrentlyDetected = true;
     }
-    
+    // Si se pierde la condición, resetear
+    if (!this.isCurrentlyDetected) {
+      this.consecutiveDetections = 0;
+    }
+    // Calidad proporcional a la media de los tres scores
+    const quality = Math.round(((this.detectorScores.redChannel + this.detectorScores.pulsatility + this.detectorScores.stability) / 3) * 100);
     return {
       isFingerDetected: this.isCurrentlyDetected,
       quality: quality,
       detectorDetails: {
-        ...this.detectorScores,
-        normalizedScore,
-        trendType: trendResult
+        ...this.detectorScores
       }
     };
   }
