@@ -1,3 +1,4 @@
+
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -16,12 +17,13 @@ export class HeartBeatProcessor {
   private readonly EMA_ALPHA = 0.4; 
   private readonly BASELINE_FACTOR = 1.0; 
 
-  // Parámetros de beep
-  private readonly BEEP_PRIMARY_FREQUENCY = 880; 
-  private readonly BEEP_SECONDARY_FREQUENCY = 440; 
-  private readonly BEEP_DURATION = 80; 
-  private readonly BEEP_VOLUME = 0.9; 
+  // Parámetros de beep y vibración
+  private readonly BEEP_PRIMARY_FREQUENCY = 110; // Frecuencia más baja para sonido cardíaco 
+  private readonly BEEP_SECONDARY_FREQUENCY = 55; // Frecuencia secundaria más baja
+  private readonly BEEP_DURATION = 150; // Mayor duración para simular latido cardíaco
+  private readonly BEEP_VOLUME = 1.0; // Volumen máximo
   private readonly MIN_BEEP_INTERVAL_MS = 300;
+  private readonly VIBRATION_PATTERN = [30, 20, 60]; // Patrón que simula un latido cardíaco
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
   private readonly LOW_SIGNAL_THRESHOLD = 0.03;
@@ -34,6 +36,7 @@ export class HeartBeatProcessor {
   private movingAverageBuffer: number[] = [];
   private smoothedValue: number = 0;
   private audioContext: AudioContext | null = null;
+  private heartSoundBuffer: AudioBuffer | null = null;
   private lastBeepTime = 0;
   private lastPeakTime: number | null = null;
   private previousPeakTime: number | null = null;
@@ -58,19 +61,114 @@ export class HeartBeatProcessor {
     try {
       this.audioContext = new AudioContext();
       await this.audioContext.resume();
-      await this.playBeep(0.01);
+      
+      // Crear un buffer para el sonido de latido cardíaco (un sonido más rico y "loud")
+      if (this.audioContext) {
+        // Creamos un buffer para el sonido de latido cardíaco
+        const sampleRate = this.audioContext.sampleRate;
+        const bufferSize = Math.floor(sampleRate * 0.3); // 300ms de duración
+        this.heartSoundBuffer = this.audioContext.createBuffer(1, bufferSize, sampleRate);
+        
+        // Generamos un sonido de latido cardíaco más realista
+        const channelData = this.heartSoundBuffer.getChannelData(0);
+        
+        // Primera parte del latido (sonido "lub")
+        const attackTime = Math.floor(sampleRate * 0.03);
+        const decayTime = Math.floor(sampleRate * 0.07);
+        for (let i = 0; i < attackTime; i++) {
+          channelData[i] = (i / attackTime) * Math.sin(i * 0.15) * 0.9;
+        }
+        for (let i = attackTime; i < attackTime + decayTime; i++) {
+          const decay = 1 - ((i - attackTime) / decayTime);
+          channelData[i] = decay * Math.sin(i * 0.12) * 0.85;
+        }
+        
+        // Pequeña pausa
+        const pauseTime = Math.floor(sampleRate * 0.05);
+        
+        // Segunda parte del latido (sonido "dub")
+        const secondAttackTime = Math.floor(sampleRate * 0.02);
+        const secondDecayTime = Math.floor(sampleRate * 0.15);
+        const secondStart = attackTime + decayTime + pauseTime;
+        for (let i = 0; i < secondAttackTime; i++) {
+          channelData[secondStart + i] = (i / secondAttackTime) * Math.sin(i * 0.1) * 0.7;
+        }
+        for (let i = secondAttackTime; i < secondAttackTime + secondDecayTime; i++) {
+          const decay = 1 - ((i - secondAttackTime) / secondDecayTime);
+          if (secondStart + i < bufferSize) {
+            channelData[secondStart + i] = decay * Math.sin(i * 0.08) * 0.65;
+          }
+        }
+      }
+      
+      await this.playTestSound(0.01);
       console.log("HeartBeatProcessor: Audio Context Initialized");
     } catch (error) {
       console.error("HeartBeatProcessor: Error initializing audio", error);
     }
   }
 
-  private async playBeep(volume: number = this.BEEP_VOLUME) {
+  private async playTestSound(volume: number = 0.01) {
+    if (!this.audioContext) return;
+    
+    try {
+      // Usamos un tono simple para el sonido de prueba
+      const oscillator = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      
+      oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime);
+      gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05);
+      
+      oscillator.connect(gain);
+      gain.connect(this.audioContext.destination);
+      
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + 0.1);
+    } catch (error) {
+      console.error("HeartBeatProcessor: Error playing test sound", error);
+    }
+  }
+
+  private async playHeartSound(volume: number = this.BEEP_VOLUME) {
     if (!this.audioContext || this.isInWarmup()) return;
 
     const now = Date.now();
     if (now - this.lastBeepTime < this.MIN_BEEP_INTERVAL_MS) return;
 
+    try {
+      // Vibrar el dispositivo con un patrón similar a un latido cardíaco
+      if (navigator.vibrate) {
+        navigator.vibrate(this.VIBRATION_PATTERN);
+      }
+
+      // Reproducir el sonido de latido cardíaco
+      if (this.audioContext && this.heartSoundBuffer) {
+        const source = this.audioContext.createBufferSource();
+        const gainNode = this.audioContext.createGain();
+        
+        source.buffer = this.heartSoundBuffer;
+        gainNode.gain.value = volume;
+        
+        source.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        source.start();
+      } else {
+        // Fallback a la versión anterior si el buffer de sonido no está disponible
+        this.playLegacyHeartSound(volume);
+      }
+
+      this.lastBeepTime = now;
+    } catch (error) {
+      console.error("HeartBeatProcessor: Error playing heart sound", error);
+    }
+  }
+
+  private async playLegacyHeartSound(volume: number = this.BEEP_VOLUME) {
+    if (!this.audioContext) return;
+    
     try {
       const primaryOscillator = this.audioContext.createOscillator();
       const primaryGain = this.audioContext.createGain();
@@ -122,10 +220,8 @@ export class HeartBeatProcessor {
 
       primaryOscillator.stop(this.audioContext.currentTime + this.BEEP_DURATION / 1000 + 0.05);
       secondaryOscillator.stop(this.audioContext.currentTime + this.BEEP_DURATION / 1000 + 0.05);
-
-      this.lastBeepTime = now;
     } catch (error) {
-      console.error("HeartBeatProcessor: Error playing beep", error);
+      console.error("HeartBeatProcessor: Error playing legacy heart sound", error);
     }
   }
 
@@ -213,7 +309,7 @@ export class HeartBeatProcessor {
       if (timeSinceLastPeak >= this.MIN_PEAK_TIME_MS) {
         this.previousPeakTime = this.lastPeakTime;
         this.lastPeakTime = now;
-        this.playBeep(0.12); // Suena beep cuando se confirma pico
+        this.playHeartSound(0.8); // Aumentado el volumen y cambiado a sonido cardíaco
         this.updateBPM();
       }
     }
