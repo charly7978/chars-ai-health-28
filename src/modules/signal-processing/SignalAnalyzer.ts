@@ -1,4 +1,3 @@
-
 import { ProcessedSignal } from '../../types/signal';
 import { DetectorScores, DetectionResult } from './types';
 
@@ -24,7 +23,7 @@ export class SignalAnalyzer {
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
   // Aumentar el tiempo de retención de detección
-  private readonly DETECTION_TIMEOUT = 2000; 
+  private readonly DETECTION_TIMEOUT = 3000; // Aumentado a 3 segundos para mayor retención
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -43,8 +42,8 @@ export class SignalAnalyzer {
     biophysical: number;
     periodicity: number;
   }): void {
-    // Factor de suavizado para cambios
-    const alpha = 0.35;  // Aumentado para adaptarse más rápido
+    // Factor de suavizado para cambios - más rápido para adaptarse
+    const alpha = 0.4;  // Aumentado para adaptarse más rápido
     
     // Actualizar cada puntuación con suavizado
     this.detectorScores.redChannel = 
@@ -81,11 +80,11 @@ export class SignalAnalyzer {
     
     // Aplicar ponderación a los detectores (total: 100) - ajustado para dar mucho más peso a señal roja
     const detectorWeights = {
-      redChannel: 50,    // Aumentado drásticamente para priorizar este indicador
-      stability: 15,     // Reducido para dar más peso al canal rojo
-      pulsatility: 15,   // Reducido para dar más peso al canal rojo
+      redChannel: 55,    // Aumentado para priorizar este indicador
+      stability: 15,     
+      pulsatility: 15,   
       biophysical: 10,
-      periodicity: 10
+      periodicity: 5
     };
     
     // Calcular puntuación ponderada
@@ -98,36 +97,36 @@ export class SignalAnalyzer {
     // Normalizar a 100
     const normalizedScore = weightedScore / 100;
     
-    // Reglas de detección con histéresis - umbrales ajustados para mejorar detección
+    // Reglas de detección con histéresis - UMBRALES MUY REDUCIDOS PARA AUMENTAR SENSIBILIDAD
     let detectionChanged = false;
     
     // *** CAMBIO CRÍTICO: UMBRAL DRÁSTICAMENTE REDUCIDO ***
-    if (normalizedScore > 0.40) {  // Reducido a sólo 0.40 (antes 0.60)
+    if (normalizedScore > 0.30) {  // Reducido a solo 0.30 (antes 0.40)
       // Puntuación alta -> incrementar detecciones consecutivas
       this.consecutiveDetections++;
       this.consecutiveNoDetections = 0; // Resetea completamente
       
-      // *** CAMBIO CRÍTICO: REQUIERE MENOS DETECCIONES CONSECUTIVAS ***
-      if (this.consecutiveDetections >= 1 && !this.isCurrentlyDetected) { // Cambio de 2 a 1
+      // ACTIVACIÓN INMEDIATA: solo requiere 1 frame con buena detección
+      if (this.consecutiveDetections >= 1 && !this.isCurrentlyDetected) { 
         this.isCurrentlyDetected = true;
         this.lastDetectionTime = currentTime;
         detectionChanged = true;
-        console.log("SignalAnalyzer: Detección de dedo ACTIVADA", { normalizedScore });
+        console.log("SignalAnalyzer: Detección de dedo ACTIVADA (score bajo)", { normalizedScore });
       }
-    } else if (normalizedScore < 0.30 || trendResult === 'non_physiological') {  // Reducido de 0.40 a 0.30
-      // Puntuación baja o señal no fisiológica -> decrementar detecciones
+    } else if (normalizedScore < 0.20) {  // Reducido de 0.30 a 0.20 para mayor permisividad
+      // Puntuación baja -> decrementar detecciones
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
       
-      // *** CAMBIO CRÍTICO: REQUIERE MÁS NO-DETECCIONES PARA CONSIDERAR QUE NO HAY DEDO ***
-      if (this.consecutiveNoDetections >= 10 && this.isCurrentlyDetected) { // Aumentado a 10
+      // Requiere MÁS no-detecciones para considerar ausencia de dedo
+      if (this.consecutiveNoDetections >= 15 && this.isCurrentlyDetected) { // Aumentado a 15
         this.isCurrentlyDetected = false;
         detectionChanged = true;
         console.log("SignalAnalyzer: Detección de dedo DESACTIVADA", { normalizedScore });
       }
     }
     
-    // Timeout de seguridad para señal perdida - Aumentado para mantener la detección por más tiempo
+    // Timeout de seguridad para señal perdida - aumentado para mantener más tiempo
     if (this.isCurrentlyDetected && currentTime - this.lastDetectionTime > this.DETECTION_TIMEOUT) {
       console.log("SignalAnalyzer: Timeout de detección activado", { 
         tiempoTranscurrido: currentTime - this.lastDetectionTime 
@@ -143,16 +142,15 @@ export class SignalAnalyzer {
       qualityValue = 0;
     } else {
       // Sistema de 20 niveles de calidad (multiplica por 5 para obtener 0-100)
-      // *** CAMBIO CRÍTICO: MULTIPLICA LA CALIDAD POR FACTOR ***
-      // Esto da una mejor percepción de calidad al usuario
-      const baseQuality = normalizedScore * 20 * 1.25; // Factor multiplicativo añadido
+      // *** FACTOR MULTIPLICATIVO AUMENTADO ***
+      const baseQuality = normalizedScore * 20 * 1.5; // Factor multiplicativo aumentado
       
       // Ajustes basados en reglas
       let adjustments = 0;
       
       // Premiar estabilidad
-      if (trendResult === 'stable') adjustments += 2;
-      if (trendResult === 'highly_stable') adjustments += 4;
+      if (trendResult === 'stable') adjustments += 3;
+      if (trendResult === 'highly_stable') adjustments += 5;
       
       // Aplicar ajustes y limitar a rango 0-20
       const adjustedQuality = Math.max(0, Math.min(20, baseQuality + adjustments));
@@ -160,8 +158,8 @@ export class SignalAnalyzer {
       // Convertir a escala 0-100
       qualityValue = Math.round(adjustedQuality * 5);
       
-      // *** CAMBIO CRÍTICO: CALIDAD MÍNIMA GARANTIZADA SI HAY DETECCIÓN ***
-      if (qualityValue < 30) qualityValue = 30; // Garantiza un mínimo de 30% de calidad
+      // *** CALIDAD MÍNIMA GARANTIZADA SI HAY DETECCIÓN ***
+      if (qualityValue < 35) qualityValue = 35; // Garantiza un mínimo de 35% de calidad
     }
     
     // Añadir a historial de calidad
@@ -175,7 +173,7 @@ export class SignalAnalyzer {
                       Math.max(1, this.qualityHistory.length);
     
     // Si la calidad es baja pero no cero, aplicar un mínimo más generoso
-    const finalQuality = avgQuality > 0 && avgQuality < 30 ? Math.max(30, avgQuality) : avgQuality;
+    const finalQuality = avgQuality > 0 && avgQuality < 35 ? Math.max(35, avgQuality) : avgQuality;
     
     // Loguear resultados para diagnóstico
     console.log("SignalAnalyzer: Estado de detección:", {

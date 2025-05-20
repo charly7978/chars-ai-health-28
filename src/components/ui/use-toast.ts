@@ -1,5 +1,5 @@
 
 import { useToast, toast } from "@/hooks/use-toast";
 
-// Reexport but without visual toast show
+// Reexport for consistent usage across the app
 export { useToast, toast };

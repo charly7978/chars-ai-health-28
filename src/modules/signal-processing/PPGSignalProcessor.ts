@@ -26,27 +26,32 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   private isCalibrating: boolean = false;
   private frameProcessedCount = 0;
   
-  // Configuración basada en nuestro plan - ajustada para mejorar detección
+  // Configuración basada en nuestro plan - ajustada para sensibilidad máxima
   private readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 15,   // Reducido drásticamente para máxima sensibilidad
+    MIN_RED_THRESHOLD: 10,   // Reducido al mínimo para máxima sensibilidad
     MAX_RED_THRESHOLD: 250,
     STABILITY_WINDOW: 6,
-    MIN_STABILITY_COUNT: 2,  // Reducido para detección más rápida
-    HYSTERESIS: 2,  // Reducido para más sensibilidad
-    MIN_CONSECUTIVE_DETECTIONS: 1,  // Reducido a 1 para detección inmediata
-    MAX_CONSECUTIVE_NO_DETECTIONS: 6,  // Aumentado para mantener la detección más tiempo
+    MIN_STABILITY_COUNT: 1,  // Reducido al mínimo (1) para detección inmediata 
+    HYSTERESIS: 1.5,         // Reducido para mayor sensibilidad
+    MIN_CONSECUTIVE_DETECTIONS: 1,  // Un solo frame es suficiente
+    MAX_CONSECUTIVE_NO_DETECTIONS: 8,  // Aumentado para mantener la detección más tiempo
     QUALITY_LEVELS: 20,
     QUALITY_HISTORY_SIZE: 10,
-    CALIBRATION_SAMPLES: 20, // Reducido para calibración más rápida
+    CALIBRATION_SAMPLES: 10, // Reducido para calibración más rápida
     TEXTURE_GRID_SIZE: 8,
-    ROI_SIZE_FACTOR: 0.3 // Aumentado para capturar mayor área
+    ROI_SIZE_FACTOR: 0.35    // Aumentado para capturar mayor área
   };
   
   constructor(
     public onSignalReady?: (signal: ProcessedSignal) => void,
     public onError?: (error: ProcessingError) => void
   ) {
+    console.log("PPGSignalProcessor: Constructor llamado con callbacks:", {
+      hasSignalReadyCallback: !!onSignalReady,
+      hasErrorCallback: !!onError
+    });
+    
     this.kalmanFilter = new KalmanFilter();
     this.sgFilter = new SavitzkyGolayFilter();
     this.trendAnalyzer = new SignalTrendAnalyzer();
@@ -67,7 +72,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       MAX_CONSECUTIVE_NO_DETECTIONS: this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS
     });
     
-    console.log("PPGSignalProcessor: Instancia avanzada creada con nueva configuración", this.CONFIG);
+    console.log("PPGSignalProcessor: Instancia creada con configuración ultra-sensible:", this.CONFIG);
   }
 
   async initialize(): Promise<void> {
@@ -80,7 +85,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       this.signalAnalyzer.reset();
       this.frameProcessedCount = 0;
       
-      console.log("PPGSignalProcessor: Sistema inicializado con nueva arquitectura");
+      console.log("PPGSignalProcessor: Sistema inicializado con callbacks:", {
+        hasSignalReadyCallback: !!this.onSignalReady,
+        hasErrorCallback: !!this.onError
+      });
     } catch (error) {
       console.error("PPGSignalProcessor: Error de inicialización", error);
       this.handleError("INIT_ERROR", "Error al inicializar el procesador avanzado");
@@ -131,7 +139,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     try {
       // Contador de frames procesados
       this.frameProcessedCount++;
-      const shouldLog = this.frameProcessedCount % 30 === 0;  // Log cada 30 frames
+      const shouldLog = this.frameProcessedCount % 15 === 0;  // Log cada 15 frames
       
       // 1. Extraer características del frame
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
@@ -139,14 +147,16 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
       // Loguear siempre para diagnóstico
-      console.log("PPGSignalProcessor: Frame datos extraídos:", { 
-        redValue, 
-        textureScore, 
-        rToGRatio, 
-        rToBRatio,
-        frameSize: `${imageData.width}x${imageData.height}`,
-        frameCount: this.frameProcessedCount
-      });
+      if (shouldLog) {
+        console.log("PPGSignalProcessor: Frame datos extraídos:", { 
+          redValue, 
+          textureScore, 
+          rToGRatio, 
+          rToBRatio,
+          frameSize: `${imageData.width}x${imageData.height}`,
+          frameCount: this.frameProcessedCount
+        });
+      }
       
       // 2. Manejo de calibración si está activa
       if (this.isCalibrating) {
@@ -165,11 +175,13 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
             rawValue: redValue,
             filteredValue: this.kalmanFilter.filter(redValue),
             quality: 40, // Calidad fija durante calibración
-            fingerDetected: redValue > 2, // Extremadamente permisivo durante calibración
+            fingerDetected: redValue > 1, // Extremadamente permisivo durante calibración
             roi: roi,
             perfusionIndex: 0.1
           };
           this.onSignalReady(provSignal);
+        } else {
+          console.error("PPGSignalProcessor: onSignalReady callback no disponible durante calibración");
         }
         
         return; // No continuamos el procesamiento normal
@@ -200,23 +212,23 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // 7. Actualizar puntuaciones de detectores
       const calibrationValues = this.calibrationHandler.getCalibrationValues();
       
-      // Aplicamos una lógica mucho más permisiva para el detector de canal rojo
+      // Aplicamos una lógica extremadamente permisiva para el detector de canal rojo
       let redChannelScore = 0;
-      if (redValue > calibrationValues.minRedThreshold * 0.5) { // Reducido a la mitad
-        // Función más sensible para la puntuación de rojo
-        redChannelScore = Math.min(1.0, (redValue - calibrationValues.minRedThreshold * 0.5) / 
-                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold * 0.5));
-      } else if (redValue > 5) { // Detector incluso con valores muy bajos
+      if (redValue > calibrationValues.minRedThreshold * 0.3) { // Reducido aún más
+        // Función mucho más sensible para la puntuación de rojo
+        redChannelScore = Math.min(1.0, (redValue - calibrationValues.minRedThreshold * 0.3) / 
+                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold * 0.3));
+      } else if (redValue > 3) { // Detector incluso con valores muy bajos
         // Puntuar valores cercanos al umbral para mejorar detección
-        redChannelScore = 0.5 * (redValue / (calibrationValues.minRedThreshold * 0.5));
+        redChannelScore = 0.6 * (redValue / (calibrationValues.minRedThreshold * 0.3));
       }
       
       this.signalAnalyzer.updateDetectorScores({
         redValue,
         redChannel: redChannelScore,
         stability: trendScores.stability,
-        pulsatility: perfusionIndex > 0.01 && perfusionIndex < 5 ? // Mucho más permisivo
-                    Math.min(1, perfusionIndex * 3.5) : 0,  // Factor aumentado para mejorar detección
+        pulsatility: perfusionIndex > 0.005 ? // Extremadamente permisivo
+                    Math.min(1, perfusionIndex * 5) : 0,  // Factor aumentado significativamente
         biophysical: biophysicalResult.confidence,
         periodicity: trendScores.periodicity
       });
@@ -237,16 +249,19 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       };
       
       // Log periódico para diagnóstico
-      console.log("PPGSignalProcessor: Estado de detección de dedo:", {
-        fingerDetected: isFingerDetected,
-        quality,
-        redValue,
-        filteredValue: sgFiltered,
-        perfusionIndex,
-        trendResult,
-        calibrationMin: calibrationValues.minRedThreshold,
-        calibrationMax: calibrationValues.maxRedThreshold
-      });
+      if (shouldLog || isFingerDetected !== this.signalAnalyzer['isCurrentlyDetected']) {
+        console.log("PPGSignalProcessor: Estado de detección de dedo:", {
+          fingerDetected: isFingerDetected,
+          quality,
+          redValue,
+          filteredValue: sgFiltered,
+          perfusionIndex,
+          trendResult,
+          calibrationMin: calibrationValues.minRedThreshold,
+          calibrationMax: calibrationValues.maxRedThreshold,
+          frameCount: this.frameProcessedCount
+        });
+      }
       
       // 10. Almacenar último valor estable y enviar señal
       if (isFingerDetected) {
@@ -255,6 +270,8 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       
       if (this.onSignalReady) {
         this.onSignalReady(processedSignal);
+      } else {
+        console.error("PPGSignalProcessor: onSignalReady callback no disponible en processFrame");
       }
     } catch (error) {
       console.error("PPGSignalProcessor: Error procesando frame", error);
@@ -269,6 +286,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       message,
       timestamp: Date.now()
     };
-    this.onError?.(error);
+    if (this.onError) {
+      this.onError(error);
+    } else {
+      console.error("PPGSignalProcessor: onError callback no disponible, no se puede reportar error:", error);
+    }
   }
 }

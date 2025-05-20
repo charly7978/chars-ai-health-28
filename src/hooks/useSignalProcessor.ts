@@ -1,7 +1,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PPGSignalProcessor } from '../modules/SignalProcessor';
+import { PPGSignalProcessor } from '../modules/SignalProcessor'; // Verifica esta importación
 import { ProcessedSignal, ProcessingError } from '../types/signal';
+import { toast } from "@/components/ui/use-toast";
 
 export const useSignalProcessor = () => {
   const [processor] = useState(() => {
@@ -9,7 +10,31 @@ export const useSignalProcessor = () => {
       timestamp: new Date().toISOString(),
       sessionId: Math.random().toString(36).substring(2, 9)
     });
-    return new PPGSignalProcessor();
+    
+    // IMPORTANTE: Asegurarnos de proporcionar los callbacks correctamente
+    const newProcessor = new PPGSignalProcessor(
+      (signal: ProcessedSignal) => {
+        console.log("Callback onSignalReady llamado correctamente", {
+          timestamp: new Date(signal.timestamp).toISOString(),
+          fingerDetected: signal.fingerDetected,
+          quality: signal.quality
+        });
+      },
+      (error: ProcessingError) => {
+        console.error("Callback onError llamado correctamente", {
+          code: error.code,
+          message: error.message,
+          timestamp: new Date(error.timestamp).toISOString()
+        });
+        toast({
+          title: "Error en el procesador de señal",
+          description: error.message,
+          variant: "destructive"
+        });
+      }
+    );
+    
+    return newProcessor;
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastSignal, setLastSignal] = useState<ProcessedSignal | null>(null);
@@ -56,15 +81,15 @@ export const useSignalProcessor = () => {
     // 3. Criterio de variabilidad PPG: verificar cambios fisiológicamente plausibles
     const filteredValues = recentHistory.map(s => s.filteredValue);
     const maxDiff = Math.max(...filteredValues) - Math.min(...filteredValues);
-    const hasPlausibleVariation = maxDiff > 0.5 && maxDiff < 50;
+    const hasPlausibleVariation = maxDiff > 0.3 && maxDiff < 50; // Más permisivo
     
     // 4. Criterio de perfusión: verificar índice de perfusión plausible
     const avgPerfusion = recentHistory.reduce((sum, s) => sum + (s.perfusionIndex || 0), 0) / recentHistory.length;
-    const hasPerfusion = avgPerfusion > 0.05 && avgPerfusion < 5;
+    const hasPerfusion = avgPerfusion > 0.03 && avgPerfusion < 5; // Más permisivo
     
-    // Combinar criterios para decisión final - MUCHO MÁS PERMISIVO
+    // Combinar criterios para decisión final - EXTREMADAMENTE PERMISIVO
     const validFingerDetection = 
-      (detectionRatio > 0.5) || // Reducido de 0.8 a 0.5
+      (detectionRatio > 0.4) || // Reducido aún más
       (qualityConsistency && (hasPlausibleVariation || hasPerfusion)); 
     
     // Registrar transiciones de calidad significativas para análisis
@@ -111,6 +136,7 @@ export const useSignalProcessor = () => {
       processorExists: !!processor
     });
     
+    // IMPORTANTE: Asignar los callbacks correctamente
     processor.onSignalReady = (signal: ProcessedSignal) => {
       // AUMENTAR ROI PARA AYUDAR A DETECCIÓN
       if (signal.roi) {
@@ -176,6 +202,15 @@ export const useSignalProcessor = () => {
         stack: new Error().stack
       });
       setError(error);
+      
+      // Mostrar toast de error solo para errores críticos
+      if (error.code.includes("ERROR")) {
+        toast({
+          title: "Error en procesamiento de señal",
+          description: error.message,
+          variant: "destructive"
+        });
+      }
     };
 
     console.log("useSignalProcessor: Iniciando procesador", {
@@ -187,6 +222,12 @@ export const useSignalProcessor = () => {
         message: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString()
+      });
+      
+      toast({
+        title: "Error de inicialización",
+        description: "No se pudo inicializar el procesador de señal",
+        variant: "destructive"
       });
     });
 
