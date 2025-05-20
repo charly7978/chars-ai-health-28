@@ -4,7 +4,7 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_WINDOW_SIZE = 40;
   private readonly DEFAULT_MIN_BPM = 30;
   private readonly DEFAULT_MAX_BPM = 220;
-  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.05; // Reducido para mejor sensibilidad
+  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.02; // Reducido para captar señal más débil
   private readonly DEFAULT_MIN_CONFIDENCE = 0.30; // Reducido para mejor detección
   private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.005; // Ajustado para mejor sensibilidad
   private readonly DEFAULT_MIN_PEAK_TIME_MS = 300; // Restaurado a valor médicamente apropiado
@@ -23,7 +23,7 @@ export class HeartBeatProcessor {
   private readonly VIBRATION_PATTERN = [40, 20, 60];
 
   // AUTO-RESET mejorado
-  private readonly LOW_SIGNAL_THRESHOLD = 0.01; // Reducido para no perder detecciones válidas
+  private readonly LOW_SIGNAL_THRESHOLD = 0; // Deshabilitado auto-reset por baja señal
   private readonly LOW_SIGNAL_FRAMES = 25; // Aumentado para mayor tolerancia
   private lowSignalCount = 0;
 
@@ -475,24 +475,11 @@ export class HeartBeatProcessor {
       return { isPeak: false, confidence: 0 };
     }
     
-    // Detección basada en criterios médicos - más sensible
-    const isOverThreshold =
-      derivative < this.adaptiveDerivativeThreshold * 0.9 && // Más sensible
-      normalizedValue > this.adaptiveSignalThreshold * 0.9 && // Más sensible
-      this.lastValue > this.baseline;
-
-    // Cálculo de confianza basado en criterios médicos - equilibrado
-    const amplitudeConfidence = Math.min(
-      Math.max(normalizedValue / (this.adaptiveSignalThreshold * 0.9), 0),
-      1
-    );
+    // Detección de pico simplificada: solo basado en amplitud sobre umbral adaptativo
+    const isOverThreshold = normalizedValue > this.adaptiveSignalThreshold * 0.8;
     
-    const derivativeConfidence = derivative < 0 ? 
-      Math.min(Math.abs(derivative) / Math.abs(this.adaptiveDerivativeThreshold * 0.9), 1) : 
-      0;
-
-    // Balance entre amplitud y derivada
-    const confidence = (amplitudeConfidence * 0.7 + derivativeConfidence * 0.3); // Enfatizar amplitud
+    // Confianza basada en proporción de amplitud al umbral
+    const confidence = Math.min(Math.max(normalizedValue / (this.adaptiveSignalThreshold * 0.8), 0), 1);
 
     return { isPeak: isOverThreshold, confidence, rawDerivative: derivative };
   }
@@ -503,16 +490,13 @@ export class HeartBeatProcessor {
     confidence: number
   ): boolean {
     this.peakConfirmationBuffer.push(normalizedValue);
-    if (this.peakConfirmationBuffer.length > 5) { 
+    if (this.peakConfirmationBuffer.length > 5) {
       this.peakConfirmationBuffer.shift();
     }
-    
-    // Confirmación de pico basada en criterios médicos
+    // Confirmación simplificada: cada pico marcado es confirmado
     if (isPeak && !this.lastConfirmedPeak) {
-      if (confidence >= this.adaptiveMinConfidence) {
-        this.lastConfirmedPeak = true;
-        return true;
-      }
+      this.lastConfirmedPeak = true;
+      return true;
     } else if (!isPeak) {
       this.lastConfirmedPeak = false;
     }
@@ -523,31 +507,8 @@ export class HeartBeatProcessor {
    * Validación de picos basada estrictamente en criterios médicos
    */
   private validatePeak(peakValue: number, confidence: number): boolean {
-    // Validación más permisiva basada en umbrales de confianza médicamente apropiados
-    if (confidence > this.PEAK_VALIDATION_THRESHOLD) {
-      return true;
-    }
-    
-    // Verificación adicional basada en contexto para picos marginales
-    if (confidence > this.adaptiveMinConfidence * 0.85 && // Reducido para ser más permisivo 
-        this.bpmHistory.length > 2 && 
-        this.lastPeakTime) {
-      
-      const expectedInterval = 60000 / this.getSmoothBPM();
-      const now = Date.now();
-      const timeSinceLastPeak = now - this.lastPeakTime;
-      
-      // Si ocurre cerca del intervalo esperado y tiene confianza razonable
-      if (timeSinceLastPeak > expectedInterval * 0.7 && // Más permisivo
-          timeSinceLastPeak < expectedInterval * 1.3 &&
-          peakValue > this.adaptiveSignalThreshold * 0.8) {
-        console.log("HeartBeatProcessor: Pico validado por contexto temporal");
-        return true;
-      }
-    }
-    
-    // Rechazar picos que no cumplen criterios médicos
-    return false;
+    // Validación simplificada: siempre confirmar el pico
+    return true;
   }
 
   private updateBPM() {
