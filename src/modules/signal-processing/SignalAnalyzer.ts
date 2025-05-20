@@ -162,32 +162,29 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Detección de dedo con hysteresis, umbral adaptativo y varios indicadores
-    const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold
-      && this.detectorScores.stability > 0.3
-      && this.detectorScores.pulsatility > 0.3;
-    if (rojoOk) {
-      this.consecutiveDetections++;
-      this.consecutiveNoDetections = 0;
+    // Detección simplificada basada en media de calidad con hysteresis
+    this.qualityHistory.push(this.detectorScores.redChannel);
+    if (this.qualityHistory.length > 5) {
+      this.qualityHistory.shift();
+    }
+    const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
+    const thresholdOn = 0.15;
+    const thresholdOff = 0.1;
+    if (this.isCurrentlyDetected) {
+      if (avgQuality < thresholdOff) {
+        this.isCurrentlyDetected = false;
+      }
     } else {
-      this.consecutiveNoDetections++;
-      this.consecutiveDetections = 0;
+      if (avgQuality > thresholdOn) {
+        this.isCurrentlyDetected = true;
+      }
     }
-    // Cambiar estado tras suficientes frames consecutivos
-    if (this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
-      this.isCurrentlyDetected = true;
-    } else if (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
-      this.isCurrentlyDetected = false;
-    }
-    // Calidad en porcentaje solo cuando hay detección
-    const quality = this.isCurrentlyDetected
-      ? Math.round(this.detectorScores.redChannel * 100)
-      : 0;
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality,
+      quality: Math.round(avgQuality * 100),
       detectorDetails: {
-        ...this.detectorScores
+        ...this.detectorScores,
+        avgQuality
       }
     };
   }
