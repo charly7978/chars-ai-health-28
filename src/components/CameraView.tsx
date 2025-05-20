@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { toast } from "@/components/ui/use-toast";
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -95,6 +96,16 @@ const CameraView = ({
       console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log("CameraView: Acceso a la cámara obtenido exitosamente");
+      
+      // NUEVO: Verificación de callback
+      if (!onStreamReady) {
+        console.error("CameraView: onStreamReady callback no disponible");
+        toast({
+          title: "Error de cámara",
+          description: "No hay callback para procesar el video",
+          variant: "destructive"
+        });
+      }
       
       const videoTrack = newStream.getVideoTracks()[0];
 
@@ -208,8 +219,20 @@ const CameraView = ({
       setStream(newStream);
       cameraInitialized.current = true;
       
+      // CRÍTICO: Asegurar que el callback se llame correctamente
       if (onStreamReady) {
+        console.log("CameraView: Llamando onStreamReady con stream:", {
+          hasVideoTracks: newStream.getVideoTracks().length > 0,
+          streamActive: newStream.active,
+          timestamp: new Date().toISOString()
+        });
         onStreamReady(newStream);
+        
+        // Verificación adicional: llamar de nuevo después de un retraso
+        setTimeout(() => {
+          console.log("CameraView: Llamando onStreamReady de nuevo después de retraso");
+          onStreamReady(newStream);
+        }, 1000);
       }
     } catch (err) {
       console.error("CameraView: Error al iniciar la cámara:", err);
