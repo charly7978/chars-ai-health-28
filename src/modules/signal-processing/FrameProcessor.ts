@@ -50,9 +50,10 @@ export class FrameProcessor {
         cells[cellIdx].blue += b;
         cells[cellIdx].count++;
         
-        // Criterio de dominancia de rojo más permisivo para facilitar detección de dedo
-        // Reducimos el umbral de 1.05 a 1.02 para ser más sensible
-        if (r > g * 1.02 && r > b * 1.02) {
+        // *** CAMBIO CRÍTICO: CRITERIO DE DETECCIÓN MUCHO MÁS PERMISIVO ***
+        // Detectamos cualquier pixel con predominancia de rojo mínima
+        // El umbral se redujo dramáticamente para mejorar la detección
+        if (r > g * 1.0 && r > b * 1.0) {
           redSum += r;
           greenSum += g;
           blueSum += b;
@@ -100,14 +101,15 @@ export class FrameProcessor {
           
           // Mayor variación indica más textura
           // Normalizar a rango 0-1 con curva óptima para piel
-          const normalizedVar = avgVariation / 20; // Reducido de 25 a 20 para ser más sensible
+          const normalizedVar = avgVariation / 10; // Reducido drásticamente para ser mucho más sensible
           textureScore = Math.min(1, normalizedVar);
         }
       }
     }
     
-    // Reducir el umbral mínimo de píxeles para considerar detección
-    if (pixelCount < 5) {  // Cambiado de 10 a 5 para ser más sensible
+    // *** CAMBIO CRÍTICO: UMBRAL MÍNIMO REDUCIDO A 1 PIXEL ***
+    // Esto prácticamente garantiza que cualquier presencia de rojo se detecte
+    if (pixelCount < 1) {
       return { 
         redValue: 0, 
         textureScore: 0, 

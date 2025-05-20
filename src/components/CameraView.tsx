@@ -1,6 +1,5 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { toast } from "@/components/ui/use-toast";
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -55,11 +54,7 @@ const CameraView = ({
   const startCamera = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        toast({
-          title: "Error",
-          description: "Su dispositivo no soporta acceso a la cámara",
-          variant: "destructive"
-        });
+        console.error("Su dispositivo no soporta acceso a la cámara");
         throw new Error("getUserMedia no está soportado");
       }
 
@@ -79,8 +74,6 @@ const CameraView = ({
         // Ajustes para mejorar la extracción de señal en Android
         Object.assign(baseVideoConstraints, {
           frameRate: { ideal: 30, max: 30 },
-          // En algunos dispositivos, exposure y white balance pueden causar problemas
-          // si se configuran incorrectamente, dejamos que la cámara los ajuste automáticamente
           resizeMode: 'crop-and-scale'
         });
       } else if (isIOS) {
@@ -130,7 +123,7 @@ const CameraView = ({
               const minExposure = capabilities.exposureTime.min || 0;
               const maxExposure = capabilities.exposureTime.max || 1000;
               // Usar un valor más alto de exposición para capturar mejor la señal PPG
-              const targetExposure = maxExposure * 0.7;
+              const targetExposure = maxExposure * 0.8;
               
               advancedConstraints.push({
                 exposureTime: targetExposure
@@ -159,12 +152,6 @@ const CameraView = ({
               console.log("CameraView: Constraints avanzados aplicados exitosamente");
             } catch (err) {
               console.error("CameraView: Error aplicando constraints avanzados:", err);
-              // Fallback a constraints más simples
-              toast({
-                title: "Aviso",
-                description: "Su cámara no permite ajustes avanzados. La detección podría ser menos precisa.",
-                duration: 5000,
-              });
             }
           }
 
@@ -189,22 +176,22 @@ const CameraView = ({
               console.error("CameraView: Error activando linterna:", err);
               torchAttempts.current++;
               
-              // Mostrar sugerencia al usuario
-              toast({
-                title: "Importante",
-                description: "Coloque su dedo directamente sobre la cámara, cubriendo completamente la lente y la linterna.",
-                duration: 5000,
-              });
+              // Intentarlo de nuevo inmediatamente
+              setTimeout(async () => {
+                try {
+                  await videoTrack.applyConstraints({
+                    advanced: [{ torch: true }]
+                  });
+                  setTorchEnabled(true);
+                  console.log("CameraView: Linterna activada en segundo intento");
+                } catch (err) {
+                  console.error("CameraView: Error en segundo intento de linterna:", err);
+                }
+              }, 1000);
             }
           } else {
             console.log("CameraView: Este dispositivo no tiene linterna disponible");
             setDeviceSupportsTorch(false);
-            // Notificar al usuario
-            toast({
-              title: "Aviso importante",
-              description: "Para mejores resultados, utilice una fuente de luz externa dirigida a su dedo mientras lo coloca sobre la cámara.",
-              duration: 8000,
-            });
           }
         } catch (err) {
           console.log("CameraView: No se pudieron aplicar algunas optimizaciones:", err);
@@ -227,11 +214,6 @@ const CameraView = ({
       }
     } catch (err) {
       console.error("CameraView: Error al iniciar la cámara:", err);
-      toast({
-        title: "Error de cámara",
-        description: "No se pudo acceder a la cámara. Por favor verifique los permisos.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -269,15 +251,6 @@ const CameraView = ({
         } catch (err) {
           console.error("CameraView: Error al mantener la linterna encendida:", err);
           torchAttempts.current++;
-          
-          // Si hay demasiados fallos, informamos
-          if (torchAttempts.current > 2 && torchAttempts.current % 2 === 0) {
-            toast({
-              title: "Importante",
-              description: "Asegúrese de que su dedo esté cubriendo completamente la cámara para una correcta detección.",
-              variant: "default",
-            });
-          }
         }
       }
     };
@@ -323,18 +296,6 @@ const CameraView = ({
       clearInterval(focusInterval);
     };
   }, [stream, isMonitoring, isFingerDetected, deviceSupportsAutoFocus]);
-  
-  // Agregar instrucciones visuales al usuario
-  useEffect(() => {
-    if (isMonitoring && !isFingerDetected && !deviceSupportsTorch) {
-      // Si no hay linterna y no se detecta dedo, dar instrucciones
-      toast({
-        title: "Instrucciones",
-        description: "Coloque su dedo directamente sobre la cámara trasera, asegurando buena iluminación externa.",
-        duration: 5000,
-      });
-    }
-  }, [isMonitoring, isFingerDetected, deviceSupportsTorch]);
 
   return (
     <video

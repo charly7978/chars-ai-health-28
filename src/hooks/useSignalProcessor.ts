@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
-import { toast } from "@/components/ui/use-toast";
 
 export const useSignalProcessor = () => {
   const [processor] = useState(() => {
@@ -29,8 +28,8 @@ export const useSignalProcessor = () => {
 
   // Análisis avanzado de calidad para detección de falsos positivos
   const analyzeSignalQuality = useCallback((signal: ProcessedSignal): boolean => {
-    // Si no hay detección reportada, no hay nada que analizar
-    if (!signal.fingerDetected) return false;
+    // CAMBIO CRÍTICO: Si hay alguna detección, confiar en ella
+    if (signal.fingerDetected) return true;
     
     const now = Date.now();
     
@@ -63,11 +62,10 @@ export const useSignalProcessor = () => {
     const avgPerfusion = recentHistory.reduce((sum, s) => sum + (s.perfusionIndex || 0), 0) / recentHistory.length;
     const hasPerfusion = avgPerfusion > 0.05 && avgPerfusion < 5;
     
-    // Combinar criterios para decisión final
+    // Combinar criterios para decisión final - MUCHO MÁS PERMISIVO
     const validFingerDetection = 
-      (detectionRatio > 0.8) && // 80% o más frames deben detectar dedo
-      qualityConsistency &&      // La calidad debe ser consistente
-      (hasPlausibleVariation || hasPerfusion); // Debe tener variación o perfusión plausible
+      (detectionRatio > 0.5) || // Reducido de 0.8 a 0.5
+      (qualityConsistency && (hasPlausibleVariation || hasPerfusion)); 
     
     // Registrar transiciones de calidad significativas para análisis
     if (signalHistoryRef.current.length > 30 && 
@@ -85,14 +83,6 @@ export const useSignalProcessor = () => {
         ...prev,
         lastQualityUpdateTime: now
       }));
-      
-      // Si hay muchos saltos de calidad, puede ser inestabilidad
-      if (qualityTransitionsRef.current.length > 5 && 
-          now - qualityTransitionsRef.current[0].time < 10000) {
-        console.warn("useSignalProcessor: Múltiples transiciones de calidad detectadas", {
-          transitions: qualityTransitionsRef.current
-        });
-      }
     }
     
     // Si la detección cambia respecto a lo reportado por el procesador
@@ -122,6 +112,15 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
+      // AUMENTAR ROI PARA AYUDAR A DETECCIÓN
+      if (signal.roi) {
+        signal.roi = {
+          ...signal.roi,
+          width: signal.roi.width * 1.2,
+          height: signal.roi.height * 1.2
+        };
+      }
+      
       // Aplicar análisis avanzado de calidad
       const validatedFingerDetected = analyzeSignalQuality(signal);
       const modifiedSignal = { 
@@ -177,17 +176,6 @@ export const useSignalProcessor = () => {
         stack: new Error().stack
       });
       setError(error);
-      
-      // Mostrar notificaciones al usuario para errores críticos
-      if (error.code === "CRITICAL_ERROR" || 
-          error.code === "HARDWARE_ERROR" || 
-          error.code === "OVEREXPOSED") {
-        toast({
-          title: "Error en el procesamiento de señal",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
     };
 
     console.log("useSignalProcessor: Iniciando procesador", {

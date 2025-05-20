@@ -29,18 +29,18 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   // Configuración basada en nuestro plan - ajustada para mejorar detección
   private readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 30,   // Reducido de 40 a 30 para ser más sensible
+    MIN_RED_THRESHOLD: 15,   // Reducido drásticamente para máxima sensibilidad
     MAX_RED_THRESHOLD: 250,
     STABILITY_WINDOW: 6,
-    MIN_STABILITY_COUNT: 3,  // Reducido de 4 a 3
-    HYSTERESIS: 3,
-    MIN_CONSECUTIVE_DETECTIONS: 2,  // Reducido de 3 a 2 para detección más rápida
-    MAX_CONSECUTIVE_NO_DETECTIONS: 3,  // Aumentado de 2 a 3 para mantener la detección
+    MIN_STABILITY_COUNT: 2,  // Reducido para detección más rápida
+    HYSTERESIS: 2,  // Reducido para más sensibilidad
+    MIN_CONSECUTIVE_DETECTIONS: 1,  // Reducido a 1 para detección inmediata
+    MAX_CONSECUTIVE_NO_DETECTIONS: 6,  // Aumentado para mantener la detección más tiempo
     QUALITY_LEVELS: 20,
     QUALITY_HISTORY_SIZE: 10,
-    CALIBRATION_SAMPLES: 30,
+    CALIBRATION_SAMPLES: 20, // Reducido para calibración más rápida
     TEXTURE_GRID_SIZE: 8,
-    ROI_SIZE_FACTOR: 0.25
+    ROI_SIZE_FACTOR: 0.3 // Aumentado para capturar mayor área
   };
   
   constructor(
@@ -138,16 +138,15 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
-      if (shouldLog) {
-        console.log("PPGSignalProcessor: Frame datos extraídos:", { 
-          redValue, 
-          textureScore, 
-          rToGRatio, 
-          rToBRatio,
-          frameSize: `${imageData.width}x${imageData.height}`,
-          frameCount: this.frameProcessedCount
-        });
-      }
+      // Loguear siempre para diagnóstico
+      console.log("PPGSignalProcessor: Frame datos extraídos:", { 
+        redValue, 
+        textureScore, 
+        rToGRatio, 
+        rToBRatio,
+        frameSize: `${imageData.width}x${imageData.height}`,
+        frameCount: this.frameProcessedCount
+      });
       
       // 2. Manejo de calibración si está activa
       if (this.isCalibrating) {
@@ -166,7 +165,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
             rawValue: redValue,
             filteredValue: this.kalmanFilter.filter(redValue),
             quality: 40, // Calidad fija durante calibración
-            fingerDetected: redValue > 5, // Más permisivo durante calibración (antes era 10)
+            fingerDetected: redValue > 2, // Extremadamente permisivo durante calibración
             roi: roi,
             perfusionIndex: 0.1
           };
@@ -201,23 +200,23 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // 7. Actualizar puntuaciones de detectores
       const calibrationValues = this.calibrationHandler.getCalibrationValues();
       
-      // Aplicamos una lógica más permisiva para el detector de canal rojo
+      // Aplicamos una lógica mucho más permisiva para el detector de canal rojo
       let redChannelScore = 0;
-      if (redValue > calibrationValues.minRedThreshold) {
+      if (redValue > calibrationValues.minRedThreshold * 0.5) { // Reducido a la mitad
         // Función más sensible para la puntuación de rojo
-        redChannelScore = Math.min(1, (redValue - calibrationValues.minRedThreshold) / 
-                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold));
-      } else if (redValue > calibrationValues.minRedThreshold * 0.7) {
+        redChannelScore = Math.min(1.0, (redValue - calibrationValues.minRedThreshold * 0.5) / 
+                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold * 0.5));
+      } else if (redValue > 5) { // Detector incluso con valores muy bajos
         // Puntuar valores cercanos al umbral para mejorar detección
-        redChannelScore = 0.5 * (redValue / calibrationValues.minRedThreshold);
+        redChannelScore = 0.5 * (redValue / (calibrationValues.minRedThreshold * 0.5));
       }
       
       this.signalAnalyzer.updateDetectorScores({
         redValue,
         redChannel: redChannelScore,
         stability: trendScores.stability,
-        pulsatility: perfusionIndex > 0.05 && perfusionIndex < 2 ? // Reducido de 0.08 a 0.05
-                    Math.min(1, perfusionIndex * 2.5) : 0,  // Aumentado de 2 a 2.5
+        pulsatility: perfusionIndex > 0.01 && perfusionIndex < 5 ? // Mucho más permisivo
+                    Math.min(1, perfusionIndex * 3.5) : 0,  // Factor aumentado para mejorar detección
         biophysical: biophysicalResult.confidence,
         periodicity: trendScores.periodicity
       });
@@ -238,18 +237,16 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       };
       
       // Log periódico para diagnóstico
-      if (shouldLog) {
-        console.log("PPGSignalProcessor: Estado de detección de dedo:", {
-          fingerDetected: isFingerDetected,
-          quality,
-          redValue,
-          filteredValue: sgFiltered,
-          perfusionIndex,
-          trendResult,
-          calibrationMin: calibrationValues.minRedThreshold,
-          calibrationMax: calibrationValues.maxRedThreshold
-        });
-      }
+      console.log("PPGSignalProcessor: Estado de detección de dedo:", {
+        fingerDetected: isFingerDetected,
+        quality,
+        redValue,
+        filteredValue: sgFiltered,
+        perfusionIndex,
+        trendResult,
+        calibrationMin: calibrationValues.minRedThreshold,
+        calibrationMax: calibrationValues.maxRedThreshold
+      });
       
       // 10. Almacenar último valor estable y enviar señal
       if (isFingerDetected) {

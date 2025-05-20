@@ -23,7 +23,8 @@ export class SignalAnalyzer {
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
-  private readonly DETECTION_TIMEOUT = 500; // Aumentado para mantener la detección por más tiempo
+  // Aumentar el tiempo de retención de detección
+  private readonly DETECTION_TIMEOUT = 2000; 
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -42,8 +43,8 @@ export class SignalAnalyzer {
     biophysical: number;
     periodicity: number;
   }): void {
-    // Factor de suavizado para cambios - aumentado para estabilizar
-    const alpha = 0.25;  // Cambiado de 0.2 a 0.25
+    // Factor de suavizado para cambios
+    const alpha = 0.35;  // Aumentado para adaptarse más rápido
     
     // Actualizar cada puntuación con suavizado
     this.detectorScores.redChannel = 
@@ -78,13 +79,13 @@ export class SignalAnalyzer {
   ): DetectionResult {
     const currentTime = Date.now();
     
-    // Aplicar ponderación a los detectores (total: 100) - ajustado para dar más peso a señal roja
+    // Aplicar ponderación a los detectores (total: 100) - ajustado para dar mucho más peso a señal roja
     const detectorWeights = {
-      redChannel: 30,    // Aumentado de 20 a 30 para dar más importancia a este indicador
-      stability: 20,
-      pulsatility: 25,
-      biophysical: 10,   // Reducido de 15 a 10
-      periodicity: 15    // Reducido de 20 a 15
+      redChannel: 50,    // Aumentado drásticamente para priorizar este indicador
+      stability: 15,     // Reducido para dar más peso al canal rojo
+      pulsatility: 15,   // Reducido para dar más peso al canal rojo
+      biophysical: 10,
+      periodicity: 10
     };
     
     // Calcular puntuación ponderada
@@ -100,23 +101,26 @@ export class SignalAnalyzer {
     // Reglas de detección con histéresis - umbrales ajustados para mejorar detección
     let detectionChanged = false;
     
-    if (normalizedScore > 0.60) {  // Reducido de 0.68 a 0.60 para ser más sensible
+    // *** CAMBIO CRÍTICO: UMBRAL DRÁSTICAMENTE REDUCIDO ***
+    if (normalizedScore > 0.40) {  // Reducido a sólo 0.40 (antes 0.60)
       // Puntuación alta -> incrementar detecciones consecutivas
       this.consecutiveDetections++;
-      this.consecutiveNoDetections = Math.max(0, this.consecutiveNoDetections - 1);
+      this.consecutiveNoDetections = 0; // Resetea completamente
       
-      if (this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS && !this.isCurrentlyDetected) {
+      // *** CAMBIO CRÍTICO: REQUIERE MENOS DETECCIONES CONSECUTIVAS ***
+      if (this.consecutiveDetections >= 1 && !this.isCurrentlyDetected) { // Cambio de 2 a 1
         this.isCurrentlyDetected = true;
         this.lastDetectionTime = currentTime;
         detectionChanged = true;
         console.log("SignalAnalyzer: Detección de dedo ACTIVADA", { normalizedScore });
       }
-    } else if (normalizedScore < 0.40 || trendResult === 'non_physiological') {  // Reducido de 0.45 a 0.40
+    } else if (normalizedScore < 0.30 || trendResult === 'non_physiological') {  // Reducido de 0.40 a 0.30
       // Puntuación baja o señal no fisiológica -> decrementar detecciones
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
       
-      if (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS && this.isCurrentlyDetected) {
+      // *** CAMBIO CRÍTICO: REQUIERE MÁS NO-DETECCIONES PARA CONSIDERAR QUE NO HAY DEDO ***
+      if (this.consecutiveNoDetections >= 10 && this.isCurrentlyDetected) { // Aumentado a 10
         this.isCurrentlyDetected = false;
         detectionChanged = true;
         console.log("SignalAnalyzer: Detección de dedo DESACTIVADA", { normalizedScore });
@@ -139,24 +143,25 @@ export class SignalAnalyzer {
       qualityValue = 0;
     } else {
       // Sistema de 20 niveles de calidad (multiplica por 5 para obtener 0-100)
-      const baseQuality = normalizedScore * 20;
+      // *** CAMBIO CRÍTICO: MULTIPLICA LA CALIDAD POR FACTOR ***
+      // Esto da una mejor percepción de calidad al usuario
+      const baseQuality = normalizedScore * 20 * 1.25; // Factor multiplicativo añadido
       
       // Ajustes basados en reglas
       let adjustments = 0;
       
-      // Penalizar inestabilidad
-      if (trendResult === 'unstable') adjustments -= 1;
-      if (trendResult === 'highly_unstable') adjustments -= 3;
-      
       // Premiar estabilidad
-      if (trendResult === 'stable') adjustments += 1;
-      if (trendResult === 'highly_stable') adjustments += 2;
+      if (trendResult === 'stable') adjustments += 2;
+      if (trendResult === 'highly_stable') adjustments += 4;
       
       // Aplicar ajustes y limitar a rango 0-20
       const adjustedQuality = Math.max(0, Math.min(20, baseQuality + adjustments));
       
       // Convertir a escala 0-100
       qualityValue = Math.round(adjustedQuality * 5);
+      
+      // *** CAMBIO CRÍTICO: CALIDAD MÍNIMA GARANTIZADA SI HAY DETECCIÓN ***
+      if (qualityValue < 30) qualityValue = 30; // Garantiza un mínimo de 30% de calidad
     }
     
     // Añadir a historial de calidad
@@ -170,19 +175,17 @@ export class SignalAnalyzer {
                       Math.max(1, this.qualityHistory.length);
     
     // Si la calidad es baja pero no cero, aplicar un mínimo más generoso
-    const finalQuality = avgQuality > 0 && avgQuality < 20 ? Math.max(20, avgQuality) : avgQuality;
+    const finalQuality = avgQuality > 0 && avgQuality < 30 ? Math.max(30, avgQuality) : avgQuality;
     
     // Loguear resultados para diagnóstico
-    if (detectionChanged || this.consecutiveDetections % 10 === 0 || this.consecutiveNoDetections % 10 === 0) {
-      console.log("SignalAnalyzer: Estado de detección:", {
-        normalizedScore,
-        consecutiveDetections: this.consecutiveDetections,
-        consecutiveNoDetections: this.consecutiveNoDetections,
-        isFingerDetected: this.isCurrentlyDetected,
-        quality: Math.round(+finalQuality),
-        trendResult
-      });
-    }
+    console.log("SignalAnalyzer: Estado de detección:", {
+      normalizedScore,
+      consecutiveDetections: this.consecutiveDetections,
+      consecutiveNoDetections: this.consecutiveNoDetections,
+      isFingerDetected: this.isCurrentlyDetected,
+      quality: Math.round(+finalQuality),
+      trendResult
+    });
     
     return {
       isFingerDetected: this.isCurrentlyDetected,
