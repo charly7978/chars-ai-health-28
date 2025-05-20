@@ -215,8 +215,8 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // 2. Apply multi-stage filtering to the signal
       let filteredValue = this.kalmanFilter.filter(redValue);
       filteredValue = this.sgFilter.filter(filteredValue);
-      // Amplificar señal para hacerla más visible en el monitor
-      const AMPLIFICATION_FACTOR = 50;
+      // Remover amplificación excesiva: usar factor 1 para mantener señal original
+      const AMPLIFICATION_FACTOR = 1;
       filteredValue = filteredValue * AMPLIFICATION_FACTOR;
 
       // 3. Perform signal trend analysis with strict physiological validation
