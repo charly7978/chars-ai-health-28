@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -21,6 +20,8 @@ const CameraView = ({
   const lastFrameTimeRef = useRef<number>(0);
   const [deviceSupportsAutoFocus, setDeviceSupportsAutoFocus] = useState(false);
   const [deviceSupportsTorch, setDeviceSupportsTorch] = useState(false);
+  const torchAttempts = useRef<number>(0);
+  const lastFingerStateChange = useRef<number>(0);
 
   const stopCamera = async () => {
     if (stream) {
@@ -63,7 +64,7 @@ const CameraView = ({
       if (isAndroid) {
         // Ajustes para mejorar la extracción de señal en Android
         Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30, max: 30 }, // Limitamos explícitamente a 30 FPS
+          frameRate: { ideal: 30, max: 30 },
           resizeMode: 'crop-and-scale'
         });
       }
@@ -72,38 +73,48 @@ const CameraView = ({
         video: baseVideoConstraints
       };
 
-      console.log("Intentando obtener acceso a la cámara con estos constraints:", constraints);
+      console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log("Acceso a la cámara obtenido exitosamente");
+      console.log("CameraView: Acceso a la cámara obtenido exitosamente");
       
       const videoTrack = newStream.getVideoTracks()[0];
 
       if (videoTrack) {
         try {
           const capabilities = videoTrack.getCapabilities();
-          console.log("Capacidades de la cámara:", capabilities);
+          console.log("CameraView: Capacidades de la cámara:", capabilities);
+          
+          // Resetear contador de intentos de linterna
+          torchAttempts.current = 0;
           
           const advancedConstraints: MediaTrackConstraintSet[] = [];
           
           if (capabilities.exposureMode) {
-            advancedConstraints.push({ exposureMode: 'continuous' });
-            console.log("Modo de exposición continua aplicado");
+            advancedConstraints.push({ 
+              exposureMode: 'continuous',
+              // Fijamos un valor de exposición manual si está disponible
+              exposureTime: capabilities.exposureTime?.max ? 
+                capabilities.exposureTime.max / 2 : undefined
+            });
+            console.log("CameraView: Modo de exposición continua aplicado");
           }
+          
           if (capabilities.focusMode) {
             advancedConstraints.push({ focusMode: 'continuous' });
             setDeviceSupportsAutoFocus(true);
-            console.log("Modo de enfoque continuo aplicado");
+            console.log("CameraView: Modo de enfoque continuo aplicado");
           }
+          
           if (capabilities.whiteBalanceMode) {
             advancedConstraints.push({ whiteBalanceMode: 'continuous' });
-            console.log("Modo de balance de blancos continuo aplicado");
+            console.log("CameraView: Modo de balance de blancos continuo aplicado");
           }
 
           if (advancedConstraints.length > 0) {
             await videoTrack.applyConstraints({
               advanced: advancedConstraints
             });
-            console.log("Constraints avanzados aplicados exitosamente");
+            console.log("CameraView: Constraints avanzados aplicados exitosamente");
           }
 
           if (videoRef.current) {
@@ -111,20 +122,17 @@ const CameraView = ({
             videoRef.current.style.backfaceVisibility = 'hidden';
           }
           
-          // Activar linterna (flash) inmediatamente si está disponible
+          // Linterna activada en base a disponibilidad
           if (capabilities.torch) {
-            console.log("Activando linterna para mejorar la señal PPG");
-            await videoTrack.applyConstraints({
-              advanced: [{ torch: true }]
-            });
-            setTorchEnabled(true);
+            console.log("CameraView: Este dispositivo tiene linterna disponible");
             setDeviceSupportsTorch(true);
+            // No activamos la linterna inmediatamente, esperamos a detectar el dedo
           } else {
-            console.log("Este dispositivo no tiene linterna disponible");
+            console.log("CameraView: Este dispositivo no tiene linterna disponible");
             setDeviceSupportsTorch(false);
           }
         } catch (err) {
-          console.log("No se pudieron aplicar algunas optimizaciones:", err);
+          console.log("CameraView: No se pudieron aplicar algunas optimizaciones:", err);
         }
       }
 
@@ -142,26 +150,26 @@ const CameraView = ({
         onStreamReady(newStream);
       }
     } catch (err) {
-      console.error("Error al iniciar la cámara:", err);
+      console.error("CameraView: Error al iniciar la cámara:", err);
     }
   };
 
   useEffect(() => {
     if (isMonitoring && !stream) {
-      console.log("Starting camera because isMonitoring=true");
+      console.log("CameraView: Starting camera because isMonitoring=true");
       startCamera();
     } else if (!isMonitoring && stream) {
-      console.log("Stopping camera because isMonitoring=false");
+      console.log("CameraView: Stopping camera because isMonitoring=false");
       stopCamera();
     }
     
     return () => {
-      console.log("CameraView component unmounting, stopping camera");
+      console.log("CameraView: Component unmounting, stopping camera");
       stopCamera();
     };
   }, [isMonitoring]);
 
-  // Gestión mejorada de la linterna basada en detección de dedo
+  // Gestión mejorada de la linterna con protección contra cambios frecuentes
   useEffect(() => {
     if (!stream || !deviceSupportsTorch) return;
     
@@ -169,44 +177,77 @@ const CameraView = ({
     if (!videoTrack || !videoTrack.getCapabilities()?.torch) return;
     
     const shouldTorchBeOn = isFingerDetected;
+    const now = Date.now();
+    
+    // Para evitar parpadeos, solo permitimos cambios después de un periodo mínimo
+    if (now - lastFingerStateChange.current < 1000) {
+      console.log("CameraView: Ignorando cambio de estado de linterna (muy frecuente)");
+      return;
+    }
     
     if (shouldTorchBeOn !== torchEnabled) {
-      console.log(`${shouldTorchBeOn ? 'Activando' : 'Desactivando'} linterna basado en detección de dedo:`, {
+      console.log(`CameraView: ${shouldTorchBeOn ? 'Activando' : 'Desactivando'} linterna basado en detección:`, {
         isFingerDetected,
         torchEnabled,
-        signalQuality
+        signalQuality,
+        attempts: torchAttempts.current
       });
       
+      lastFingerStateChange.current = now;
+      
+      // Intentamos cambiar el estado de la linterna
       videoTrack.applyConstraints({
         advanced: [{ torch: shouldTorchBeOn }]
       }).then(() => {
         setTorchEnabled(shouldTorchBeOn);
+        // Reiniciar contador de intentos exitosos
+        if (shouldTorchBeOn) {
+          torchAttempts.current = 0;
+        }
       }).catch(err => {
-        console.error(`Error ${shouldTorchBeOn ? 'activando' : 'desactivando'} linterna:`, err);
+        console.error(`CameraView: Error ${shouldTorchBeOn ? 'activando' : 'desactivando'} linterna:`, err);
+        
+        // Incrementar contador de intentos fallidos
+        if (shouldTorchBeOn) {
+          torchAttempts.current++;
+          
+          // Si fallamos muchas veces, informamos al usuario
+          if (torchAttempts.current > 3) {
+            console.warn("CameraView: Múltiples fallas al activar linterna, posible problema de hardware");
+          }
+        }
       });
     }
-  }, [stream, isFingerDetected, torchEnabled, deviceSupportsTorch]);
+  }, [stream, isFingerDetected, torchEnabled, deviceSupportsTorch, signalQuality]);
 
-  // Intentar enfoque automático periódicamente si el dispositivo lo soporta
+  // Enfoque automático optimizado para la detección PPG
   useEffect(() => {
     if (!stream || !isMonitoring || !deviceSupportsAutoFocus) return;
     
     let focusInterval: number;
     
-    // Si no hay dedo detectado, intentamos enfocar con más frecuencia
-    const focusIntervalTime = isFingerDetected ? 5000 : 2000;
+    // Adaptamos la frecuencia de enfoque según si hay dedo o no
+    const focusIntervalTime = isFingerDetected ? 4000 : 1500;
     
     const attemptRefocus = () => {
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && videoTrack.getCapabilities()?.focusMode) {
-        console.log("Intentando re-enfocar la cámara");
+        console.log("CameraView: Intentando re-enfocar la cámara");
         videoTrack.applyConstraints({
-          advanced: [{ focusMode: 'continuous' }]
+          advanced: [{ 
+            focusMode: 'continuous',
+            // Enfoque macro cuando hay dedo para captar mejor detalles cercanos
+            focusDistance: isFingerDetected ? 
+              { ideal: 0.1, min: 0.05, max: 0.2 } : undefined
+          }]
         }).catch(err => {
-          console.warn("Error al intentar re-enfocar:", err);
+          console.warn("CameraView: Error al intentar re-enfocar:", err);
         });
       }
     };
+    
+    // Enfocamos inmediatamente cuando cambia el estado del dedo
+    attemptRefocus();
     
     focusInterval = window.setInterval(attemptRefocus, focusIntervalTime);
     

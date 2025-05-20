@@ -22,6 +22,40 @@ export const useSignalProcessor = () => {
     totalValues: 0
   });
 
+  // Lógica mejorada para evaluar la detección del dedo con mayor precisión
+  const validateFingerDetection = (signal: ProcessedSignal): boolean => {
+    // Establecemos un umbral de calidad más alto para evitar falsos positivos
+    const MINIMUM_QUALITY_THRESHOLD = 45;
+    
+    // Verificamos que la calidad de la señal supere nuestro umbral
+    const hasGoodQuality = signal.quality >= MINIMUM_QUALITY_THRESHOLD;
+    
+    // Verificamos que el valor filtrado esté en un rango plausible para una señal PPG real
+    const isPlausibleValue = signal.filteredValue > 1.5 && signal.filteredValue < 250;
+    
+    // Verificamos que el índice de perfusión esté en un rango adecuado (si está disponible)
+    const hasGoodPerfusion = signal.perfusionIndex 
+      ? signal.perfusionIndex > 0.08 && signal.perfusionIndex < 5
+      : true;
+    
+    // Un dedo válido debe cumplir con todos estos criterios
+    const isValidFinger = hasGoodQuality && isPlausibleValue && hasGoodPerfusion;
+    
+    // Para debugging, si el resultado cambia respecto a lo reportado por el procesador
+    if (isValidFinger !== signal.fingerDetected) {
+      console.log("useSignalProcessor: Corrección de detección", {
+        processorDetection: signal.fingerDetected,
+        correctedDetection: isValidFinger,
+        quality: signal.quality,
+        filteredValue: signal.filteredValue,
+        perfusionIndex: signal.perfusionIndex,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return isValidFinger;
+  };
+
   useEffect(() => {
     console.log("useSignalProcessor: Configurando callbacks", {
       timestamp: new Date().toISOString(),
@@ -29,9 +63,8 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Ahora confiamos más en la evaluación del procesador pero exigimos una 
-      // calidad mínima de 40 para considerar una detección válida
-      const robustFingerDetected = signal.fingerDetected && signal.quality >= 40;
+      // Mejoramos la evaluación con nuestra función de validación especializada
+      const robustFingerDetected = validateFingerDetection(signal);
       const modifiedSignal = { ...signal, fingerDetected: robustFingerDetected };
       
       console.log("useSignalProcessor: Señal recibida detallada:", {
@@ -41,7 +74,7 @@ export const useSignalProcessor = () => {
         rawValue: modifiedSignal.rawValue,
         filteredValue: modifiedSignal.filteredValue,
         originalFingerDetected: signal.fingerDetected,
-        fingerDetected: modifiedSignal.fingerDetected,
+        validatedFingerDetected: robustFingerDetected,
         roi: modifiedSignal.roi,
         processingTime: Date.now() - modifiedSignal.timestamp
       });
