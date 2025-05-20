@@ -24,6 +24,7 @@ const CameraView = ({
   const [deviceSupportsTorch, setDeviceSupportsTorch] = useState(false);
   const torchAttempts = useRef<number>(0);
   const cameraInitialized = useRef<boolean>(false);
+  const requestedTorch = useRef<boolean>(false);
 
   const stopCamera = async () => {
     if (stream) {
@@ -47,6 +48,7 @@ const CameraView = ({
       setStream(null);
       setTorchEnabled(false);
       cameraInitialized.current = false;
+      requestedTorch.current = false;
     }
   };
 
@@ -64,28 +66,38 @@ const CameraView = ({
       const isAndroid = /android/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-      // Configuración optimizada para captura PPG
-      const baseVideoConstraints: MediaTrackConstraints = {
+      // Configuración optimizada para captura PPG - ajustes para mejor detección
+      let baseVideoConstraints: MediaTrackConstraints = {
         facingMode: 'environment',
-        width: { ideal: isIOS ? 1280 : 720 },
-        height: { ideal: isIOS ? 720 : 480 }
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
       };
+
+      console.log("CameraView: Configurando cámara para detección de dedo");
 
       if (isAndroid) {
         // Ajustes para mejorar la extracción de señal en Android
         Object.assign(baseVideoConstraints, {
           frameRate: { ideal: 30, max: 30 },
+          // En algunos dispositivos, exposure y white balance pueden causar problemas
+          // si se configuran incorrectamente, dejamos que la cámara los ajuste automáticamente
           resizeMode: 'crop-and-scale'
         });
       } else if (isIOS) {
         // Ajustes específicos para iOS
         Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 60, min: 30 },
+          frameRate: { ideal: 30, min: 30 },
+        });
+      } else {
+        // Para otros dispositivos establecemos parámetros generales
+        Object.assign(baseVideoConstraints, {
+          frameRate: { ideal: 30 }
         });
       }
 
       const constraints: MediaStreamConstraints = {
-        video: baseVideoConstraints
+        video: baseVideoConstraints,
+        audio: false
       };
 
       console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
@@ -101,15 +113,30 @@ const CameraView = ({
           
           // Resetear contador de intentos de linterna
           torchAttempts.current = 0;
+          requestedTorch.current = false;
           
           const advancedConstraints: MediaTrackConstraintSet[] = [];
           
           // Configuración optimizada para captura PPG
           if (capabilities.exposureMode) {
+            // Exposición manual para tener mejores resultados con PPG
             advancedConstraints.push({ 
-              exposureMode: 'continuous'
+              exposureMode: 'manual'
             });
-            console.log("CameraView: Modo de exposición continua aplicado");
+            console.log("CameraView: Modo de exposición manual aplicado");
+
+            // Solo si tiene controles de exposición, intentamos establecer un valor
+            if (capabilities.exposureTime) {
+              const minExposure = capabilities.exposureTime.min || 0;
+              const maxExposure = capabilities.exposureTime.max || 1000;
+              // Usar un valor más alto de exposición para capturar mejor la señal PPG
+              const targetExposure = maxExposure * 0.7;
+              
+              advancedConstraints.push({
+                exposureTime: targetExposure
+              });
+              console.log(`CameraView: Tiempo de exposición ajustado a ${targetExposure}`);
+            }
           }
           
           if (capabilities.focusMode) {
@@ -123,11 +150,22 @@ const CameraView = ({
             console.log("CameraView: Modo de balance de blancos continuo aplicado");
           }
 
+          // Aplicar configuraciones avanzadas
           if (advancedConstraints.length > 0) {
-            await videoTrack.applyConstraints({
-              advanced: advancedConstraints
-            });
-            console.log("CameraView: Constraints avanzados aplicados exitosamente");
+            try {
+              await videoTrack.applyConstraints({
+                advanced: advancedConstraints
+              });
+              console.log("CameraView: Constraints avanzados aplicados exitosamente");
+            } catch (err) {
+              console.error("CameraView: Error aplicando constraints avanzados:", err);
+              // Fallback a constraints más simples
+              toast({
+                title: "Aviso",
+                description: "Su cámara no permite ajustes avanzados. La detección podría ser menos precisa.",
+                duration: 5000,
+              });
+            }
           }
 
           if (videoRef.current) {
@@ -145,14 +183,16 @@ const CameraView = ({
                 advanced: [{ torch: true }]
               });
               setTorchEnabled(true);
+              requestedTorch.current = true;
               console.log("CameraView: Linterna activada para medición PPG");
             } catch (err) {
               console.error("CameraView: Error activando linterna:", err);
               torchAttempts.current++;
-              // Notificar al usuario
+              
+              // Mostrar sugerencia al usuario
               toast({
-                title: "Aviso",
-                description: "No se pudo activar la linterna. La calidad de la medición puede verse afectada.",
+                title: "Importante",
+                description: "Coloque su dedo directamente sobre la cámara, cubriendo completamente la lente y la linterna.",
                 duration: 5000,
               });
             }
@@ -161,9 +201,9 @@ const CameraView = ({
             setDeviceSupportsTorch(false);
             // Notificar al usuario
             toast({
-              title: "Aviso",
-              description: "Su dispositivo no tiene linterna. Ubique su dedo en un ambiente bien iluminado.",
-              duration: 5000,
+              title: "Aviso importante",
+              description: "Para mejores resultados, utilice una fuente de luz externa dirigida a su dedo mientras lo coloca sobre la cámara.",
+              duration: 8000,
             });
           }
         } catch (err) {
@@ -218,13 +258,14 @@ const CameraView = ({
     if (!videoTrack || !videoTrack.getCapabilities()?.torch) return;
     
     const keepTorchOn = async () => {
-      if (!torchEnabled) {
+      if (isMonitoring && !torchEnabled && deviceSupportsTorch) {
         try {
           console.log("CameraView: Asegurando que la linterna esté encendida");
           await videoTrack.applyConstraints({
             advanced: [{ torch: true }]
           });
           setTorchEnabled(true);
+          requestedTorch.current = true;
         } catch (err) {
           console.error("CameraView: Error al mantener la linterna encendida:", err);
           torchAttempts.current++;
@@ -232,9 +273,9 @@ const CameraView = ({
           // Si hay demasiados fallos, informamos
           if (torchAttempts.current > 2 && torchAttempts.current % 2 === 0) {
             toast({
-              title: "Problemas con la linterna",
-              description: "Se están experimentando dificultades con la linterna. La calidad puede verse afectada.",
-              variant: "destructive",
+              title: "Importante",
+              description: "Asegúrese de que su dedo esté cubriendo completamente la cámara para una correcta detección.",
+              variant: "default",
             });
           }
         }
@@ -282,6 +323,18 @@ const CameraView = ({
       clearInterval(focusInterval);
     };
   }, [stream, isMonitoring, isFingerDetected, deviceSupportsAutoFocus]);
+  
+  // Agregar instrucciones visuales al usuario
+  useEffect(() => {
+    if (isMonitoring && !isFingerDetected && !deviceSupportsTorch) {
+      // Si no hay linterna y no se detecta dedo, dar instrucciones
+      toast({
+        title: "Instrucciones",
+        description: "Coloque su dedo directamente sobre la cámara trasera, asegurando buena iluminación externa.",
+        duration: 5000,
+      });
+    }
+  }, [isMonitoring, isFingerDetected, deviceSupportsTorch]);
 
   return (
     <video

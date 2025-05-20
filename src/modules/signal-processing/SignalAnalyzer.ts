@@ -23,7 +23,7 @@ export class SignalAnalyzer {
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
-  private readonly DETECTION_TIMEOUT = 250;
+  private readonly DETECTION_TIMEOUT = 500; // Aumentado para mantener la detección por más tiempo
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -42,8 +42,8 @@ export class SignalAnalyzer {
     biophysical: number;
     periodicity: number;
   }): void {
-    // Factor de suavizado para cambios
-    const alpha = 0.2;
+    // Factor de suavizado para cambios - aumentado para estabilizar
+    const alpha = 0.25;  // Cambiado de 0.2 a 0.25
     
     // Actualizar cada puntuación con suavizado
     this.detectorScores.redChannel = 
@@ -60,6 +60,16 @@ export class SignalAnalyzer {
     
     this.detectorScores.periodicity = 
       (1 - alpha) * this.detectorScores.periodicity + alpha * scores.periodicity;
+
+    // Añadir logueo para diagnóstico de valores
+    console.log("SignalAnalyzer: Scores actualizados:", {
+      redValue: scores.redValue,
+      redChannel: this.detectorScores.redChannel,
+      stability: this.detectorScores.stability,
+      pulsatility: this.detectorScores.pulsatility,
+      biophysical: this.detectorScores.biophysical,
+      periodicity: this.detectorScores.periodicity
+    });
   }
 
   analyzeSignalMultiDetector(
@@ -68,13 +78,13 @@ export class SignalAnalyzer {
   ): DetectionResult {
     const currentTime = Date.now();
     
-    // Aplicar ponderación a los detectores (total: 100)
+    // Aplicar ponderación a los detectores (total: 100) - ajustado para dar más peso a señal roja
     const detectorWeights = {
-      redChannel: 20,    // 20% al valor de rojo
-      stability: 20,     // 20% a estabilidad
-      pulsatility: 25,   // 25% a pulsatilidad
-      biophysical: 15,   // 15% a validación biofísica
-      periodicity: 20    // 20% a periodicidad fisiológica
+      redChannel: 30,    // Aumentado de 20 a 30 para dar más importancia a este indicador
+      stability: 20,
+      pulsatility: 25,
+      biophysical: 10,   // Reducido de 15 a 10
+      periodicity: 15    // Reducido de 20 a 15
     };
     
     // Calcular puntuación ponderada
@@ -87,10 +97,10 @@ export class SignalAnalyzer {
     // Normalizar a 100
     const normalizedScore = weightedScore / 100;
     
-    // Reglas de detección con histéresis
+    // Reglas de detección con histéresis - umbrales ajustados para mejorar detección
     let detectionChanged = false;
     
-    if (normalizedScore > 0.68) {
+    if (normalizedScore > 0.60) {  // Reducido de 0.68 a 0.60 para ser más sensible
       // Puntuación alta -> incrementar detecciones consecutivas
       this.consecutiveDetections++;
       this.consecutiveNoDetections = Math.max(0, this.consecutiveNoDetections - 1);
@@ -99,8 +109,9 @@ export class SignalAnalyzer {
         this.isCurrentlyDetected = true;
         this.lastDetectionTime = currentTime;
         detectionChanged = true;
+        console.log("SignalAnalyzer: Detección de dedo ACTIVADA", { normalizedScore });
       }
-    } else if (normalizedScore < 0.45 || trendResult === 'non_physiological') {
+    } else if (normalizedScore < 0.40 || trendResult === 'non_physiological') {  // Reducido de 0.45 a 0.40
       // Puntuación baja o señal no fisiológica -> decrementar detecciones
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
@@ -108,12 +119,15 @@ export class SignalAnalyzer {
       if (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS && this.isCurrentlyDetected) {
         this.isCurrentlyDetected = false;
         detectionChanged = true;
+        console.log("SignalAnalyzer: Detección de dedo DESACTIVADA", { normalizedScore });
       }
     }
     
-    // Timeout de seguridad para señal perdida
-    if (this.isCurrentlyDetected && currentTime - this.lastDetectionTime > 1000) {
-      console.log("SignalAnalyzer: Timeout de detección activado");
+    // Timeout de seguridad para señal perdida - Aumentado para mantener la detección por más tiempo
+    if (this.isCurrentlyDetected && currentTime - this.lastDetectionTime > this.DETECTION_TIMEOUT) {
+      console.log("SignalAnalyzer: Timeout de detección activado", { 
+        tiempoTranscurrido: currentTime - this.lastDetectionTime 
+      });
       this.isCurrentlyDetected = false;
       detectionChanged = true;
     }
@@ -155,8 +169,20 @@ export class SignalAnalyzer {
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / 
                       Math.max(1, this.qualityHistory.length);
     
-    // Si la calidad es baja pero no cero, aplicar un mínimo
-    const finalQuality = avgQuality > 0 && avgQuality < 15 ? Math.max(15, avgQuality) : avgQuality;
+    // Si la calidad es baja pero no cero, aplicar un mínimo más generoso
+    const finalQuality = avgQuality > 0 && avgQuality < 20 ? Math.max(20, avgQuality) : avgQuality;
+    
+    // Loguear resultados para diagnóstico
+    if (detectionChanged || this.consecutiveDetections % 10 === 0 || this.consecutiveNoDetections % 10 === 0) {
+      console.log("SignalAnalyzer: Estado de detección:", {
+        normalizedScore,
+        consecutiveDetections: this.consecutiveDetections,
+        consecutiveNoDetections: this.consecutiveNoDetections,
+        isFingerDetected: this.isCurrentlyDetected,
+        quality: Math.round(+finalQuality),
+        trendResult
+      });
+    }
     
     return {
       isFingerDetected: this.isCurrentlyDetected,
@@ -192,5 +218,6 @@ export class SignalAnalyzer {
       biophysical: 0,
       periodicity: 0
     };
+    console.log("SignalAnalyzer: Sistema reseteado");
   }
 }
