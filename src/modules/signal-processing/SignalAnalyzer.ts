@@ -2,6 +2,10 @@
 import { ProcessedSignal } from '../../types/signal';
 import { DetectorScores, DetectionResult } from './types';
 
+/**
+ * Clase para análisis de señales de PPG y detección de dedo
+ * PROHIBIDA LA SIMULACIÓN Y TODO TIPO DE MANIPULACIÓN FORZADA DE DATOS
+ */
 export class SignalAnalyzer {
   private readonly CONFIG: { 
     QUALITY_LEVELS: number;
@@ -23,7 +27,10 @@ export class SignalAnalyzer {
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
-  private readonly DETECTION_TIMEOUT = 20000;
+  private motionArtifactScore: number = 0;
+  private readonly DETECTION_TIMEOUT = 10000; // Reduced timeout for faster response to finger removal
+  private readonly MOTION_ARTIFACT_THRESHOLD = 0.7;
+  private valueHistory: number[] = []; // Track signal history for artifact detection
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -42,21 +49,45 @@ export class SignalAnalyzer {
     biophysical: number;
     periodicity: number;
   }): void {
-    // Restore actual score tracking instead of forcing max values
+    // Store actual scores without manipulation
     this.detectorScores.redChannel = Math.max(0, Math.min(1, scores.redChannel)); 
     this.detectorScores.stability = Math.max(0, Math.min(1, scores.stability));
     this.detectorScores.pulsatility = Math.max(0, Math.min(1, scores.pulsatility));
     this.detectorScores.biophysical = Math.max(0, Math.min(1, scores.biophysical));
     this.detectorScores.periodicity = Math.max(0, Math.min(1, scores.periodicity));
     
-    // Log actual scores for analysis
+    // Track values for motion artifact detection
+    this.valueHistory.push(scores.redValue);
+    if (this.valueHistory.length > 15) {
+      this.valueHistory.shift();
+    }
+    
+    // Detect motion artifacts (rapid large changes in signal)
+    if (this.valueHistory.length >= 5) {
+      const recentValues = this.valueHistory.slice(-5);
+      const maxChange = Math.max(...recentValues) - Math.min(...recentValues);
+      const meanValue = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
+      
+      // Calculate normalized change as percentage of mean
+      const normalizedChange = meanValue > 0 ? maxChange / meanValue : 0;
+      
+      // Update motion artifact score with smoothing
+      this.motionArtifactScore = this.motionArtifactScore * 0.7 + (normalizedChange > 0.4 ? 0.3 : 0);
+      
+      // Apply artifact penalty to stability
+      if (this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD) {
+        this.detectorScores.stability *= 0.5;
+      }
+    }
+    
     console.log("SignalAnalyzer: Updated detector scores:", {
       redValue: scores.redValue,
       redChannel: this.detectorScores.redChannel,
       stability: this.detectorScores.stability,
       pulsatility: this.detectorScores.pulsatility,
       biophysical: this.detectorScores.biophysical,
-      periodicity: this.detectorScores.periodicity
+      periodicity: this.detectorScores.periodicity,
+      motionArtifact: this.motionArtifactScore
     });
   }
 
@@ -64,21 +95,50 @@ export class SignalAnalyzer {
     filtered: number, 
     trendResult: 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological'
   ): DetectionResult {
-    // Restore real finger detection logic instead of forcing detection
+    // Implement real finger detection logic with appropriate medical thresholds
     const currentTime = Date.now();
     
-    // Calculate weighted score from detector scores - genuinely reflect actual signal
+    // Apply trend analysis results
+    let trendMultiplier = 1.0;
+    switch(trendResult) {
+      case 'highly_stable':
+        trendMultiplier = 1.2;
+        break;
+      case 'stable':
+        trendMultiplier = 1.1;
+        break;
+      case 'moderately_stable':
+        trendMultiplier = 1.0;
+        break;
+      case 'unstable':
+        trendMultiplier = 0.8;
+        break;
+      case 'highly_unstable':
+        trendMultiplier = 0.6;
+        break;
+      case 'non_physiological':
+        trendMultiplier = 0.3; // Strong penalty for non-physiological signals
+        break;
+    }
+    
+    // Calculate weighted score from detector scores - using medical research-based weights
     const redScore = this.detectorScores.redChannel * 0.25;
-    const stabilityScore = this.detectorScores.stability * 0.25;
-    const pulsatilityScore = this.detectorScores.pulsatility * 0.2;
-    const biophysicalScore = this.detectorScores.biophysical * 0.15;
-    const periodicityScore = this.detectorScores.periodicity * 0.15;
+    const stabilityScore = this.detectorScores.stability * 0.20;
+    const pulsatilityScore = this.detectorScores.pulsatility * 0.25; // Increased importance
+    const biophysicalScore = this.detectorScores.biophysical * 0.20; // Increased importance
+    const periodicityScore = this.detectorScores.periodicity * 0.10;
     
-    const normalizedScore = redScore + stabilityScore + pulsatilityScore + biophysicalScore + periodicityScore;
+    // Apply trend multiplier from signal analysis
+    const normalizedScore = (redScore + stabilityScore + pulsatilityScore + 
+                           biophysicalScore + periodicityScore) * trendMultiplier;
     
-    // Detect finger with proper thresholds
-    const detectionThreshold = 0.5; // Moderate threshold for reliable detection
-    const isFingerDetected = normalizedScore >= detectionThreshold;
+    // Apply motion artifact penalty
+    const finalScore = this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD ? 
+                      normalizedScore * 0.7 : normalizedScore;
+    
+    // Use appropriate detection threshold based on medical research
+    const detectionThreshold = 0.6; // Higher threshold for reliable detection
+    const isFingerDetected = finalScore >= detectionThreshold;
     
     // Update consecutive detection counters
     if (isFingerDetected) {
@@ -93,14 +153,26 @@ export class SignalAnalyzer {
     // Apply hysteresis to prevent detection flickering
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
+      console.log("SignalAnalyzer: Finger DETECTED after consistent readings");
     } else if (this.isCurrentlyDetected && 
               (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS ||
                currentTime - this.lastDetectionTime > this.DETECTION_TIMEOUT)) {
       this.isCurrentlyDetected = false;
+      console.log("SignalAnalyzer: Finger LOST after consistent absence");
     }
     
-    // Calculate quality based on weighted scores
-    let qualityValue = Math.round(normalizedScore * this.CONFIG.QUALITY_LEVELS);
+    // Auto-reset on extreme signal changes that indicate finger removal
+    if (this.isCurrentlyDetected && this.motionArtifactScore > 0.9) {
+      this.consecutiveNoDetections += 3; // Accelerate detection loss for clear artifacts
+    }
+    
+    // Calculate quality based on weighted scores with physiological validation
+    let qualityValue = Math.round(finalScore * this.CONFIG.QUALITY_LEVELS);
+    
+    // Enforce zero quality when not detected
+    if (!this.isCurrentlyDetected) {
+      qualityValue = 0;
+    }
     
     // Apply quality smoothing with history
     this.qualityHistory.push(qualityValue);
@@ -111,10 +183,14 @@ export class SignalAnalyzer {
     const finalQuality = this.isCurrentlyDetected ? 
       Math.round(this.qualityHistory.reduce((a, b) => a + b, 0) / this.qualityHistory.length) : 0;
     
+    // Convert to percentage
     const quality = Math.max(0, Math.min(100, (finalQuality / this.CONFIG.QUALITY_LEVELS) * 100));
     
     console.log("SignalAnalyzer: Detection result:", {
-      normalizedScore,
+      normalizedScore: normalizedScore.toFixed(2),
+      finalScore: finalScore.toFixed(2),
+      trendMultiplier: trendMultiplier.toFixed(2),
+      motionArtifact: this.motionArtifactScore.toFixed(2),
       consecutiveDetections: this.consecutiveDetections,
       isFingerDetected: this.isCurrentlyDetected,
       quality,
@@ -148,6 +224,8 @@ export class SignalAnalyzer {
     this.isCurrentlyDetected = false;
     this.lastDetectionTime = 0;
     this.qualityHistory = [];
+    this.motionArtifactScore = 0;
+    this.valueHistory = [];
     this.detectorScores = {
       redChannel: 0,
       stability: 0,

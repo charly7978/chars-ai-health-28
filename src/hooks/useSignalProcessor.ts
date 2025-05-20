@@ -3,6 +3,10 @@ import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 import { toast } from "@/components/ui/use-toast";
 
+/**
+ * Custom hook for managing PPG signal processing
+ * PROHIBIDA LA SIMULACIÓN Y TODO TIPO DE MANIPULACIÓN FORZADA DE DATOS
+ */
 export const useSignalProcessor = () => {
   const processorRef = useRef<PPGSignalProcessor | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,44 +23,99 @@ export const useSignalProcessor = () => {
   const signalHistoryRef = useRef<ProcessedSignal[]>([]);
   const qualityTransitionsRef = useRef<{time: number, from: number, to: number}[]>([]);
   const calibrationInProgressRef = useRef(false);
+  const errorCountRef = useRef(0);
+  const lastErrorTimeRef = useRef(0);
 
-  // CRITICAL CHANGE: Ensure we always have a valid processor
+  // Create processor with well-defined callbacks
   useEffect(() => {
     console.log("useSignalProcessor: Creating new processor instance", {
       timestamp: new Date().toISOString(),
       sessionId: Math.random().toString(36).substring(2, 9)
     });
 
-    // Create processor with callbacks defined from the start
+    // Define signal ready callback with proper physiological validation
     const onSignalReady = (signal: ProcessedSignal) => {
-      console.log("Callback onSignalReady called successfully", {
+      console.log("Signal received:", {
         timestamp: new Date(signal.timestamp).toISOString(),
         fingerDetected: signal.fingerDetected,
         quality: signal.quality,
-        rawValue: signal.rawValue,
-        filteredValue: signal.filteredValue
+        rawValue: signal.rawValue.toFixed(2),
+        filteredValue: signal.filteredValue.toFixed(2)
       });
       
-      // Use signal as-is without forcing detection - respect actual finger detection
+      // Use signal with medical validation - no forcing detection
       setLastSignal(signal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      // Update statistics
-      setSignalStats(prev => {
-        const newStats = {
-          minValue: Math.min(prev.minValue, signal.filteredValue),
-          maxValue: Math.max(prev.maxValue, signal.filteredValue),
-          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
-          totalValues: prev.totalValues + 1,
-          lastQualityUpdateTime: prev.lastQualityUpdateTime
-        };
+      // Store for history tracking
+      signalHistoryRef.current.push(signal);
+      if (signalHistoryRef.current.length > 100) { // Keep last 100 signals
+        signalHistoryRef.current.shift();
+      }
+      
+      // Track quality transitions for analysis
+      const prevSignal = signalHistoryRef.current[signalHistoryRef.current.length - 2];
+      if (prevSignal && Math.abs(prevSignal.quality - signal.quality) > 15) {
+        qualityTransitionsRef.current.push({
+          time: signal.timestamp,
+          from: prevSignal.quality,
+          to: signal.quality
+        });
         
-        return newStats;
-      });
+        // Keep limited history
+        if (qualityTransitionsRef.current.length > 20) {
+          qualityTransitionsRef.current.shift();
+        }
+      }
+      
+      // Update statistics with valid signals only
+      if (signal.fingerDetected && signal.quality > 30) {
+        setSignalStats(prev => {
+          const newStats = {
+            minValue: Math.min(prev.minValue, signal.filteredValue),
+            maxValue: Math.max(prev.maxValue, signal.filteredValue),
+            avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+            totalValues: prev.totalValues + 1,
+            lastQualityUpdateTime: signal.timestamp
+          };
+          
+          return newStats;
+        });
+      }
     };
 
+    // Enhanced error handling with rate limiting
     const onError = (error: ProcessingError) => {
+      const currentTime = Date.now();
+      
+      // Avoid error flooding - limit to one error every 2 seconds
+      if (currentTime - lastErrorTimeRef.current < 2000) {
+        errorCountRef.current++;
+        
+        // Only log without toast if errors are coming too quickly
+        console.error("useSignalProcessor: Error suppressed to avoid flooding:", {
+          ...error,
+          formattedTime: new Date(error.timestamp).toISOString(),
+          errorCount: errorCountRef.current
+        });
+        
+        // Only show a toast for every 5th error when they come rapidly
+        if (errorCountRef.current % 5 === 0) {
+          toast({
+            title: "Multiple processing errors",
+            description: `${errorCountRef.current} errors in the last 2 seconds. Last error: ${error.message}`,
+            variant: "destructive"
+          });
+        }
+        
+        return;
+      }
+      
+      // Reset error count and update last error time
+      errorCountRef.current = 1;
+      lastErrorTimeRef.current = currentTime;
+      
       console.error("useSignalProcessor: Detailed error:", {
         ...error,
         formattedTime: new Date(error.timestamp).toISOString(),
@@ -93,16 +152,22 @@ export const useSignalProcessor = () => {
   const startProcessing = useCallback(() => {
     if (!processorRef.current) {
       console.error("useSignalProcessor: No processor available");
+      toast({
+        title: "Error starting processing",
+        description: "Signal processor not initialized",
+        variant: "destructive"
+      });
       return;
     }
 
     console.log("useSignalProcessor: Starting processing", {
-      estadoAnterior: isProcessing,
+      previousState: isProcessing,
       timestamp: new Date().toISOString(),
       processorExists: !!processorRef.current,
       hasSignalReadyCallback: !!processorRef.current.onSignalReady
     });
     
+    // Reset all stats and history
     setIsProcessing(true);
     setFramesProcessed(0);
     setSignalStats({
@@ -112,10 +177,19 @@ export const useSignalProcessor = () => {
       totalValues: 0,
       lastQualityUpdateTime: 0
     });
+    
     signalHistoryRef.current = [];
     qualityTransitionsRef.current = [];
+    errorCountRef.current = 0;
+    lastErrorTimeRef.current = 0;
     
+    // Start the processor
     processorRef.current.start();
+    
+    toast({
+      title: "Processing started",
+      description: "Position your finger on the camera",
+    });
   }, [isProcessing]);
 
   const stopProcessing = useCallback(() => {
@@ -125,20 +199,30 @@ export const useSignalProcessor = () => {
     }
 
     console.log("useSignalProcessor: Stopping processing", {
-      estadoAnterior: isProcessing,
-      framesProcessados: framesProcessed,
-      estadisticasFinales: signalStats,
+      previousState: isProcessing,
+      framesProcessed: framesProcessed,
+      finalStats: signalStats,
       timestamp: new Date().toISOString()
     });
     
     setIsProcessing(false);
     processorRef.current.stop();
     calibrationInProgressRef.current = false;
+    
+    toast({
+      title: "Processing stopped",
+      description: `Processed ${framesProcessed} frames`,
+    });
   }, [isProcessing, framesProcessed, signalStats]);
 
   const calibrate = useCallback(async () => {
     if (!processorRef.current) {
       console.error("useSignalProcessor: No processor available to calibrate");
+      toast({
+        title: "Calibration failed",
+        description: "Signal processor not initialized",
+        variant: "destructive"
+      });
       return false;
     }
 
@@ -148,11 +232,23 @@ export const useSignalProcessor = () => {
       });
       
       calibrationInProgressRef.current = true;
+      
+      toast({
+        title: "Calibrating",
+        description: "Please hold your finger steady on the camera",
+      });
+      
       await processorRef.current.calibrate();
       
       // Wait a bit for the automatic calibration to complete
       setTimeout(() => {
         calibrationInProgressRef.current = false;
+        
+        toast({
+          title: "Calibration complete",
+          description: "Signal processor has been calibrated for your device",
+        });
+        
         console.log("useSignalProcessor: Advanced calibration completed", {
           timestamp: new Date().toISOString()
         });
@@ -167,6 +263,13 @@ export const useSignalProcessor = () => {
       });
       
       calibrationInProgressRef.current = false;
+      
+      toast({
+        title: "Calibration error",
+        description: error instanceof Error ? error.message : "Unknown error during calibration",
+        variant: "destructive"
+      });
+      
       return false;
     }
   }, []);
@@ -178,15 +281,26 @@ export const useSignalProcessor = () => {
     }
 
     if (isProcessing) {
-      console.log("processFrame: Processing frame", {
-        width: imageData.width,
-        height: imageData.height,
-        timestamp: Date.now()
-      });
+      // Avoid excessive logging - only log occasionally
+      if (framesProcessed % 30 === 0) {
+        console.log("processFrame: Processing frame", {
+          width: imageData.width,
+          height: imageData.height,
+          timestamp: Date.now(),
+          frameNumber: framesProcessed
+        });
+      }
       
       // Verify callbacks are properly assigned
       if (!processorRef.current.onSignalReady) {
         console.error("processFrame: onSignalReady is not defined in the processor");
+        
+        toast({
+          title: "Processing error",
+          description: "Signal processor callback not configured",
+          variant: "destructive"
+        });
+        
         return;
       }
       
@@ -194,14 +308,20 @@ export const useSignalProcessor = () => {
         processorRef.current.processFrame(imageData);
       } catch (error) {
         console.error("processFrame: Error processing frame", error);
-        toast({
-          title: "Error processing frame",
-          description: error instanceof Error ? error.message : "Unknown error",
-          variant: "destructive"
-        });
+        
+        // Rate-limit error toasts to avoid flooding
+        const currentTime = Date.now();
+        if (currentTime - lastErrorTimeRef.current > 3000) {
+          toast({
+            title: "Error processing frame",
+            description: error instanceof Error ? error.message : "Unknown error",
+            variant: "destructive"
+          });
+          lastErrorTimeRef.current = currentTime;
+        }
       }
     }
-  }, [isProcessing]);
+  }, [isProcessing, framesProcessed]);
 
   return {
     isProcessing,
@@ -213,6 +333,8 @@ export const useSignalProcessor = () => {
     startProcessing,
     stopProcessing,
     calibrate,
-    processFrame
+    processFrame,
+    signalHistory: signalHistoryRef.current,
+    qualityTransitions: qualityTransitionsRef.current
   };
 };
