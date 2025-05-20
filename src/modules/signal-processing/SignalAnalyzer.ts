@@ -34,7 +34,7 @@ export class SignalAnalyzer {
   private calibrationPhase: boolean = true;
   private calibrationSamples: number[] = [];
   private readonly CALIBRATION_SAMPLE_SIZE = 20;
-  private adaptiveThreshold: number = 0.03; // Umbral inicial que se ajustará
+  private adaptiveThreshold: number = 0.1; // Umbral inicial que se ajustará (más estricto)
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -42,11 +42,12 @@ export class SignalAnalyzer {
     MIN_CONSECUTIVE_DETECTIONS: number;
     MAX_CONSECUTIVE_NO_DETECTIONS: number;
   }) {
-    // Modificar configuración para ser más sensible
+    // Configuración de hysteresis simétrica para detección más rápida
     this.CONFIG = {
-      ...config,
-      MIN_CONSECUTIVE_DETECTIONS: Math.max(1, Math.floor(config.MIN_CONSECUTIVE_DETECTIONS / 3)), // Reducido aún más para detección más rápida (antes /2)
-      MAX_CONSECUTIVE_NO_DETECTIONS: Math.ceil(config.MAX_CONSECUTIVE_NO_DETECTIONS * 1.5) // Aumentado para ser más tolerante
+      QUALITY_LEVELS: config.QUALITY_LEVELS,
+      QUALITY_HISTORY_SIZE: config.QUALITY_HISTORY_SIZE,
+      MIN_CONSECUTIVE_DETECTIONS: 3,
+      MAX_CONSECUTIVE_NO_DETECTIONS: 3
     };
   }
   
@@ -161,8 +162,10 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Detección de dedo con hysteresis y umbral adaptativo
-    const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold;
+    // Detección de dedo con hysteresis, umbral adaptativo y varios indicadores
+    const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold
+      && this.detectorScores.stability > 0.3
+      && this.detectorScores.pulsatility > 0.3;
     if (rojoOk) {
       this.consecutiveDetections++;
       this.consecutiveNoDetections = 0;
@@ -209,7 +212,7 @@ export class SignalAnalyzer {
     this.valueHistory = [];
     this.calibrationPhase = true; // Reiniciar fase de calibración
     this.calibrationSamples = []; // Limpiar muestras de calibración
-    this.adaptiveThreshold = 0.03; // Restablecer umbral adaptativo
+    this.adaptiveThreshold = 0.1; // Restablecer umbral adaptativo
     this.detectorScores = {
       redChannel: 0,
       stability: 0,
