@@ -1,4 +1,3 @@
-
 // Este archivo exporta el PPGSignalProcessor desde la estructura refactorizada
 // para mantener compatibilidad con versiones anteriores
 import { PPGSignalProcessor as OriginalPPGSignalProcessor } from './signal-processing/PPGSignalProcessor';
@@ -13,9 +12,10 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
     onSignalReady?: (signal: ProcessedSignal) => void,
     onError?: (error: ProcessingError) => void
   ) {
-    console.log("PPGSignalProcessor wrapper: Creando instancia con callbacks explícitos:", {
+    console.log("[DIAG] SignalProcessor wrapper: Constructor", {
       hasSignalReadyCallback: !!onSignalReady,
-      hasErrorCallback: !!onError
+      hasErrorCallback: !!onError,
+      stack: new Error().stack
     });
     
     // Llamar al constructor de la clase padre
@@ -29,6 +29,7 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
   
   // Verificación de inicialización correcta
   private checkInitialization() {
+    console.log("[DIAG] SignalProcessor wrapper: checkInitialization", { isInitialized: this.isInitialized });
     if (!this.isInitialized) {
       console.log("⚠️ PPGSignalProcessor: Inicialización verificada manualmente");
       this.initialize().then(() => {
@@ -42,7 +43,7 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
   
   // Sobrescribimos initialize para marcar como inicializado
   async initialize(): Promise<void> {
-    console.log("PPGSignalProcessor wrapper: Inicializando con callbacks", {
+    console.log("[DIAG] SignalProcessor wrapper: initialize() called", {
       hasOnSignalReadyCallback: !!this.onSignalReady,
       hasOnErrorCallback: !!this.onError
     });
@@ -64,6 +65,14 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
 
   // Sobrescribimos processFrame para asegurar que los callbacks estén actualizados
   processFrame(imageData: ImageData): void {
+    console.log("[DIAG] SignalProcessor wrapper: processFrame() called", {
+      isInitialized: this.isInitialized,
+      hasOnSignalReadyCallback: !!this.onSignalReady,
+      superHasCallback: !!super.onSignalReady,
+      imageSize: `${imageData.width}x${imageData.height}`,
+      timestamp: new Date().toISOString()
+    });
+    
     // VERIFICACIÓN CRÍTICA: Asegurar que los callbacks están correctamente configurados
     if (this.onSignalReady && super.onSignalReady !== this.onSignalReady) {
       console.log("PPGSignalProcessor wrapper: Actualizando onSignalReady callback");
@@ -74,14 +83,6 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
       console.log("PPGSignalProcessor wrapper: Actualizando onError callback");
       super.onError = this.onError;
     }
-    
-    // Dar más información para debug
-    console.log("PPGSignalProcessor wrapper: Procesando frame", {
-      hasOnSignalReadyCallback: !!this.onSignalReady,
-      superHasCallback: !!super.onSignalReady,
-      imageSize: `${imageData.width}x${imageData.height}`,
-      timestamp: new Date().toISOString()
-    });
     
     // Si no se ha inicializado, hacerlo ahora
     if (!this.isInitialized) {

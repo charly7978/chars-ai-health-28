@@ -361,7 +361,7 @@ const Index = () => {
     setElapsedTime(0);
     setHeartRate(0);
     setVitalSigns({ 
-      spo2: 0, 
+      spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "--",
       glucose: 0,
@@ -489,6 +489,18 @@ const Index = () => {
 
     processImage();
   };
+
+  useEffect(() => {
+    if (lastSignal) {
+      console.log("[DIAG] Index.tsx: lastSignal actualizado", {
+        timestamp: new Date(lastSignal.timestamp).toISOString(),
+        fingerDetected: lastSignal.fingerDetected,
+        quality: lastSignal.quality,
+        rawValue: lastSignal.rawValue,
+        filteredValue: lastSignal.filteredValue
+      });
+    }
+  }, [lastSignal]);
 
   useEffect(() => {
     if (lastSignal && lastSignal.fingerDetected && isMonitoring) {

@@ -235,15 +235,14 @@ const CameraView = ({
 
   useEffect(() => {
     if (isMonitoring && !stream) {
-      console.log("CameraView: Starting camera because isMonitoring=true");
+      console.log("[DIAG] CameraView: Iniciando cámara porque isMonitoring=true");
       startCamera();
     } else if (!isMonitoring && stream) {
-      console.log("CameraView: Stopping camera because isMonitoring=false");
+      console.log("[DIAG] CameraView: Deteniendo cámara porque isMonitoring=false");
       stopCamera();
     }
-    
     return () => {
-      console.log("CameraView: Component unmounting, stopping camera");
+      console.log("[DIAG] CameraView: Desmontando componente, deteniendo cámara");
       stopCamera();
     };
   }, [isMonitoring]);

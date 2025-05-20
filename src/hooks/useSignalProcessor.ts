@@ -34,12 +34,13 @@ export const useSignalProcessor = () => {
 
     // Define signal ready callback with proper physiological validation
     const onSignalReady = (signal: ProcessedSignal) => {
-      console.log("Signal received:", {
+      console.log("[DIAG] useSignalProcessor/onSignalReady: Frame recibido", {
         timestamp: new Date(signal.timestamp).toISOString(),
         fingerDetected: signal.fingerDetected,
         quality: signal.quality,
-        rawValue: signal.rawValue.toFixed(2),
-        filteredValue: signal.filteredValue.toFixed(2)
+        rawValue: signal.rawValue,
+        filteredValue: signal.filteredValue,
+        stack: new Error().stack
       });
       
       // Use signal with medical validation - no forcing detection
@@ -227,18 +228,15 @@ export const useSignalProcessor = () => {
       console.error("useSignalProcessor: No processor available to process frames");
       return;
     }
-
     if (isProcessing) {
-      // Avoid excessive logging - only log occasionally
-      if (framesProcessed % 30 === 0) {
-        console.log("processFrame: Processing frame", {
+      if (framesProcessed % 10 === 0) {
+        console.log(`[DIAG] useSignalProcessor/processFrame: Procesando frame #${framesProcessed}`, {
           width: imageData.width,
           height: imageData.height,
           timestamp: Date.now(),
-          frameNumber: framesProcessed
+          processorIsProcessing: processorRef.current.isProcessing
         });
       }
-      
       // Verify callbacks are properly assigned
       if (!processorRef.current.onSignalReady) {
         console.error("processFrame: onSignalReady is not defined in the processor");

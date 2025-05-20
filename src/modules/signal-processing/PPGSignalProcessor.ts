@@ -47,9 +47,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     public onSignalReady?: (signal: ProcessedSignal) => void,
     public onError?: (error: ProcessingError) => void
   ) {
-    console.log("PPGSignalProcessor: Constructor called with callbacks:", {
+    console.log("[DIAG] PPGSignalProcessor: Constructor", {
       hasSignalReadyCallback: !!onSignalReady,
-      hasErrorCallback: !!onError
+      hasErrorCallback: !!onError,
+      stack: new Error().stack
     });
     
     this.kalmanFilter = new KalmanFilter();
@@ -76,6 +77,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 
   async initialize(): Promise<void> {
+    console.log("[DIAG] PPGSignalProcessor: initialize() called", {
+      hasSignalReadyCallback: !!this.onSignalReady,
+      hasErrorCallback: !!this.onError
+    });
     try {
       // Reset all filters and analyzers
       this.lastValues = [];
@@ -97,6 +102,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 
   start(): void {
+    console.log("[DIAG] PPGSignalProcessor: start() called", { isProcessing: this.isProcessing });
     if (this.isProcessing) return;
     this.isProcessing = true;
     this.initialize();
@@ -104,6 +110,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 
   stop(): void {
+    console.log("[DIAG] PPGSignalProcessor: stop() called", { isProcessing: this.isProcessing });
     this.isProcessing = false;
     this.lastValues = [];
     this.kalmanFilter.reset();
@@ -139,6 +146,12 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 
   processFrame(imageData: ImageData): void {
+    console.log("[DIAG] PPGSignalProcessor: processFrame() called", {
+      isProcessing: this.isProcessing,
+      hasOnSignalReadyCallback: !!this.onSignalReady,
+      imageSize: `${imageData.width}x${imageData.height}`,
+      timestamp: new Date().toISOString()
+    });
     if (!this.isProcessing) {
       console.log("PPGSignalProcessor: Not processing, ignoring frame");
       return;
