@@ -1,3 +1,4 @@
+
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -16,11 +17,11 @@ export class HeartBeatProcessor {
   private readonly EMA_ALPHA = 0.4; 
   private readonly BASELINE_FACTOR = 1.0; 
 
-  // Parámetros de beep y vibración
-  private readonly BEEP_DURATION = 450; // Mayor duración para un sonido más completo y realista
-  private readonly BEEP_VOLUME = 0.85; // Volumen ajustado
+  // Parámetros de beep y vibración - Actualizados para mejor audibilidad
+  private readonly BEEP_DURATION = 450; 
+  private readonly BEEP_VOLUME = 1.0; // Volumen máximo
   private readonly MIN_BEEP_INTERVAL_MS = 300;
-  private readonly VIBRATION_PATTERN = [60, 40, 100]; // Patrón más natural
+  private readonly VIBRATION_PATTERN = [60, 40, 100]; 
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
   private readonly LOW_SIGNAL_THRESHOLD = 0.03;
@@ -60,14 +61,14 @@ export class HeartBeatProcessor {
       await this.audioContext.resume();
       console.log("HeartBeatProcessor: Audio Context Initialized and resumed");
       
-      // Reproducir un sonido de prueba muy bajo volumen solo para desbloquear el audio
-      await this.playTestSound(0.05); // Aumentado el volumen del sonido de prueba
+      // Reproducir un sonido de prueba audible para desbloquear el audio
+      await this.playTestSound(0.2);
     } catch (error) {
       console.error("HeartBeatProcessor: Error initializing audio", error);
     }
   }
 
-  private async playTestSound(volume: number = 0.05) {
+  private async playTestSound(volume: number = 0.2) {
     if (!this.audioContext) return;
     
     try {
@@ -76,7 +77,7 @@ export class HeartBeatProcessor {
       const gain = this.audioContext.createGain();
       
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(150, this.audioContext.currentTime); // Frecuencia más audible para prueba
+      oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // Frecuencia A4 - claramente audible
       
       gain.gain.setValueAtTime(0, this.audioContext.currentTime);
       gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
@@ -107,51 +108,64 @@ export class HeartBeatProcessor {
     }
 
     try {
-      console.log("HeartBeatProcessor: Reproduciendo sonido de latido");
+      console.log("HeartBeatProcessor: Reproduciendo sonido de latido con volumen:", volume);
       
-      // Vibrar el dispositivo con un patrón similar a un latido cardíaco
+      // Vibrar el dispositivo
       if (navigator.vibrate) {
         navigator.vibrate(this.VIBRATION_PATTERN);
       }
 
-      // Implementación simple y directa del sonido de latido cardíaco
+      // Implementación mejorada y más audible del sonido de latido
+      // Primera parte del latido ("LUB")
       const oscillator1 = this.audioContext.createOscillator();
-      const oscillator2 = this.audioContext.createOscillator();
-      const gainNode = this.audioContext.createGain();
+      const gainNode1 = this.audioContext.createGain();
       
-      // Configurar osciladores para frecuencias muy bajas
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 30; // Frecuencia muy baja para "lub"
+      oscillator1.frequency.value = 150; // Frecuencia mucho más audible para "lub"
+      
+      gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode1.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.03);
+      gainNode1.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
+      
+      oscillator1.connect(gainNode1);
+      gainNode1.connect(this.audioContext.destination);
+      
+      oscillator1.start(this.audioContext.currentTime);
+      oscillator1.stop(this.audioContext.currentTime + 0.2);
+      
+      // Segunda parte del latido ("DUB")
+      const oscillator2 = this.audioContext.createOscillator();
+      const gainNode2 = this.audioContext.createGain();
       
       oscillator2.type = 'sine';
-      oscillator2.frequency.value = 20; // Frecuencia aún más baja para "dub"
+      oscillator2.frequency.value = 100; // Frecuencia más baja pero audible para "dub"
       
-      // Configurar ganancia
-      gainNode.gain.value = 0;
-      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
+      gainNode2.gain.setValueAtTime(0, this.audioContext.currentTime + 0.1);
+      gainNode2.gain.linearRampToValueAtTime(volume * 0.8, this.audioContext.currentTime + 0.13);
+      gainNode2.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
       
-      // Filtro paso bajo para asegurar sonido grave
-      const filter = this.audioContext.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = 100; // Solo frecuencias por debajo de 100Hz
+      oscillator2.connect(gainNode2);
+      gainNode2.connect(this.audioContext.destination);
       
-      // Conectar nodos de audio
-      oscillator1.connect(filter);
-      oscillator2.connect(filter);
-      filter.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
+      oscillator2.start(this.audioContext.currentTime + 0.1);
+      oscillator2.stop(this.audioContext.currentTime + 0.35);
       
-      // Programar el sonido "lub"
-      oscillator1.start(this.audioContext.currentTime);
-      oscillator1.stop(this.audioContext.currentTime + 0.3);
+      // Agregar un poco de "cuerpo" al sonido para hacerlo más realista
+      const oscillator3 = this.audioContext.createOscillator();
+      const gainNode3 = this.audioContext.createGain();
       
-      // Programar el sonido "dub" después de un pequeño retardo
-      oscillator2.start(this.audioContext.currentTime + 0.15);
-      oscillator2.stop(this.audioContext.currentTime + 0.4);
+      oscillator3.type = 'triangle'; // Usar onda triangular para dar más textura
+      oscillator3.frequency.value = 75; // Frecuencia complementaria
       
-      // Bajar el volumen suavemente
-      gainNode.gain.linearRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5);
+      gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode3.gain.linearRampToValueAtTime(volume * 0.4, this.audioContext.currentTime + 0.05);
+      gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.25);
+      
+      oscillator3.connect(gainNode3);
+      gainNode3.connect(this.audioContext.destination);
+      
+      oscillator3.start(this.audioContext.currentTime);
+      oscillator3.stop(this.audioContext.currentTime + 0.3);
       
       console.log("HeartBeatProcessor: Sonido de latido reproducido correctamente");
       this.lastBeepTime = now;

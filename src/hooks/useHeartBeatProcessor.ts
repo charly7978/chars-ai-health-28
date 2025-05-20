@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
 
@@ -33,6 +34,22 @@ export const useHeartBeatProcessor = () => {
         processorRegistrado: !!(window as any).heartBeatProcessor,
         timestamp: new Date().toISOString()
       });
+
+      // Añadir evento para asegurar que el audio se inicialice correctamente
+      const initializeAudio = () => {
+        console.log('useHeartBeatProcessor: Inicializando audio por interacción del usuario');
+        if (processorRef.current) {
+          // Esto forzará la creación del contexto de audio
+          const dummyContext = new AudioContext();
+          dummyContext.resume().then(() => {
+            console.log('Audio context activated by user interaction');
+            dummyContext.close();
+          });
+        }
+      };
+      
+      document.body.addEventListener('click', initializeAudio, { once: true });
+      document.body.addEventListener('touchstart', initializeAudio, { once: true });
     }
 
     return () => {
