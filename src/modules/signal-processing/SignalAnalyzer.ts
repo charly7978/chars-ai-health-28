@@ -206,9 +206,14 @@ export class SignalAnalyzer {
     
     // Nueva lógica: solo permitir detección si hay suficiente rojo y pulsatility
     const rojoOk = this.detectorScores.redChannel > 0.04;
-    const pulsoOk = this.detectorScores.pulsatility > 0.05;
+    // Ajuste 1: Aumentar umbral de pulsatility
+    const pulsoOk = this.detectorScores.pulsatility > 0.15; // Antes 0.05
+    // Ajuste 2: Penalizar frames con textura anómala (ruido sin dedo)
+    const texturaOk = typeof this.detectorScores.textureScore === 'undefined' || (this.detectorScores.textureScore > 0.38 && this.detectorScores.textureScore < 0.95);
+    // Ajuste 3: Aumentar mínimo de frames consecutivos para confirmar dedo
+    this.CONFIG.MIN_CONSECUTIVE_DETECTIONS = 10; // Antes 6
     // Si el rojo es bajo, nunca detectar dedo aunque haya variabilidad
-    if (!rojoOk) {
+    if (!rojoOk || !pulsoOk || !texturaOk) {
       this.isCurrentlyDetected = false;
       return {
         isFingerDetected: false,
@@ -217,7 +222,7 @@ export class SignalAnalyzer {
           ...this.detectorScores,
           normalizedScore,
           trendType: trendResult,
-          reason: 'Rojo insuficiente'
+          reason: 'Condición insuficiente (rojo, pulso o textura)'
         }
       };
     }
