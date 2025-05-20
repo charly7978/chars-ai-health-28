@@ -1,3 +1,5 @@
+export type TrendResult = "stable" | "unstable" | "non_physiological";
+
 /**
  * Clase para análisis de tendencias de la señal PPG
  * Implementa detección de patrones y estabilidad
