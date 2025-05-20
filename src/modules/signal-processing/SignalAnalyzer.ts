@@ -162,7 +162,7 @@ export class SignalAnalyzer {
     trendResult: any
   ): DetectionResult {
     // Solo un umbral absoluto de rojo, sin checks de pulsatilidad ni estabilidad
-    const rojoOk = this.detectorScores.redChannel > 0.03;
+    const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold;
     if (!rojoOk) {
       this.isCurrentlyDetected = false;
       this.consecutiveDetections = 0;
@@ -180,9 +180,6 @@ export class SignalAnalyzer {
     this.consecutiveNoDetections = 0;
     if (this.consecutiveDetections >= 3) {
       this.isCurrentlyDetected = true;
-    }
-    if (!this.isCurrentlyDetected) {
-      this.consecutiveDetections = 0;
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,

@@ -19,10 +19,18 @@ export class SignalTrendAnalyzer {
   constructor(historyLength: number = 30) {
     this.historyLength = historyLength;
   }
-
-  // LÓGICA ULTRA-SIMPLE: el análisis de tendencia siempre retorna 'stable'
-  analyzeTrend(value: number): 'stable' {
-    return 'stable';
+  analyzeTrend(value: number): TrendResult {
+    // Implementar una lógica más completa basada en los scores
+    const { stability, periodicity, consistency, physiological } = this.trendScores;
+    
+    // Si las métricas fisiológicas están fuera de rango
+    if (physiological < 0.3 && this.valueHistory.length > 15) {
+      return "non_physiological";
+    }
+    
+    // Usar una combinación de métricas para determinar estabilidad
+    const stabilityScore = (stability * 0.4 + periodicity * 0.3 + consistency * 0.3);
+    return stabilityScore > 0.6 ? "stable" : "unstable";
   }
 
   // LÓGICA ULTRA-SIMPLE: el score de estabilidad siempre es 1
