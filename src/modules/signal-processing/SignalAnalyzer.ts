@@ -1,4 +1,3 @@
-
 import { ProcessedSignal } from '../../types/signal';
 import { DetectorScores, DetectionResult } from './types';
 
@@ -126,12 +125,12 @@ export class SignalAnalyzer {
         break;
     }
     
-    // Ponderación más equilibrada para puntuaciones de detectores
-    const redScore = this.detectorScores.redChannel * 0.25; // Incrementado (antes 0.20)
-    const stabilityScore = this.detectorScores.stability * 0.20; // Reducido (antes 0.25)
-    const pulsatilityScore = this.detectorScores.pulsatility * 0.25; 
-    const biophysicalScore = this.detectorScores.biophysical * 0.20;
-    const periodicityScore = this.detectorScores.periodicity * 0.10;
+    // Ponderación más permisiva para facilitar detección
+    const redScore = this.detectorScores.redChannel * 0.35; // Antes 0.25
+    const stabilityScore = this.detectorScores.stability * 0.25; // Antes 0.20
+    const pulsatilityScore = this.detectorScores.pulsatility * 0.30; // Antes 0.25
+    const biophysicalScore = this.detectorScores.biophysical * 0.07; // Antes 0.20
+    const periodicityScore = this.detectorScores.periodicity * 0.03; // Antes 0.10
     
     // Apply trend multiplier from signal analysis
     const normalizedScore = (redScore + stabilityScore + pulsatilityScore + 
@@ -141,9 +140,9 @@ export class SignalAnalyzer {
     const finalScore = this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD ? 
                       normalizedScore * 0.6 : normalizedScore; // Antes 0.5
     
-    // Umbral de detección reducido para mayor sensibilidad
-    const detectionThreshold = 0.5; // Reducido para detección más sensible (antes 0.65)
-    const isFingerDetected = finalScore >= detectionThreshold;
+    // Umbral de detección aún más bajo para máxima sensibilidad
+    const detectionThreshold = 0.03; // Antes 0.5
+    const isFingerDetected = finalScore >= detectionThreshold || (this.detectorScores.redChannel > 0.05 && this.detectorScores.pulsatility > 0.05);
     
     // Update consecutive detection counters
     if (isFingerDetected) {
@@ -176,7 +175,7 @@ export class SignalAnalyzer {
     
     // Asignar calidad mínima cuando se detecta dedo pero con señal débil
     if (this.isCurrentlyDetected && qualityValue < 1) {
-      qualityValue = 1; // Garantizar calidad mínima para dedos detectados
+      qualityValue = 10; // Garantizar calidad mínima para dedos detectados
     }
     
     // Suavizado de calidad con historial
