@@ -1,3 +1,4 @@
+
 import { ProcessedSignal, ProcessingError, SignalProcessor } from '../types/signal';
 
 class KalmanFilter {
@@ -26,22 +27,24 @@ export class PPGSignalProcessor implements SignalProcessor {
   private kalmanFilter: KalmanFilter;
   private lastValues: number[] = [];
   private readonly DEFAULT_CONFIG = {
-    BUFFER_SIZE: 15,           // Aumentado para mejor estabilidad
-    MIN_RED_THRESHOLD: 40,     // Ajustado para mejor detección
-    MAX_RED_THRESHOLD: 250,    // Aumentado para captar señales más intensas
-    STABILITY_WINDOW: 6,       // Ventana más grande para mejor estabilidad
-    MIN_STABILITY_COUNT: 4,    // Más muestras para confirmar estabilidad
-    HYSTERESIS: 5,            // Nuevo: histéresis para evitar fluctuaciones
-    MIN_CONSECUTIVE_DETECTIONS: 3  // Nuevo: mínimo de detecciones consecutivas
+    BUFFER_SIZE: 15,
+    MIN_RED_THRESHOLD: 40,
+    MAX_RED_THRESHOLD: 250,
+    STABILITY_WINDOW: 6,
+    MIN_STABILITY_COUNT: 4,
+    HYSTERESIS: 5,
+    MIN_CONSECUTIVE_DETECTIONS: 2, // Reducido de 3 a 2 para detección más rápida
+    MAX_CONSECUTIVE_NO_DETECTIONS: 3 // Nuevo: para desactivar más rápidamente cuando se retira el dedo
   };
 
   private currentConfig: typeof this.DEFAULT_CONFIG;
   private stableFrameCount: number = 0;
   private lastStableValue: number = 0;
   private consecutiveDetections: number = 0;
+  private consecutiveNoDetections: number = 0; // Contador para seguimiento cuando no hay detección
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
-  private readonly DETECTION_TIMEOUT = 500; // 500ms timeout
+  private readonly DETECTION_TIMEOUT = 300; // Reducido de 500ms a 300ms para respuesta más rápida
 
   constructor(
     public onSignalReady?: (signal: ProcessedSignal) => void,
@@ -58,6 +61,7 @@ export class PPGSignalProcessor implements SignalProcessor {
       this.stableFrameCount = 0;
       this.lastStableValue = 0;
       this.consecutiveDetections = 0;
+      this.consecutiveNoDetections = 0; // Resetear contador de no detecciones
       this.isCurrentlyDetected = false;
       this.lastDetectionTime = 0;
       this.kalmanFilter.reset();
@@ -81,6 +85,7 @@ export class PPGSignalProcessor implements SignalProcessor {
     this.stableFrameCount = 0;
     this.lastStableValue = 0;
     this.consecutiveDetections = 0;
+    this.consecutiveNoDetections = 0; // Resetear contador de no detecciones
     this.isCurrentlyDetected = false;
     this.kalmanFilter.reset();
     console.log("PPGSignalProcessor: Detenido");
@@ -131,6 +136,16 @@ export class PPGSignalProcessor implements SignalProcessor {
         roi: roi,
         perfusionIndex: perfusionIndex
       };
+      
+      // Logs adicionales para debugging de detección de dedo
+      if (this.isCurrentlyDetected !== isFingerDetected) {
+        console.log(`Estado de detección cambiado: ${this.isCurrentlyDetected} -> ${isFingerDetected}`, {
+          rawValue,
+          consecutiveDetections: this.consecutiveDetections,
+          consecutiveNoDetections: this.consecutiveNoDetections,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       // Enviar feedback sobre el uso de la linterna cuando es necesario
       if (isFingerDetected && quality < 40 && redValue < 120 && this.onError) {
@@ -197,8 +212,8 @@ export class PPGSignalProcessor implements SignalProcessor {
         const b = data[i+2];   // Canal azul
         
         // Solo incluir píxeles que tengan una predominancia clara del rojo
-        // Esto ayuda a filtrar áreas que no son del dedo o están mal iluminadas
-        if (r > g * 1.1 && r > b * 1.1) {
+        // Reducimos el umbral de 1.1 a 1.05 para ser un poco más sensibles
+        if (r > g * 1.05 && r > b * 1.05) {
           redSum += r;
           greenSum += g;
           blueSum += b;
@@ -228,8 +243,8 @@ export class PPGSignalProcessor implements SignalProcessor {
       }
     }
     
-    // Si no hay suficientes píxeles con dominancia roja, no hay dedo
-    if (pixelCount < 50) {
+    // Reducir el umbral mínimo de píxeles de 50 a 30 para mayor sensibilidad
+    if (pixelCount < 30) {
       return 0;
     }
     
@@ -239,7 +254,8 @@ export class PPGSignalProcessor implements SignalProcessor {
     
     for (const key in regions) {
       const region = regions[key];
-      if (region.count > 10) {  // Ignorar regiones con muy pocos píxeles
+      // Reducir el umbral de 10 a 5 píxeles para regiones pequeñas pero válidas
+      if (region.count > 5) {
         const avgRed = region.redSum / region.count;
         if (avgRed > bestAvgRed) {
           bestAvgRed = avgRed;
@@ -248,8 +264,8 @@ export class PPGSignalProcessor implements SignalProcessor {
       }
     }
     
-    // Si encontramos una buena región, usar ese valor
-    if (bestRegion && bestAvgRed > 100) {
+    // Reducir el umbral de 100 a 80 para ser más sensible a detecciones iniciales
+    if (bestRegion && bestAvgRed > 80) {
       return bestAvgRed;
     }
     
@@ -258,10 +274,10 @@ export class PPGSignalProcessor implements SignalProcessor {
     const avgGreen = greenSum / pixelCount;
     const avgBlue = blueSum / pixelCount;
     
-    // Métricas mejoradas de detección del dedo
-    const isRedDominant = avgRed > (avgGreen * 1.2) && avgRed > (avgBlue * 1.2);
-    const hasGoodContrast = pixelCount > 100 && (maxRed - minRed) > 15;
-    const isInRange = avgRed > 50 && avgRed < 250; // Evitar valores extremos
+    // Métricas mejoradas de detección del dedo - reducimos umbrales para mayor sensibilidad
+    const isRedDominant = avgRed > (avgGreen * 1.15) && avgRed > (avgBlue * 1.15);
+    const hasGoodContrast = pixelCount > 80 && (maxRed - minRed) > 10;
+    const isInRange = avgRed > 40 && avgRed < 250; // Reducir umbral inferior a 40
     
     // Devolver el valor procesado o 0 si no se detecta un dedo
     return (isRedDominant && hasGoodContrast && isInRange) ? avgRed : 0;
@@ -273,9 +289,15 @@ export class PPGSignalProcessor implements SignalProcessor {
     
     // Si el valor de entrada es 0 (no se detectó dominancia de rojo), definitivamente no hay dedo
     if (rawValue <= 0) {
+      this.consecutiveNoDetections++;
       this.consecutiveDetections = 0;
       this.stableFrameCount = 0;
-      this.isCurrentlyDetected = false;
+      
+      // Si tenemos suficientes frames consecutivos sin detección, actualizamos el estado
+      if (this.consecutiveNoDetections >= this.currentConfig.MAX_CONSECUTIVE_NO_DETECTIONS) {
+        this.isCurrentlyDetected = false;
+      }
+      
       return { isFingerDetected: false, quality: 0 };
     }
     
@@ -288,11 +310,12 @@ export class PPGSignalProcessor implements SignalProcessor {
         rawValue <= this.currentConfig.MAX_RED_THRESHOLD;
 
     if (!inRange) {
-      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
+      this.consecutiveDetections = 0;
+      this.consecutiveNoDetections++;
       this.stableFrameCount = Math.max(0, this.stableFrameCount - 1);
       
-      // Solo cancelamos la detección después de un tiempo para evitar falsos negativos por fluctuaciones
-      if (timeSinceLastDetection > this.DETECTION_TIMEOUT && this.consecutiveDetections === 0) {
+      // Cancelamos la detección más rápidamente cuando no hay señal adecuada
+      if (this.consecutiveNoDetections >= this.currentConfig.MAX_CONSECUTIVE_NO_DETECTIONS) {
         this.isCurrentlyDetected = false;
       }
       
@@ -301,6 +324,9 @@ export class PPGSignalProcessor implements SignalProcessor {
       return { isFingerDetected: this.isCurrentlyDetected, quality };
     }
 
+    // Reseteamos el contador de no detecciones cuando hay señal válida
+    this.consecutiveNoDetections = 0;
+    
     // Calcular estabilidad temporal de la señal
     const stability = this.calculateStability();
     
@@ -314,19 +340,19 @@ export class PPGSignalProcessor implements SignalProcessor {
     if (stability > 0.8) {
       // Señal muy estable, incrementamos rápidamente
       this.stableFrameCount = Math.min(
-        this.stableFrameCount + 1.5,
+        this.stableFrameCount + 2, // Incremento más rápido
         this.currentConfig.MIN_STABILITY_COUNT * 2
       );
     } else if (stability > 0.6) {
       // Señal moderadamente estable
       this.stableFrameCount = Math.min(
-        this.stableFrameCount + 1,
+        this.stableFrameCount + 1.5, // Incremento más rápido
         this.currentConfig.MIN_STABILITY_COUNT * 2
       );
     } else if (stability > 0.4) {
-      // Señal con estabilidad media, incremento lento
+      // Señal con estabilidad media
       this.stableFrameCount = Math.min(
-        this.stableFrameCount + 0.5,
+        this.stableFrameCount + 1, // Incremento normal
         this.currentConfig.MIN_STABILITY_COUNT * 2
       );
     } else {

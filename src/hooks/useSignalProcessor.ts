@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -28,16 +29,18 @@ export const useSignalProcessor = () => {
     });
     
     processor.onSignalReady = (signal: ProcessedSignal) => {
-      // Evaluación robusta de detección de dedo:
-      const robustFingerDetected = signal.fingerDetected && signal.quality >= 60;
+      // Ahora confiamos más en la evaluación del procesador pero exigimos una 
+      // calidad mínima de 40 para considerar una detección válida
+      const robustFingerDetected = signal.fingerDetected && signal.quality >= 40;
       const modifiedSignal = { ...signal, fingerDetected: robustFingerDetected };
+      
       console.log("useSignalProcessor: Señal recibida detallada:", {
         timestamp: modifiedSignal.timestamp,
         formattedTime: new Date(modifiedSignal.timestamp).toISOString(),
         quality: modifiedSignal.quality,
         rawValue: modifiedSignal.rawValue,
         filteredValue: modifiedSignal.filteredValue,
-        // Ahora el flag fingerDetected refleja la evaluación robusta
+        originalFingerDetected: signal.fingerDetected,
         fingerDetected: modifiedSignal.fingerDetected,
         roi: modifiedSignal.roi,
         processingTime: Date.now() - modifiedSignal.timestamp
