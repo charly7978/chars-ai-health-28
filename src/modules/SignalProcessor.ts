@@ -863,7 +863,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Number(Math.round(finalQuality)), // Explicit number conversion with Number()
+      quality: Math.round(finalQuality),
       detectorDetails: {
         ...this.detectorScores,
         normalizedScore,
