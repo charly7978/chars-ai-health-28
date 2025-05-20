@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
 
@@ -173,7 +172,7 @@ export const useHeartBeatProcessor = () => {
     setConfidence(0);
   }, [currentBPM, confidence]);
 
-  // Nuevo método para establecer el estado de arritmia en el procesador
+  // Aseguramos que setArrhythmiaState funcione correctamente
   const setArrhythmiaState = useCallback((isArrhythmiaDetected: boolean) => {
     console.log('useHeartBeatProcessor: Estableciendo estado de arritmia', {
       isArrhythmiaDetected,
@@ -192,6 +191,6 @@ export const useHeartBeatProcessor = () => {
     confidence,
     processSignal,
     reset,
-    setArrhythmiaState // Exponemos la nueva función
+    setArrhythmiaState
   };
 };

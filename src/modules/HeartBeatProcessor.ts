@@ -1,3 +1,4 @@
+
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -95,7 +96,7 @@ export class HeartBeatProcessor {
     }
   }
 
-  // Nuevo método para reproducir el sonido de latido con opción de arritmia
+  // Modificado: Reproducir sonido de latido con opción de arritmia más sutil
   private async playHeartSound(volume: number = this.BEEP_VOLUME, isArrhythmic: boolean = false) {
     if (!this.audioContext || this.isInWarmup()) {
       console.log("HeartBeatProcessor: No se puede reproducir - AudioContext no disponible o en warmup");
@@ -121,10 +122,10 @@ export class HeartBeatProcessor {
       const gainNode1 = this.audioContext.createGain();
       
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 120; // Igualada a la frecuencia del "dub" (120Hz)
+      oscillator1.frequency.value = 120; // Frecuencia igual al "dub" (120Hz)
       
       gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode1.gain.linearRampToValueAtTime(volume * 1.1, this.audioContext.currentTime + 0.03); // Volumen ligeramente aumentado
+      gainNode1.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.03); // Volumen ligeramente aumentado
       gainNode1.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
       
       oscillator1.connect(gainNode1);
@@ -138,10 +139,10 @@ export class HeartBeatProcessor {
       const gainNode2 = this.audioContext.createGain();
       
       oscillator2.type = 'sine';
-      oscillator2.frequency.value = 120; // Mantenida en 120Hz
+      oscillator2.frequency.value = 120;
       
       gainNode2.gain.setValueAtTime(0, this.audioContext.currentTime + 0.1);
-      gainNode2.gain.linearRampToValueAtTime(volume * 1.1, this.audioContext.currentTime + 0.13); // Volumen ligeramente aumentado
+      gainNode2.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.13); // Volumen ligeramente aumentado
       gainNode2.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
       
       oscillator2.connect(gainNode2);
@@ -150,26 +151,26 @@ export class HeartBeatProcessor {
       oscillator2.start(this.audioContext.currentTime + 0.1);
       oscillator2.stop(this.audioContext.currentTime + 0.35);
       
-      // Tercer sonido para arritmias (si corresponde)
+      // Tercer sonido para arritmias (solo si hay arritmia detectada)
       if (isArrhythmic) {
         const oscillator3 = this.audioContext.createOscillator();
         const gainNode3 = this.audioContext.createGain();
         
-        // Usar una onda diferente para el sonido de arritmia
-        oscillator3.type = 'sawtooth'; // Tipo de onda distintiva
-        oscillator3.frequency.value = 180; // Frecuencia más alta para llamar la atención
+        // Cambiado a un beep más sutil (sine en vez de sawtooth)
+        oscillator3.type = 'sine';
+        oscillator3.frequency.value = 440; // Frecuencia estándar de beep (440Hz - A4)
         
-        gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime + 0.2);
-        gainNode3.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.23); // Volumen más alto
-        gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.45);
+        gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime + 0.36); // Inicia después del segundo sonido
+        gainNode3.gain.linearRampToValueAtTime(volume * 0.7, this.audioContext.currentTime + 0.38); // Volumen más bajo (70%)
+        gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5);
         
         oscillator3.connect(gainNode3);
         gainNode3.connect(this.audioContext.destination);
         
-        oscillator3.start(this.audioContext.currentTime + 0.2);
-        oscillator3.stop(this.audioContext.currentTime + 0.5);
+        oscillator3.start(this.audioContext.currentTime + 0.36); // Comienza después de los otros sonidos
+        oscillator3.stop(this.audioContext.currentTime + 0.6);
         
-        console.log("HeartBeatProcessor: Sonido de arritmia adicional reproducido");
+        console.log("HeartBeatProcessor: Beep de arritmia reproducido");
       }
       
       console.log("HeartBeatProcessor: Sonido de latido reproducido correctamente");
@@ -264,9 +265,9 @@ export class HeartBeatProcessor {
         this.previousPeakTime = this.lastPeakTime;
         this.lastPeakTime = now;
         
-        // Reproducir sonido con indicación de arritmia si está marcado
+        // Reproducir sonido solo pasando el estado de arritmia cuando realmente está detectada
         console.log("HeartBeatProcessor: Pico detectado, intentando reproducir sonido");
-        this.playHeartSound(0.9, this.isArrhythmiaDetected); // Pasar el estado de arritmia detectada
+        this.playHeartSound(0.95, this.isArrhythmiaDetected);
         
         this.updateBPM();
       }
