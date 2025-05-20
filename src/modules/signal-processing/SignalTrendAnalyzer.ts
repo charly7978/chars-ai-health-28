@@ -19,6 +19,19 @@ export class SignalTrendAnalyzer {
     this.historyLength = historyLength;
   }
 
+  analyzeTrend(value: number): 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological' {
+    this.addValue(value);
+    return this.getAnalysisResult();
+  }
+
+  getStabilityScore(): number {
+    return this.trendScores.stability;
+  }
+  
+  getPeriodicityScore(): number {
+    return this.trendScores.periodicity;
+  }
+
   addValue(value: number): void {
     // Actualizar historiales
     this.valueHistory.push(value);

@@ -1,95 +1,135 @@
 
 /**
- * Sistema de detección multiespectral de tejido vivo
- * basado en características de la piel humana y patrones PPG
+ * Clase para validación de señales biofísicamente plausibles
+ * Aplica restricciones fisiológicas a las señales PPG
  */
 export class BiophysicalValidator {
-  private readonly MIN_R_TO_G_RATIO = 1.15;
-  private readonly MIN_R_TO_B_RATIO = 1.15;
-  private readonly MIN_PULSATILITY = 0.8;
-  private readonly MAX_PULSATILITY = 4.5;
-  private readonly MIN_TEXTURE_SCORE = 0.45;
-  private perfusionHistory: number[] = [];
-  private colorRatioHistory: { rToG: number, rToB: number }[] = [];
+  private lastPulsatilityValues: number[] = [];
+  private readonly MAX_PULSATILITY_HISTORY = 30;
+  private readonly MIN_PULSATILITY = 0.1;
+  private readonly MAX_PULSATILITY = 10.0;
 
-  addSample(pixelData: { 
-    r: number, 
-    g: number, 
-    b: number, 
-    perfusionIdx?: number,
-    textureScore?: number 
-  }): { isValidTissue: boolean; confidence: number; metrics: Record<string, number> } {
-    const { r, g, b, perfusionIdx = 0, textureScore: inputTextureScore = 0 } = pixelData;
-    
-    // 1. Validar dominancia de canal rojo (característica de hemoglobina)
-    const rToGRatio = r / Math.max(1, g);
-    const rToBRatio = r / Math.max(1, b);
-    
-    // Guardar historiales
-    this.colorRatioHistory.push({ rToG: rToGRatio, rToB: rToBRatio });
-    if (this.colorRatioHistory.length > 10) this.colorRatioHistory.shift();
-    
-    if (perfusionIdx > 0) {
-      this.perfusionHistory.push(perfusionIdx);
-      if (this.perfusionHistory.length > 10) this.perfusionHistory.shift();
-    }
-    
-    // 2. Calcular métricas promediadas
-    const avgRToG = this.colorRatioHistory.reduce((sum, item) => sum + item.rToG, 0) / 
-                   this.colorRatioHistory.length;
-    const avgRToB = this.colorRatioHistory.reduce((sum, item) => sum + item.rToB, 0) / 
-                   this.colorRatioHistory.length;
-    
-    // 3. Calcular puntuaciones individuales
-    const colorRatioScore = (
-      (avgRToG > this.MIN_R_TO_G_RATIO ? avgRToG / this.MIN_R_TO_G_RATIO : 0) +
-      (avgRToB > this.MIN_R_TO_B_RATIO ? avgRToB / this.MIN_R_TO_B_RATIO : 0)
-    ) / 2;
-    
-    // Limitar a máximo 1.0
-    const normalizedColorScore = Math.min(1.0, colorRatioScore);
-    
-    // 4. Evaluar perfusión (si está disponible)
-    let perfusionScore = 0;
-    if (this.perfusionHistory.length > 0) {
-      const avgPerfusion = this.perfusionHistory.reduce((sum, val) => sum + val, 0) / 
-                          this.perfusionHistory.length;
-      
-      perfusionScore = avgPerfusion > this.MIN_PULSATILITY && avgPerfusion < this.MAX_PULSATILITY ?
-                      1.0 : 0;
-    }
-    
-    // 5. Evaluar textura (si está disponible)
-    const processedTextureScore = inputTextureScore > this.MIN_TEXTURE_SCORE ? 
-                       inputTextureScore : 0;
-    
-    // 6. Combinar puntuaciones
-    const availableMetrics = [
-      normalizedColorScore > 0 ? 1 : 0,
-      perfusionScore > 0 ? 1 : 0,
-      processedTextureScore > 0 ? 1 : 0
-    ].filter(Boolean).length;
-    
-    // Calcular confianza basada en métricas disponibles
-    const totalScore = (normalizedColorScore + perfusionScore + processedTextureScore) / 
-                      Math.max(1, availableMetrics);
-    
-    // Umbral para considerar tejido vivo
-    const isValidTissue = totalScore > 0.6;
-    
-    return {
-      isValidTissue,
-      confidence: totalScore,
-      metrics: {
-        colorRatio: normalizedColorScore,
-        perfusion: perfusionScore,
-        texture: processedTextureScore
-      }
-    };
+  // Rangos biofísicos normales para señales PPG
+  private readonly PHYSIOLOGICAL_RANGES = {
+    redToGreen: { min: 1.0, max: 3.0, weight: 0.4 },
+    redToBlue: { min: 1.0, max: 3.5, weight: 0.3 },
+    redValue: { min: 20, max: 240, weight: 0.3 }
+  };
+
+  constructor() {
+    // Inicializar el histórico de pulsatilidad
+    this.reset();
   }
 
+  /**
+   * Calcula el índice de pulsatilidad de la señal basado en las variaciones recientes
+   * @param value Valor actual de la señal filtrada
+   * @returns Índice de pulsatilidad normalizado entre 0-1
+   */
+  calculatePulsatilityIndex(value: number): number {
+    // Añadir al historial
+    this.lastPulsatilityValues.push(value);
+    
+    // Mantener tamaño limitado
+    if (this.lastPulsatilityValues.length > this.MAX_PULSATILITY_HISTORY) {
+      this.lastPulsatilityValues.shift();
+    }
+    
+    // Si no hay suficientes valores, retornar pulsatilidad media
+    if (this.lastPulsatilityValues.length < 10) {
+      return 0.5; // Valor neutro
+    }
+    
+    // Calcular variabilidad (diferencia entre máximo y mínimo recientes)
+    const max = Math.max(...this.lastPulsatilityValues);
+    const min = Math.min(...this.lastPulsatilityValues);
+    const mean = this.lastPulsatilityValues.reduce((sum, val) => sum + val, 0) / 
+                 this.lastPulsatilityValues.length;
+    
+    // Evitar división por cero
+    if (Math.abs(mean) < 0.001) {
+      return 0.2; // Valor bajo pero no cero
+    }
+    
+    // Calcular índice de pulsatilidad normalizado
+    const rawPulsatility = (max - min) / Math.abs(mean);
+    
+    // Normalizar a rango 0-1 basado en rangos fisiológicos
+    const normalizedPulsatility = Math.max(0, Math.min(1, 
+      (rawPulsatility - this.MIN_PULSATILITY) / 
+      (this.MAX_PULSATILITY - this.MIN_PULSATILITY)
+    ));
+    
+    return normalizedPulsatility;
+  }
+
+  /**
+   * Valida si los parámetros de la señal están dentro de rangos biofísicamente plausibles
+   * @param redValue Valor medio del canal rojo
+   * @param rToGRatio Ratio rojo/verde
+   * @param rToBRatio Ratio rojo/azul
+   * @returns Score de plausibilidad biofísica (0-1)
+   */
+  validateBiophysicalRange(redValue: number, rToGRatio: number, rToBRatio: number): number {
+    // Validar relación rojo/verde (característica clave de la hemoglobina)
+    const rToGScore = this.calculateRangeScore(
+      rToGRatio,
+      this.PHYSIOLOGICAL_RANGES.redToGreen.min,
+      this.PHYSIOLOGICAL_RANGES.redToGreen.max
+    );
+    
+    // Validar relación rojo/azul (otra característica de la hemoglobina)
+    const rToBScore = this.calculateRangeScore(
+      rToBRatio,
+      this.PHYSIOLOGICAL_RANGES.redToBlue.min,
+      this.PHYSIOLOGICAL_RANGES.redToBlue.max
+    );
+    
+    // Validar nivel absoluto del rojo (debe estar en un rango razonable)
+    const redValueScore = this.calculateRangeScore(
+      redValue,
+      this.PHYSIOLOGICAL_RANGES.redValue.min,
+      this.PHYSIOLOGICAL_RANGES.redValue.max
+    );
+    
+    // Calcular score ponderado
+    const weightedScore = 
+      rToGScore * this.PHYSIOLOGICAL_RANGES.redToGreen.weight +
+      rToBScore * this.PHYSIOLOGICAL_RANGES.redToBlue.weight +
+      redValueScore * this.PHYSIOLOGICAL_RANGES.redValue.weight;
+    
+    return weightedScore;
+  }
+
+  /**
+   * Calcula un score basado en si un valor está dentro de un rango
+   * con transición suave en los límites
+   */
+  private calculateRangeScore(value: number, min: number, max: number): number {
+    // Si está en el rango óptimo
+    if (value >= min && value <= max) {
+      return 1.0;
+    }
+    
+    // Si está por debajo del mínimo, calcular score con degradado
+    if (value < min) {
+      const distance = min - value;
+      const range = min * 0.5; // Permitir desviación de hasta 50% por debajo
+      
+      return Math.max(0, 1 - (distance / range));
+    }
+    
+    // Si está por encima del máximo, calcular score con degradado
+    const distance = value - max;
+    const range = max * 0.5; // Permitir desviación de hasta 50% por encima
+    
+    return Math.max(0, 1 - (distance / range));
+  }
+
+  /**
+   * Reiniciar el estado del validador
+   */
   reset(): void {
-    this.perfusionHistory = [];
-    this.colorRatioHistory = [];
+    this.lastPulsatilityValues = [];
   }
 }
