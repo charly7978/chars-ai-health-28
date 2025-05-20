@@ -341,22 +341,4 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 }
 
-export type TrendResult = "stable" | "unstable" | "non_physiological";
 
-export class SignalTrendAnalyzer {
-  // Define las propiedades y métodos necesarios, por ejemplo:
-  public historyLength: number = 0;
-  public valueHistory: number[] = [];
-  // ... otras propiedades como diffHistory, patternHistory, etc.
-
-  analyzeTrend(value: number): TrendResult {
-    // tu lógica...
-    return "stable"; // o "unstable" o "non_physiological"
-  }
-
-  reset(): void {
-    this.historyLength = 0;
-    this.valueHistory = [];
-    // reinicia las demás propiedades según corresponda
-  }
-}
