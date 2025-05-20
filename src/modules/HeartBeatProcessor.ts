@@ -20,7 +20,7 @@ export class HeartBeatProcessor {
   private readonly BEEP_DURATION = 450; 
   private readonly BEEP_VOLUME = 1.0; // Volumen máximo
   private readonly MIN_BEEP_INTERVAL_MS = 300;
-  private readonly VIBRATION_PATTERN = [60, 40, 100];
+  private readonly VIBRATION_PATTERN = [40, 20, 60]; // Patrón de vibración más corto y directo
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
   private readonly LOW_SIGNAL_THRESHOLD = 0.05;
