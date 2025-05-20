@@ -1,4 +1,3 @@
-
 /**
  * Clase para análisis de tendencias de la señal PPG
  * Implementa detección de patrones y estabilidad
@@ -60,14 +59,15 @@ export class SignalTrendAnalyzer {
   }
 
   private updateAnalysis(): void {
-    if (this.valueHistory.length < 10) return;
+    if (this.valueHistory.length < 6) return; // Permitir análisis antes (antes 10)
     
     // 1. Calcular estabilidad (basada en desviación estándar normalizada)
     const mean = this.valueHistory.reduce((sum, val) => sum + val, 0) / this.valueHistory.length;
     const variance = this.valueHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / this.valueHistory.length;
     const stdDev = Math.sqrt(variance);
     const normalizedStdDev = stdDev / Math.max(1, Math.abs(mean));
-    this.trendScores.stability = Math.max(0, Math.min(1, 1 - normalizedStdDev * 5));
+    // Menor penalización por ruido, estabilidad sube más rápido
+    this.trendScores.stability = Math.max(0, Math.min(1, 1 - normalizedStdDev * 2.2)); // Antes *5
     
     // 2. Calcular periodicidad (basada en cruces por cero y cambios de dirección)
     let directionChanges = 0;
