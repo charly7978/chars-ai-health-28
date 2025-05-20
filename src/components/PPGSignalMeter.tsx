@@ -53,7 +53,7 @@ const PPGSignalMeter = ({
   const PEAK_THRESHOLD = 3;
   const MIN_PEAK_DISTANCE_MS = 300;
   const IMMEDIATE_RENDERING = true;
-  const MAX_PEAKS_TO_DISPLAY = 15;
+  const MAX_PEAKS_TO_DISPLAY = 4;
 
   useEffect(() => {
     if (!dataBufferRef.current) {
