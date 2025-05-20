@@ -161,28 +161,28 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // LÓGICA ULTRA-SIMPLIFICADA: solo detecta dedo si el canal rojo supera un umbral adaptativo
+    // Detección de dedo con hysteresis y umbral adaptativo
     const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold;
-    if (!rojoOk) {
-      this.isCurrentlyDetected = false;
-      return {
-        isFingerDetected: false,
-        quality: 0,
-        detectorDetails: {
-          ...this.detectorScores,
-          reason: 'Canal rojo insuficiente'
-        }
-      };
+    if (rojoOk) {
+      this.consecutiveDetections++;
+      this.consecutiveNoDetections = 0;
+    } else {
+      this.consecutiveNoDetections++;
+      this.consecutiveDetections = 0;
     }
-    // Acumula detecciones sin reiniciarlas prematuramente
-    this.consecutiveDetections++;
-    this.consecutiveNoDetections = 0;
-    if (this.consecutiveDetections >= 3) {
+    // Cambiar estado tras suficientes frames consecutivos
+    if (this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
+    } else if (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
+      this.isCurrentlyDetected = false;
     }
+    // Calidad en porcentaje solo cuando hay detección
+    const quality = this.isCurrentlyDetected
+      ? Math.round(this.detectorScores.redChannel * 100)
+      : 0;
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(this.detectorScores.redChannel * 100),
+      quality,
       detectorDetails: {
         ...this.detectorScores
       }
