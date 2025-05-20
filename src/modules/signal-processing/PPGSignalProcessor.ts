@@ -10,8 +10,8 @@ import { SignalAnalyzer } from './SignalAnalyzer';
 import { SignalProcessorConfig } from './types';
 
 /**
- * Procesador avanzado de señal PPG con detección robusta de dedo
- * e indicador de calidad de 20 puntos
+ * Procesador de señal PPG con detección de dedo
+ * e indicador de calidad
  */
 export class PPGSignalProcessor implements SignalProcessorInterface {
   public isProcessing: boolean = false;
@@ -26,28 +26,28 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   public isCalibrating: boolean = false;
   public frameProcessedCount = 0;
   
-  // Configuración basada en nuestro plan - ajustada para sensibilidad extrema
+  // Restored normal configuration with appropriate thresholds
   public readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 1,    // Reducido al mínimo absoluto para máxima sensibilidad
+    MIN_RED_THRESHOLD: 20,    // Restored to detect finger properly
     MAX_RED_THRESHOLD: 250,
     STABILITY_WINDOW: 6,
-    MIN_STABILITY_COUNT: 1,  // Reducido al mínimo (1) para detección inmediata 
-    HYSTERESIS: 1.0,         // Eliminada histéresis para detección inmediata
-    MIN_CONSECUTIVE_DETECTIONS: 1,  // Un solo frame es suficiente
-    MAX_CONSECUTIVE_NO_DETECTIONS: 50,  // Aumentado para mantener la detección más tiempo
+    MIN_STABILITY_COUNT: 3,   // Requires more stability for real detection
+    HYSTERESIS: 1.5,          // Restored hysteresis for stable detection
+    MIN_CONSECUTIVE_DETECTIONS: 3,  // Requires multiple frames to confirm detection
+    MAX_CONSECUTIVE_NO_DETECTIONS: 8,  // Quicker to lose detection when finger is removed
     QUALITY_LEVELS: 20,
     QUALITY_HISTORY_SIZE: 10,
-    CALIBRATION_SAMPLES: 5, // Reducido para calibración más rápida
+    CALIBRATION_SAMPLES: 10,
     TEXTURE_GRID_SIZE: 8,
-    ROI_SIZE_FACTOR: 0.6     // Aumentado para capturar mayor área
+    ROI_SIZE_FACTOR: 0.6
   };
   
   constructor(
     public onSignalReady?: (signal: ProcessedSignal) => void,
     public onError?: (error: ProcessingError) => void
   ) {
-    console.log("PPGSignalProcessor: Constructor llamado con callbacks:", {
+    console.log("PPGSignalProcessor: Constructor called with callbacks:", {
       hasSignalReadyCallback: !!onSignalReady,
       hasErrorCallback: !!onError
     });
@@ -72,7 +72,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       MAX_CONSECUTIVE_NO_DETECTIONS: this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS
     });
     
-    console.log("PPGSignalProcessor: Instancia creada con configuración ultra-sensible:", this.CONFIG);
+    console.log("PPGSignalProcessor: Instance created with configuration:", this.CONFIG);
   }
 
   async initialize(): Promise<void> {
@@ -133,30 +133,30 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
 
   processFrame(imageData: ImageData): void {
     if (!this.isProcessing) {
-      console.log("PPGSignalProcessor: No está procesando, ignorando frame");
+      console.log("PPGSignalProcessor: Not processing, ignoring frame");
       return;
     }
 
     try {
-      // Contador de frames procesados
+      // Counter of processed frames
       this.frameProcessedCount++;
-      const shouldLog = this.frameProcessedCount % 10 === 0;  // Log cada 10 frames
+      const shouldLog = this.frameProcessedCount % 10 === 0;  // Log every 10 frames
       
-      // VERIFICACIÓN CRÍTICA: Asegurar que los callbacks estén disponibles
+      // CRITICAL CHECK: Ensure callbacks are available
       if (!this.onSignalReady) {
-        console.error("PPGSignalProcessor: onSignalReady callback no disponible, no se puede continuar");
-        this.handleError("CALLBACK_ERROR", "Callback onSignalReady no disponible");
+        console.error("PPGSignalProcessor: onSignalReady callback not available, cannot continue");
+        this.handleError("CALLBACK_ERROR", "Callback onSignalReady not available");
         return;
       }
       
-      // 1. Extraer características del frame
+      // 1. Extract frame features
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
-      // Loguear para diagnóstico
+      // Log for diagnostics
       if (shouldLog) {
-        console.log("PPGSignalProcessor: Frame datos extraídos:", { 
+        console.log("PPGSignalProcessor: Frame data extracted:", { 
           redValue, 
           textureScore, 
           rToGRatio, 
@@ -167,45 +167,65 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         });
       }
       
-      // CAMBIO CRÍTICO: SIEMPRE detectar dedo para depuración
-      const isFingerDetected = true;
-      const quality = Math.max(60, Math.min(100, redValue / 2)); // Calidad basada en valor rojo (mínimo 60)
+      // 2. Apply filtering to the signal
+      let filteredValue = this.kalmanFilter.filter(redValue);
+      filteredValue = this.sgFilter.filter(filteredValue);
       
-      // Crear objeto de señal procesada
+      // 3. Analyze signal trend for stability assessment
+      const trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
+      
+      // 4. Calculate detector scores
+      const detectorScores = {
+        redValue,
+        redChannel: Math.min(1.0, Math.max(0, (redValue - this.CONFIG.MIN_RED_THRESHOLD) / 
+                                           (this.CONFIG.MAX_RED_THRESHOLD - this.CONFIG.MIN_RED_THRESHOLD))),
+        stability: this.trendAnalyzer.getStabilityScore(),
+        pulsatility: this.biophysicalValidator.calculatePulsatilityIndex(filteredValue),
+        biophysical: this.biophysicalValidator.validateBiophysicalRange(redValue, rToGRatio, rToBRatio),
+        periodicity: this.trendAnalyzer.getPeriodicityScore()
+      };
+      
+      this.signalAnalyzer.updateDetectorScores(detectorScores);
+      
+      // 5. Perform multi-detector analysis for finger detection
+      const detectionResult = this.signalAnalyzer.analyzeSignalMultiDetector(filteredValue, trendResult);
+      const { isFingerDetected, quality } = detectionResult;
+      
+      // Create processed signal object
       const processedSignal: ProcessedSignal = {
         timestamp: Date.now(),
         rawValue: redValue,
-        filteredValue: redValue, // Usar valor sin filtrar para depuración
+        filteredValue: filteredValue,
         quality: quality,
         fingerDetected: isFingerDetected,
         roi: roi,
-        perfusionIndex: Math.max(0.5, redValue / 200) // Valor dinámico pero siempre positivo
+        perfusionIndex: isFingerDetected ? (redValue * 0.01) : 0
       };
       
-      // Log periódico
+      // Periodic logging
       if (shouldLog) {
-        console.log("PPGSignalProcessor: Enviando señal:", {
+        console.log("PPGSignalProcessor: Sending signal:", {
           fingerDetected: isFingerDetected,
           quality,
           redValue,
-          filteredValue: redValue,
+          filteredValue,
           timestamp: new Date().toISOString()
         });
       }
       
-      // VERIFICACIÓN FINAL DE CALLBACK Y ENVÍO
+      // FINAL CALLBACK VERIFICATION AND SENDING
       if (typeof this.onSignalReady === 'function') {
         this.onSignalReady(processedSignal);
         if (shouldLog) {
-          console.log("PPGSignalProcessor: Señal enviada correctamente al callback");
+          console.log("PPGSignalProcessor: Signal sent successfully to callback");
         }
       } else {
-        console.error("PPGSignalProcessor: onSignalReady no es una función válida");
-        this.handleError("CALLBACK_ERROR", "Callback onSignalReady no es una función válida");
+        console.error("PPGSignalProcessor: onSignalReady is not a valid function");
+        this.handleError("CALLBACK_ERROR", "Callback onSignalReady is not a valid function");
       }
     } catch (error) {
-      console.error("PPGSignalProcessor: Error procesando frame", error);
-      this.handleError("PROCESSING_ERROR", "Error en el procesamiento avanzado de frame");
+      console.error("PPGSignalProcessor: Error processing frame", error);
+      this.handleError("PROCESSING_ERROR", "Error processing frame");
     }
   }
   

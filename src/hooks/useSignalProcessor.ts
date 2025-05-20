@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
@@ -21,16 +20,16 @@ export const useSignalProcessor = () => {
   const qualityTransitionsRef = useRef<{time: number, from: number, to: number}[]>([]);
   const calibrationInProgressRef = useRef(false);
 
-  // CAMBIO CRÍTICO: Asegurarnos de que siempre existe un procesador válido
+  // CRITICAL CHANGE: Ensure we always have a valid processor
   useEffect(() => {
-    console.log("useSignalProcessor: Creando nueva instancia del procesador", {
+    console.log("useSignalProcessor: Creating new processor instance", {
       timestamp: new Date().toISOString(),
       sessionId: Math.random().toString(36).substring(2, 9)
     });
 
-    // Crear el procesador con callbacks definidos desde el inicio
+    // Create processor with callbacks defined from the start
     const onSignalReady = (signal: ProcessedSignal) => {
-      console.log("Callback onSignalReady llamado correctamente", {
+      console.log("Callback onSignalReady called successfully", {
         timestamp: new Date(signal.timestamp).toISOString(),
         fingerDetected: signal.fingerDetected,
         quality: signal.quality,
@@ -38,23 +37,17 @@ export const useSignalProcessor = () => {
         filteredValue: signal.filteredValue
       });
       
-      // FORZAR DETECCIÓN PARA DEPURACIÓN
-      const modifiedSignal = { 
-        ...signal, 
-        fingerDetected: true,
-        quality: Math.max(70, signal.quality) // Garantizar calidad alta
-      };
-      
-      setLastSignal(modifiedSignal);
+      // Use signal as-is without forcing detection - respect actual finger detection
+      setLastSignal(signal);
       setError(null);
       setFramesProcessed(prev => prev + 1);
       
-      // Actualizar estadísticas
+      // Update statistics
       setSignalStats(prev => {
         const newStats = {
-          minValue: Math.min(prev.minValue, modifiedSignal.filteredValue),
-          maxValue: Math.max(prev.maxValue, modifiedSignal.filteredValue),
-          avgValue: (prev.avgValue * prev.totalValues + modifiedSignal.filteredValue) / (prev.totalValues + 1),
+          minValue: Math.min(prev.minValue, signal.filteredValue),
+          maxValue: Math.max(prev.maxValue, signal.filteredValue),
+          avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
           totalValues: prev.totalValues + 1,
           lastQualityUpdateTime: prev.lastQualityUpdateTime
         };
@@ -64,7 +57,7 @@ export const useSignalProcessor = () => {
     };
 
     const onError = (error: ProcessingError) => {
-      console.error("useSignalProcessor: Error detallado:", {
+      console.error("useSignalProcessor: Detailed error:", {
         ...error,
         formattedTime: new Date(error.timestamp).toISOString(),
         stack: new Error().stack
@@ -73,23 +66,23 @@ export const useSignalProcessor = () => {
       setError(error);
       
       toast({
-        title: "Error en procesamiento de señal",
+        title: "Error in signal processing",
         description: error.message,
         variant: "destructive"
       });
     };
 
-    // Crear el procesador con los callbacks adecuados
+    // Create processor with proper callbacks
     processorRef.current = new PPGSignalProcessor(onSignalReady, onError);
     
-    console.log("useSignalProcessor: Procesador creado con callbacks establecidos:", {
+    console.log("useSignalProcessor: Processor created with callbacks established:", {
       hasOnSignalReadyCallback: !!processorRef.current.onSignalReady,
       hasOnErrorCallback: !!processorRef.current.onError
     });
     
     return () => {
       if (processorRef.current) {
-        console.log("useSignalProcessor: Limpiando procesador");
+        console.log("useSignalProcessor: Cleaning up processor");
         processorRef.current.stop();
       }
       signalHistoryRef.current = [];
@@ -99,11 +92,11 @@ export const useSignalProcessor = () => {
 
   const startProcessing = useCallback(() => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No hay procesador disponible");
+      console.error("useSignalProcessor: No processor available");
       return;
     }
 
-    console.log("useSignalProcessor: Iniciando procesamiento", {
+    console.log("useSignalProcessor: Starting processing", {
       estadoAnterior: isProcessing,
       timestamp: new Date().toISOString(),
       processorExists: !!processorRef.current,
@@ -127,11 +120,11 @@ export const useSignalProcessor = () => {
 
   const stopProcessing = useCallback(() => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No hay procesador disponible para detener");
+      console.error("useSignalProcessor: No processor available to stop");
       return;
     }
 
-    console.log("useSignalProcessor: Deteniendo procesamiento", {
+    console.log("useSignalProcessor: Stopping processing", {
       estadoAnterior: isProcessing,
       framesProcessados: framesProcessed,
       estadisticasFinales: signalStats,
@@ -145,29 +138,29 @@ export const useSignalProcessor = () => {
 
   const calibrate = useCallback(async () => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No hay procesador disponible para calibrar");
+      console.error("useSignalProcessor: No processor available to calibrate");
       return false;
     }
 
     try {
-      console.log("useSignalProcessor: Iniciando calibración avanzada", {
+      console.log("useSignalProcessor: Starting advanced calibration", {
         timestamp: new Date().toISOString()
       });
       
       calibrationInProgressRef.current = true;
       await processorRef.current.calibrate();
       
-      // Esperamos un poco para dar tiempo a la calibración automática
+      // Wait a bit for the automatic calibration to complete
       setTimeout(() => {
         calibrationInProgressRef.current = false;
-        console.log("useSignalProcessor: Calibración avanzada completada", {
+        console.log("useSignalProcessor: Advanced calibration completed", {
           timestamp: new Date().toISOString()
         });
       }, 3000);
       
       return true;
     } catch (error) {
-      console.error("useSignalProcessor: Error de calibración detallado:", {
+      console.error("useSignalProcessor: Detailed calibration error:", {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         timestamp: new Date().toISOString()
@@ -180,30 +173,30 @@ export const useSignalProcessor = () => {
 
   const processFrame = useCallback((imageData: ImageData) => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No hay procesador disponible para procesar frames");
+      console.error("useSignalProcessor: No processor available to process frames");
       return;
     }
 
     if (isProcessing) {
-      console.log("processFrame: Procesando frame", {
+      console.log("processFrame: Processing frame", {
         width: imageData.width,
         height: imageData.height,
         timestamp: Date.now()
       });
       
-      // Verificar que los callbacks estén correctamente asignados
+      // Verify callbacks are properly assigned
       if (!processorRef.current.onSignalReady) {
-        console.error("processFrame: onSignalReady no está definido en el procesador");
+        console.error("processFrame: onSignalReady is not defined in the processor");
         return;
       }
       
       try {
         processorRef.current.processFrame(imageData);
       } catch (error) {
-        console.error("processFrame: Error al procesar frame", error);
+        console.error("processFrame: Error processing frame", error);
         toast({
-          title: "Error al procesar frame",
-          description: error instanceof Error ? error.message : "Error desconocido",
+          title: "Error processing frame",
+          description: error instanceof Error ? error.message : "Unknown error",
           variant: "destructive"
         });
       }
