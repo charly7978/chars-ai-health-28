@@ -724,4 +724,75 @@ export class HeartBeatProcessor {
   public getSignalQuality(): number {
     return this.currentSignalQuality;
   }
+
+  /**
+   * Calcula la calidad de la señal actual basado en múltiples factores
+   * @param normalizedValue Valor normalizado de la señal actual
+   * @param confidence Confianza de la detección actual
+   * @returns Valor de calidad entre 0-100
+   */
+  private calculateSignalQuality(normalizedValue: number, confidence: number): number {
+    // Si no hay suficientes datos para una evaluación precisa
+    if (this.signalBuffer.length < 10) {
+      return Math.min(this.currentSignalQuality + 5, 30); // Incremento gradual hasta 30 durante calibración
+    }
+    
+    // Calcular estadísticas de señal reciente
+    const recentSignals = this.signalBuffer.slice(-20);
+    const avgSignal = recentSignals.reduce((sum, val) => sum + val, 0) / recentSignals.length;
+    const maxSignal = Math.max(...recentSignals);
+    const minSignal = Math.min(...recentSignals);
+    const range = maxSignal - minSignal;
+    
+    // Componentes de calidad
+    let amplitudeQuality = 0;
+    let stabilityQuality = 0;
+    let rhythmQuality = 0;
+    
+    // 1. Calidad basada en amplitud (0-40)
+    amplitudeQuality = Math.min(Math.abs(normalizedValue) * 100, 40);
+    
+    // 2. Calidad basada en estabilidad de señal (0-30)
+    if (range > 0.01) {
+      const variability = range / avgSignal;
+      if (variability < 0.5) { // Variabilidad óptima para PPG
+        stabilityQuality = 30;
+      } else if (variability < 1.0) {
+        stabilityQuality = 20;
+      } else if (variability < 2.0) {
+        stabilityQuality = 10;
+      } else {
+        stabilityQuality = 5;
+      }
+    }
+    
+    // 3. Calidad basada en ritmo (0-30)
+    if (this.bpmHistory.length >= 3) {
+      const recentBPMs = this.bpmHistory.slice(-3);
+      const bpmVariance = Math.max(...recentBPMs) - Math.min(...recentBPMs);
+      
+      if (bpmVariance < 5) {
+        rhythmQuality = 30; // Ritmo muy estable
+      } else if (bpmVariance < 10) {
+        rhythmQuality = 20; // Ritmo estable
+      } else if (bpmVariance < 15) {
+        rhythmQuality = 10; // Ritmo variable pero aceptable
+      } else {
+        rhythmQuality = 5;  // Ritmo inestable
+      }
+    }
+    
+    // Calidad total (0-100)
+    let totalQuality = amplitudeQuality + stabilityQuality + rhythmQuality;
+    
+    // Penalización por baja confianza
+    if (confidence < 0.6) {
+      totalQuality *= confidence / 0.6;
+    }
+    
+    // Suavizado para evitar cambios bruscos
+    totalQuality = this.currentSignalQuality * 0.7 + totalQuality * 0.3;
+    
+    return Math.min(Math.max(Math.round(totalQuality), 0), 100);
+  }
 }
