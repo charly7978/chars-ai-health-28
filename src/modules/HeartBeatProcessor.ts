@@ -18,12 +18,10 @@ export class HeartBeatProcessor {
   private readonly BASELINE_FACTOR = 1.0; 
 
   // Parámetros de beep y vibración
-  private readonly BEEP_PRIMARY_FREQUENCY = 40; // Reducido aún más para un sonido más profundo
-  private readonly BEEP_SECONDARY_FREQUENCY = 20; // Frecuencia secundaria aún más baja
-  private readonly BEEP_DURATION = 200; // Mayor duración para sonido más profundo
-  private readonly BEEP_VOLUME = 0.90; // Volumen ajustado
+  private readonly BEEP_DURATION = 450; // Mayor duración para un sonido más completo y realista
+  private readonly BEEP_VOLUME = 0.85; // Volumen ajustado
   private readonly MIN_BEEP_INTERVAL_MS = 300;
-  private readonly VIBRATION_PATTERN = [40, 30, 80]; // Patrón más prolongado para simular un latido más profundo
+  private readonly VIBRATION_PATTERN = [60, 40, 100]; // Patrón más natural
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
   private readonly LOW_SIGNAL_THRESHOLD = 0.03;
@@ -62,74 +60,162 @@ export class HeartBeatProcessor {
       this.audioContext = new AudioContext();
       await this.audioContext.resume();
       
-      // Crear un buffer para el sonido de latido cardíaco mucho más grave
       if (this.audioContext) {
-        // Creamos un buffer para el sonido de latido cardíaco
+        // Crear un buffer para un sonido de latido cardíaco realista
         const sampleRate = this.audioContext.sampleRate;
-        const bufferSize = Math.floor(sampleRate * 0.4); // 400ms de duración para un sonido más largo y profundo
+        const bufferSize = Math.floor(sampleRate * 0.8); // 800ms para el sonido completo
         this.heartSoundBuffer = this.audioContext.createBuffer(1, bufferSize, sampleRate);
         
-        // Generamos un sonido de latido cardíaco mucho más grave y realista
         const channelData = this.heartSoundBuffer.getChannelData(0);
         
-        // Primera parte del latido (sonido "lub") - mucho más grave
-        const attackTime = Math.floor(sampleRate * 0.04);
-        const decayTime = Math.floor(sampleRate * 0.10);
-        for (let i = 0; i < attackTime; i++) {
-          // Frecuencia mucho más baja (0.04) para un tono profundo desde el inicio
-          channelData[i] = (i / attackTime) * Math.sin(i * 0.04) * 0.9;
-        }
-        for (let i = attackTime; i < attackTime + decayTime; i++) {
-          const decay = 1 - ((i - attackTime) / decayTime);
-          // Frecuencia reducida a 0.035 para mantener el tono grave
-          channelData[i] = decay * Math.sin(i * 0.035) * 0.85;
-        }
-        
-        // Pequeña pausa
-        const pauseTime = Math.floor(sampleRate * 0.06);
-        
-        // Segunda parte del latido (sonido "dub") - aún más grave
-        const secondAttackTime = Math.floor(sampleRate * 0.03);
-        const secondDecayTime = Math.floor(sampleRate * 0.17);
-        const secondStart = attackTime + decayTime + pauseTime;
-        for (let i = 0; i < secondAttackTime; i++) {
-          // Frecuencia aún más reducida (0.03) para la segunda parte
-          channelData[secondStart + i] = (i / secondAttackTime) * Math.sin(i * 0.03) * 0.7;
-        }
-        for (let i = secondAttackTime; i < secondAttackTime + secondDecayTime; i++) {
-          const decay = 1 - ((i - secondAttackTime) / secondDecayTime);
-          if (secondStart + i < bufferSize) {
-            // Tono aún más grave (0.025)
-            channelData[secondStart + i] = decay * Math.sin(i * 0.025) * 0.65;
-          }
-        }
+        // Diseñar un latido cardíaco realista con sonidos Lub-Dub
+        this.createRealisticHeartbeat(channelData, sampleRate);
       }
       
-      await this.playTestSound(0.01);
+      // Reproducir un sonido de prueba muy bajo volumen solo para desbloquear el audio
+      await this.playTestSound(0.005);
       console.log("HeartBeatProcessor: Audio Context Initialized");
     } catch (error) {
       console.error("HeartBeatProcessor: Error initializing audio", error);
     }
   }
 
-  private async playTestSound(volume: number = 0.01) {
+  private createRealisticHeartbeat(channelData: Float32Array, sampleRate: number) {
+    // Sonido Lub (primer tono)
+    const lubDuration = Math.floor(sampleRate * 0.15); // 150ms
+    const lubStart = 0;
+    
+    // Sonido Dub (segundo tono)
+    const dubDuration = Math.floor(sampleRate * 0.25); // 250ms
+    const dubStart = Math.floor(sampleRate * 0.22); // Comienza después de una pequeña pausa
+    
+    // Crear envolvente para ambos sonidos
+    const envLub = this.createEnvelope(lubDuration, 0.02, 0.2, 0.6, 0.2);
+    const envDub = this.createEnvelope(dubDuration, 0.03, 0.15, 0.65, 0.17);
+    
+    // Frecuencias principales para cada componente (muy bajas para un sonido profundo)
+    const lubFreq1 = 25; // Frecuencia muy baja para el primer tono
+    const lubFreq2 = 15; // Armónico secundario
+    const dubFreq1 = 20; // Frecuencia para el segundo tono
+    const dubFreq2 = 12; // Armónico secundario más bajo
+    
+    // Amplitudes y balances para crear un sonido rico pero no agudo
+    const lubAmp1 = 0.9;
+    const lubAmp2 = 0.5;
+    const dubAmp1 = 0.75;
+    const dubAmp2 = 0.45;
+    
+    // Aplicar ruido suave para la textura
+    const noiseFactor = 0.08;
+    
+    // Generar el primer sonido "Lub"
+    for (let i = 0; i < lubDuration; i++) {
+      const t = i / sampleRate;
+      const env = envLub[i];
+      
+      // Usar formas de onda sinusoidales suaves para evitar clics
+      const signal1 = lubAmp1 * Math.sin(2 * Math.PI * lubFreq1 * t);
+      const signal2 = lubAmp2 * Math.sin(2 * Math.PI * lubFreq2 * t);
+      
+      // Añadir ruido suave para textura
+      const noise = (Math.random() * 2 - 1) * noiseFactor;
+      
+      // Combinar señales con la envolvente
+      channelData[lubStart + i] = (signal1 + signal2 + noise) * env;
+    }
+    
+    // Generar el segundo sonido "Dub"
+    for (let i = 0; i < dubDuration; i++) {
+      const t = i / sampleRate;
+      const env = envDub[i];
+      
+      // Usar frecuencias más bajas para el segundo tono
+      const signal1 = dubAmp1 * Math.sin(2 * Math.PI * dubFreq1 * t);
+      const signal2 = dubAmp2 * Math.sin(2 * Math.PI * dubFreq2 * t);
+      
+      // Añadir ruido suave para textura
+      const noise = (Math.random() * 2 - 1) * noiseFactor * 0.8;
+      
+      // Combinar señales con la envolvente
+      if (dubStart + i < channelData.length) {
+        channelData[dubStart + i] = (signal1 + signal2 + noise) * env;
+      }
+    }
+    
+    // Aplicar un filtro de suavizado para eliminar cualquier posible clic
+    this.smoothBuffer(channelData, 32);
+  }
+
+  // Crear una envolvente ADSR (Attack, Decay, Sustain, Release) para sonido suave
+  private createEnvelope(size: number, attackRatio: number, decayRatio: number, sustainLevel: number, releaseRatio: number): Float32Array {
+    const env = new Float32Array(size);
+    
+    const attackSamples = Math.floor(size * attackRatio);
+    const decaySamples = Math.floor(size * decayRatio);
+    const releaseSamples = Math.floor(size * releaseRatio);
+    const sustainSamples = size - attackSamples - decaySamples - releaseSamples;
+    
+    // Fase de ataque (inicio suave)
+    for (let i = 0; i < attackSamples; i++) {
+      env[i] = i / attackSamples;
+    }
+    
+    // Fase de decay (caída suave hasta el nivel de sustain)
+    for (let i = 0; i < decaySamples; i++) {
+      env[attackSamples + i] = 1.0 - (1.0 - sustainLevel) * (i / decaySamples);
+    }
+    
+    // Fase de sustain (mantener)
+    for (let i = 0; i < sustainSamples; i++) {
+      env[attackSamples + decaySamples + i] = sustainLevel;
+    }
+    
+    // Fase de release (final suave)
+    for (let i = 0; i < releaseSamples; i++) {
+      env[attackSamples + decaySamples + sustainSamples + i] = sustainLevel * (1 - i / releaseSamples);
+    }
+    
+    return env;
+  }
+  
+  // Suavizar el buffer para eliminar clics
+  private smoothBuffer(buffer: Float32Array, windowSize: number) {
+    const tempBuffer = new Float32Array(buffer.length);
+    for (let i = 0; i < buffer.length; i++) {
+      let sum = 0;
+      let count = 0;
+      
+      for (let j = Math.max(0, i - windowSize/2); j < Math.min(buffer.length, i + windowSize/2); j++) {
+        sum += buffer[j];
+        count++;
+      }
+      
+      tempBuffer[i] = sum / count;
+    }
+    
+    for (let i = 0; i < buffer.length; i++) {
+      buffer[i] = tempBuffer[i];
+    }
+  }
+
+  private async playTestSound(volume: number = 0.005) {
     if (!this.audioContext) return;
     
     try {
-      // Usamos un tono muy bajo para el sonido de prueba
+      // Usar un tono muy bajo y muy bajo volumen solo para activar el AudioContext
       const oscillator = this.audioContext.createOscillator();
       const gain = this.audioContext.createGain();
       
-      oscillator.frequency.setValueAtTime(100, this.audioContext.currentTime); // Frecuencia mucho más baja para prueba
+      oscillator.frequency.setValueAtTime(5, this.audioContext.currentTime); // Frecuencia extremadamente baja
       gain.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05);
+      gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2);
       
       oscillator.connect(gain);
       gain.connect(this.audioContext.destination);
       
       oscillator.start();
-      oscillator.stop(this.audioContext.currentTime + 0.1);
+      oscillator.stop(this.audioContext.currentTime + 0.3);
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing test sound", error);
     }
@@ -155,77 +241,21 @@ export class HeartBeatProcessor {
         source.buffer = this.heartSoundBuffer;
         gainNode.gain.value = volume;
         
-        source.connect(gainNode);
+        // Aplicar un ligero filtro pasabajos para asegurar que no haya altas frecuencias
+        const filter = this.audioContext.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 120; // Filtrar frecuencias por encima de 120Hz
+        
+        source.connect(filter);
+        filter.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
         
         source.start();
-      } else {
-        // Fallback a la versión anterior si el buffer de sonido no está disponible
-        this.playLegacyHeartSound(volume);
       }
 
       this.lastBeepTime = now;
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
-    }
-  }
-
-  private async playLegacyHeartSound(volume: number = this.BEEP_VOLUME) {
-    if (!this.audioContext) return;
-    
-    try {
-      const primaryOscillator = this.audioContext.createOscillator();
-      const primaryGain = this.audioContext.createGain();
-
-      const secondaryOscillator = this.audioContext.createOscillator();
-      const secondaryGain = this.audioContext.createGain();
-
-      primaryOscillator.type = "sine";
-      primaryOscillator.frequency.setValueAtTime(
-        this.BEEP_PRIMARY_FREQUENCY,
-        this.audioContext.currentTime
-      );
-
-      secondaryOscillator.type = "sine";
-      secondaryOscillator.frequency.setValueAtTime(
-        this.BEEP_SECONDARY_FREQUENCY,
-        this.audioContext.currentTime
-      );
-
-      // Envelope del sonido principal - inicio más suave para evitar clicks
-      primaryGain.gain.setValueAtTime(0, this.audioContext.currentTime);
-      primaryGain.gain.linearRampToValueAtTime(
-        volume,
-        this.audioContext.currentTime + 0.03 // Rampa más larga para evitar tonos agudos al inicio
-      );
-      primaryGain.gain.exponentialRampToValueAtTime(
-        0.01,
-        this.audioContext.currentTime + this.BEEP_DURATION / 1000
-      );
-
-      // Envelope del sonido secundario - también con inicio más suave
-      secondaryGain.gain.setValueAtTime(0, this.audioContext.currentTime);
-      secondaryGain.gain.linearRampToValueAtTime(
-        volume * 0.6,
-        this.audioContext.currentTime + 0.03 // Rampa más larga para evitar tonos agudos al inicio
-      );
-      secondaryGain.gain.exponentialRampToValueAtTime(
-        0.01,
-        this.audioContext.currentTime + this.BEEP_DURATION / 1000
-      );
-
-      primaryOscillator.connect(primaryGain);
-      secondaryOscillator.connect(secondaryGain);
-      primaryGain.connect(this.audioContext.destination);
-      secondaryGain.connect(this.audioContext.destination);
-
-      primaryOscillator.start();
-      secondaryOscillator.start();
-
-      primaryOscillator.stop(this.audioContext.currentTime + this.BEEP_DURATION / 1000 + 0.05);
-      secondaryOscillator.stop(this.audioContext.currentTime + this.BEEP_DURATION / 1000 + 0.05);
-    } catch (error) {
-      console.error("HeartBeatProcessor: Error playing legacy heart sound", error);
     }
   }
 
