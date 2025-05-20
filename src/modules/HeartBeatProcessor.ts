@@ -1,4 +1,3 @@
-
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES (Valores por defecto) ──────────
   private readonly DEFAULT_SAMPLE_RATE = 60;
@@ -112,55 +111,97 @@ export class HeartBeatProcessor {
     }
   }
 
+  // Modificado: Reproducir sonido de latido con opción de arritmia más sutil y síncrona
   private async playHeartSound(volume: number = this.BEEP_VOLUME, isArrhythmic: boolean = false) {
     if (!this.audioContext || this.isInWarmup()) {
       // console.log("HeartBeatProcessor: No se puede reproducir - AudioContext no disponible o en warmup");
       return;
     }
+
     const now = Date.now();
     if (now - this.lastBeepTime < this.MIN_BEEP_INTERVAL_MS) {
       // console.log("HeartBeatProcessor: Demasiado pronto para otro sonido");
       return;
     }
+
     try {
+      // console.log(`HeartBeatProcessor: Reproduciendo sonido de latido ${isArrhythmic ? 'arrítmico (síncrono)' : 'normal'} con volumen:`, volume);
+      
       if (navigator.vibrate) {
         navigator.vibrate(this.VIBRATION_PATTERN);
       }
+
+      const currentTime = this.audioContext.currentTime;
+
+      // Primera parte del latido ("LUB")
       const oscillator1 = this.audioContext.createOscillator();
       const gainNode1 = this.audioContext.createGain();
+      
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 120;
-      gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode1.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.03);
-      gainNode1.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
+      oscillator1.frequency.value = 120; 
+      
+      gainNode1.gain.setValueAtTime(0, currentTime);
+      gainNode1.gain.linearRampToValueAtTime(volume * 1.2, currentTime + 0.03); 
+      gainNode1.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.15);
+      
       oscillator1.connect(gainNode1);
       gainNode1.connect(this.audioContext.destination);
-      oscillator1.start(this.audioContext.currentTime);
-      oscillator1.stop(this.audioContext.currentTime + 0.2);
+      
+      oscillator1.start(currentTime);
+      oscillator1.stop(currentTime + 0.2);
+      
+      // Segunda parte del latido ("DUB")
       const oscillator2 = this.audioContext.createOscillator();
       const gainNode2 = this.audioContext.createGain();
+      
+      const dubStartTime = currentTime + 0.1;
       oscillator2.type = 'sine';
       oscillator2.frequency.value = 120;
-      gainNode2.gain.setValueAtTime(0, this.audioContext.currentTime + 0.1);
-      gainNode2.gain.linearRampToValueAtTime(volume * 1.2, this.audioContext.currentTime + 0.13);
-      gainNode2.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
+      
+      gainNode2.gain.setValueAtTime(0, dubStartTime);
+      gainNode2.gain.linearRampToValueAtTime(volume * 1.2, dubStartTime + 0.03); 
+      gainNode2.gain.exponentialRampToValueAtTime(0.001, dubStartTime + 0.2); // DUB dura 0.2s (total 0.1 + 0.2 = 0.3s desde el inicio)
+      
       oscillator2.connect(gainNode2);
       gainNode2.connect(this.audioContext.destination);
-      oscillator2.start(this.audioContext.currentTime + 0.1);
-      oscillator2.stop(this.audioContext.currentTime + 0.35);
+      
+      oscillator2.start(dubStartTime);
+      oscillator2.stop(dubStartTime + 0.25); // Asegurar que se detenga
+      
+      // Tercer sonido para arritmias (superpuesto con el DUB)
       if (isArrhythmic) {
         const oscillator3 = this.audioContext.createOscillator();
         const gainNode3 = this.audioContext.createGain();
-        oscillator3.type = 'sine';
-        oscillator3.frequency.value = 440;
-        gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime + 0.36);
-        gainNode3.gain.linearRampToValueAtTime(volume * 0.7, this.audioContext.currentTime + 0.38);
-        gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5);
+        
+        oscillator3.type = 'sine'; // Mantenemos 'sine' para un tono claro
+        oscillator3.frequency.value = 440; // Frecuencia A4, distintiva del latido base
+
+        // Tiempos para el sonido de arritmia, diseñado para sonar *durante* el DUB
+        const arrhythmiaSoundStartTime = dubStartTime + 0.01; // Ligeramente después del inicio del DUB para no solapar el ataque
+        const arrhythmiaAttackDuration = 0.02;
+        const arrhythmiaSustainDuration = 0.10; // Duración del tono de arritmia
+        const arrhythmiaReleaseDuration = 0.05;
+
+        const arrhythmiaAttackEndTime = arrhythmiaSoundStartTime + arrhythmiaAttackDuration;
+        const arrhythmiaSustainEndTime = arrhythmiaAttackEndTime + arrhythmiaSustainDuration;
+        const arrhythmiaReleaseEndTime = arrhythmiaSustainEndTime + arrhythmiaReleaseDuration;
+
+        gainNode3.gain.setValueAtTime(0, arrhythmiaSoundStartTime);
+        // Un volumen ligeramente menor para que se mezcle pero sea distintivo
+        gainNode3.gain.linearRampToValueAtTime(volume * 0.65, arrhythmiaAttackEndTime); 
+        gainNode3.gain.setValueAtTime(volume * 0.65, arrhythmiaSustainEndTime); // Mantener durante el sustain
+        gainNode3.gain.exponentialRampToValueAtTime(0.001, arrhythmiaReleaseEndTime);
+        
         oscillator3.connect(gainNode3);
         gainNode3.connect(this.audioContext.destination);
-        oscillator3.start(this.audioContext.currentTime + 0.36);
-        oscillator3.stop(this.audioContext.currentTime + 0.6);
+        
+        oscillator3.start(arrhythmiaSoundStartTime);
+        oscillator3.stop(arrhythmiaReleaseEndTime + 0.01); // Detener poco después de la rampa
+        
+        // console.log("HeartBeatProcessor: Sonido de arritmia (superpuesto) reproducido");
       }
+      
+      // console.log("HeartBeatProcessor: Sonido de latido reproducido correctamente");
       this.lastBeepTime = now;
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
@@ -552,7 +593,7 @@ export class HeartBeatProcessor {
     // New Min Confidence: ${this.adaptiveMinConfidence.toFixed(3)},
     // New Derivative Threshold: ${this.adaptiveDerivativeThreshold.toFixed(3)}`);
 
-    // Limpiar buffers para la próxima ventana de ajuste, o no, para un promedio más largo.
+    // Limpiar buffers para la próxima ventana de ajuste, o no, para que sea un promedio más largo.
     // Por ahora, no los limpiamos para que sea un promedio móvil más largo.
     // Si se quisiera un ajuste basado solo en la última ventana:
     // this.recentPeakAmplitudes = [];
