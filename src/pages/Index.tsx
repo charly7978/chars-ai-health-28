@@ -526,9 +526,9 @@ const Index = () => {
         setBeatDetected(false);
       }, 2000);
     }
-    // Umbral mínimo de calidad, dedo detectado y detección de pico para medir
+    // Umbral mínimo de calidad y detección basada en picos
     const MIN_SIGNAL_QUALITY_TO_MEASURE = 30;
-    if (!lastSignal.fingerDetected || lastSignal.quality < MIN_SIGNAL_QUALITY_TO_MEASURE || !beatDetectedRef.current) {
+    if (lastSignal.quality < MIN_SIGNAL_QUALITY_TO_MEASURE || !beatDetectedRef.current) {
       setHeartRate(0);
       setHeartbeatSignal(0);
       setBeatMarker(0);
