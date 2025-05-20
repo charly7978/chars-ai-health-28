@@ -45,7 +45,7 @@ const PPGSignalMeter = ({
   const GRID_SIZE_X = 10;
   const GRID_SIZE_Y = 10;
   const verticalScale = 200.0;
-  const SMOOTHING_FACTOR = 0.5;
+  const SMOOTHING_FACTOR = 1.7;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
@@ -246,13 +246,13 @@ const PPGSignalMeter = ({
     if (baselineRef.current === null) {
       baselineRef.current = value;
     } else {
-      baselineRef.current = baselineRef.current * 0.99 + value * 0.01;
+      baselineRef.current = baselineRef.current * 0.95 + value * 0.05;
     }
     
     const smoothedValue = smoothValue(value, lastValueRef.current);
     lastValueRef.current = smoothedValue;
     
-    const normalizedValue = smoothedValue - (baselineRef.current || 0);
+    const normalizedValue = (baselineRef.current || 0) - smoothedValue;
     const scaledValue = normalizedValue * verticalScale;
     
     let isArrhythmia = false;
