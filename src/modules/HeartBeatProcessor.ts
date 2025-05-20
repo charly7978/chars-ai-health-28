@@ -7,7 +7,7 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_SIGNAL_THRESHOLD = 0.02; // Reducido para captar señal más débil
   private readonly DEFAULT_MIN_CONFIDENCE = 0.30; // Reducido para mejor detección
   private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.005; // Ajustado para mejor sensibilidad
-  private readonly DEFAULT_MIN_PEAK_TIME_MS = 300; // Restaurado a valor médicamente apropiado
+  private readonly DEFAULT_MIN_PEAK_TIME_MS = 500; // Aumentado para limitar BPM máximo y reducir falsos picos
   private readonly WARMUP_TIME_MS = 1000; // Reducido para obtener lecturas más rápido
 
   // Parámetros de filtrado ajustados para precisión médica
@@ -70,7 +70,7 @@ export class HeartBeatProcessor {
   private peakConfirmationBuffer: number[] = [];
   private lastConfirmedPeak: boolean = false;
   private smoothBPM: number = 0;
-  private readonly BPM_ALPHA = 0.3; // Restaurado para suavizado apropiado
+  private readonly BPM_ALPHA = 0.1; // Reducido para suavizado de BPM más fuerte y menos variaciones
   private peakCandidateIndex: number | null = null;
   private peakCandidateValue: number = 0;
   private isArrhythmiaDetected: boolean = false;
@@ -476,7 +476,7 @@ export class HeartBeatProcessor {
       return { isPeak: false, confidence: 0 };
     }
     // Detectar pico en máximo local: derivada negativa
-    const isOverThreshold = derivative < 0;
+    const isOverThreshold = derivative < 0 && normalizedValue >= this.adaptiveSignalThreshold;
     // Confianza máxima en cada detección de pico
     const confidence = 1;
 
@@ -506,8 +506,8 @@ export class HeartBeatProcessor {
    * Validación de picos basada estrictamente en criterios médicos
    */
   private validatePeak(peakValue: number, confidence: number): boolean {
-    // Validación simplificada: siempre confirmar el pico
-    return true;
+    // Confirmar pico solo si supera umbral adaptativo y confianza mínima
+    return peakValue >= this.adaptiveSignalThreshold && confidence >= this.DEFAULT_MIN_CONFIDENCE;
   }
 
   private updateBPM() {
