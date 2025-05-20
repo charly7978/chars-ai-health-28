@@ -162,29 +162,44 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Ventana más amplia para suavizar detección de dedo
+    // Actualizar historial de calidad de canal rojo y calcular calidad media
     this.qualityHistory.push(this.detectorScores.redChannel);
-    if (this.qualityHistory.length > 15) {
+    if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
       this.qualityHistory.shift();
     }
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    const thresholdOn = 0.05; // Menor para reconocer dedo más débil
-    const thresholdOff = 0.02; // Menor para no perder dedo estable
-    if (this.isCurrentlyDetected) {
-      if (avgQuality < thresholdOff) {
-        this.isCurrentlyDetected = false;
-      }
-    } else {
-      if (avgQuality > thresholdOn) {
-        this.isCurrentlyDetected = true;
-      }
+    // Umbrales adaptativos basados en calibración
+    const thresholdOn = this.adaptiveThreshold;
+    const thresholdOff = this.adaptiveThreshold * 0.5;
+    // Histeresis con contadores para robustez
+    if (avgQuality > thresholdOn) {
+      this.consecutiveDetections++;
+      this.consecutiveNoDetections = 0;
+    } else if (avgQuality < thresholdOff) {
+      this.consecutiveNoDetections++;
+      this.consecutiveDetections = 0;
+    }
+    // Confirmar detección tras N cuadros consecutivos
+    if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
+      this.isCurrentlyDetected = true;
+    }
+    // Perder detección tras M cuadros consecutivos por debajo del umbral
+    if (this.isCurrentlyDetected && this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
+      this.isCurrentlyDetected = false;
+    }
+    // Validación adicional: descartar si no hay pulsatilidad suficiente
+    if (this.isCurrentlyDetected && this.detectorScores.pulsatility < 0.2) {
+      this.isCurrentlyDetected = false;
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
       quality: Math.round(avgQuality * 100),
       detectorDetails: {
         ...this.detectorScores,
-        avgQuality
+        avgQuality,
+        adaptiveThreshold: this.adaptiveThreshold,
+        consecutiveDetections: this.consecutiveDetections,
+        consecutiveNoDetections: this.consecutiveNoDetections
       }
     };
   }
