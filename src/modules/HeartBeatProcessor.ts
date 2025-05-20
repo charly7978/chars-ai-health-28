@@ -121,10 +121,10 @@ export class HeartBeatProcessor {
       const gainNode1 = this.audioContext.createGain();
       
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 140; // Frecuencia entre 130Hz y 150Hz para "lub"
+      oscillator1.frequency.value = 120; // Igualada a la frecuencia del "dub" (120Hz)
       
       gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode1.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.03);
+      gainNode1.gain.linearRampToValueAtTime(volume * 1.1, this.audioContext.currentTime + 0.03); // Volumen ligeramente aumentado
       gainNode1.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.15);
       
       oscillator1.connect(gainNode1);
@@ -138,10 +138,10 @@ export class HeartBeatProcessor {
       const gainNode2 = this.audioContext.createGain();
       
       oscillator2.type = 'sine';
-      oscillator2.frequency.value = 120; // Frecuencia aumentada para "dub"
+      oscillator2.frequency.value = 120; // Mantenida en 120Hz
       
       gainNode2.gain.setValueAtTime(0, this.audioContext.currentTime + 0.1);
-      gainNode2.gain.linearRampToValueAtTime(volume * 0.8, this.audioContext.currentTime + 0.13);
+      gainNode2.gain.linearRampToValueAtTime(volume * 1.1, this.audioContext.currentTime + 0.13); // Volumen ligeramente aumentado
       gainNode2.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
       
       oscillator2.connect(gainNode2);
