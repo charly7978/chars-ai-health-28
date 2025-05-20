@@ -21,7 +21,7 @@ class KalmanFilter {
   }
 }
 
-export class PPGSignalProcessor implements SignalProcessor {
+export class SignalProcessor {
   private isProcessing: boolean = false;
   private kalmanFilter: KalmanFilter;
   private lastValues: number[] = [];
@@ -448,7 +448,6 @@ export class PPGSignalProcessor implements SignalProcessor {
     return Math.max(0, Math.min(1, 1 - (avgVariation / 40))) * (hasOutliers ? 0.7 : 1);
   }
 
-  // Ensure this method returns the correct type
   private analyzeSignalTrend(): 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' {
     if (this.signalHistory.length < 10) return 'moderately_stable';
     

@@ -247,7 +247,12 @@ export class HeartBeatProcessor {
     }
     this.lastValue = smoothed;
     
-    const { isPeak, confidence, rawDerivative } = this.detectPeak(normalizedValue, smoothDerivative);
+    // Use let instead of const since we might need to modify isPeak later
+    const peakDetectionResult = this.detectPeak(normalizedValue, smoothDerivative);
+    let isPeak = peakDetectionResult.isPeak;
+    const confidence = peakDetectionResult.confidence;
+    const rawDerivative = peakDetectionResult.rawDerivative;
+    
     const isConfirmedPeak = this.confirmPeak(isPeak, normalizedValue, confidence);
 
     if (isConfirmedPeak && !this.isInWarmup()) {
