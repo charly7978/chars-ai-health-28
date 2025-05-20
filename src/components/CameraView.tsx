@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -63,7 +62,7 @@ const CameraView = ({
 
       // Configuración optimizada para captura PPG - ajustes para mejor detección
       let baseVideoConstraints: MediaTrackConstraints = {
-        facingMode: 'environment',
+        facingMode: { exact: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 }
       };
