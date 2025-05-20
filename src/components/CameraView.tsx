@@ -26,8 +26,9 @@ const CameraView = ({
   const cameraInitialized = useRef<boolean>(false);
   const requestedTorch = useRef<boolean>(false);
   const attemptCount = useRef<number>(0);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const stopCamera = async () => {
+  const stopCamera = () => {
     if (stream) {
       console.log("Stopping camera stream and turning off torch");
       stream.getTracks().forEach(track => {
@@ -47,13 +48,14 @@ const CameraView = ({
       }
       
       setStream(null);
+      streamRef.current = null;
       setTorchEnabled(false);
       cameraInitialized.current = false;
       requestedTorch.current = false;
     }
   };
 
-  const startCamera = async () => {
+  const startCamera = () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         console.error("Su dispositivo no soporta acceso a la cámara");
@@ -107,42 +109,45 @@ const CameraView = ({
 
       console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
       
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-        console.log("CameraView: Acceso a la cámara obtenido exitosamente");
-        handleStream(newStream);
-      } catch (err) {
-        attemptCount.current += 1;
-        console.error(`CameraView: Error al acceder a la cámara (intento ${attemptCount.current}):`, err);
-        
-        // Si fallamos en desktop, intentar con configuración más simple
-        if (isDesktop) {
-          console.log("CameraView: Intentando con configuración alternativa para Windows");
-          try {
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(newStream => {
+          console.log("CameraView: Acceso a la cámara obtenido exitosamente");
+          handleStream(newStream);
+        })
+        .catch(err => {
+          attemptCount.current += 1;
+          console.error(`CameraView: Error al acceder a la cámara (intento ${attemptCount.current}):`, err);
+          
+          // Si fallamos en desktop, intentar con configuración más simple
+          if (isDesktop) {
+            console.log("CameraView: Intentando con configuración alternativa para Windows");
             const simpleConstraints: MediaStreamConstraints = {
               video: true,
               audio: false
             };
-            const fallbackStream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
-            console.log("CameraView: Acceso a la cámara obtenido con configuración alternativa");
-            handleStream(fallbackStream);
-          } catch (fallbackErr) {
-            console.error("CameraView: Error con configuración alternativa:", fallbackErr);
+            
+            navigator.mediaDevices.getUserMedia(simpleConstraints)
+              .then(fallbackStream => {
+                console.log("CameraView: Acceso a la cámara obtenido con configuración alternativa");
+                handleStream(fallbackStream);
+              })
+              .catch(fallbackErr => {
+                console.error("CameraView: Error con configuración alternativa:", fallbackErr);
+                toast({
+                  title: "Error de cámara",
+                  description: "No se pudo acceder a la cámara. Intente con otro navegador o dispositivo.",
+                  variant: "destructive"
+                });
+              });
+          } else {
+            // Si estamos en móvil, mostrar un mensaje de error
             toast({
               title: "Error de cámara",
-              description: "No se pudo acceder a la cámara. Intente con otro navegador o dispositivo.",
+              description: "No se pudo acceder a la cámara. Revise los permisos e intente de nuevo.",
               variant: "destructive"
             });
           }
-        } else {
-          // Si estamos en móvil, mostrar un mensaje de error
-          toast({
-            title: "Error de cámara",
-            description: "No se pudo acceder a la cámara. Revise los permisos e intente de nuevo.",
-            variant: "destructive"
-          });
-        }
-      }
+        });
     } catch (err) {
       console.error("CameraView: Error general al iniciar la cámara:", err);
       toast({
@@ -154,6 +159,9 @@ const CameraView = ({
   };
 
   const handleStream = (newStream: MediaStream) => {
+    // Guardar referencia al stream para estabilidad
+    streamRef.current = newStream;
+    
     // NUEVO: Verificación de callback
     if (!onStreamReady) {
       console.error("CameraView: onStreamReady callback no disponible");
@@ -210,14 +218,17 @@ const CameraView = ({
           console.log("CameraView: Modo de balance de blancos continuo aplicado");
         }
 
-        // Aplicar configuraciones avanzadas
+        // Aplicar configuraciones avanzadas con tiempo de espera para estabilidad
         if (advancedConstraints.length > 0) {
-          videoTrack.applyConstraints({
-            advanced: advancedConstraints
-          }).catch(err => {
-            console.error("CameraView: Error aplicando constraints avanzados:", err);
-          });
-          console.log("CameraView: Constraints avanzados aplicados exitosamente");
+          // Esperar un momento antes de aplicar constraints
+          setTimeout(() => {
+            videoTrack.applyConstraints({
+              advanced: advancedConstraints
+            }).catch(err => {
+              console.error("CameraView: Error aplicando constraints avanzados:", err);
+            });
+            console.log("CameraView: Constraints avanzados aplicados exitosamente");
+          }, 300);
         }
 
         if (videoRef.current) {
@@ -225,33 +236,36 @@ const CameraView = ({
           videoRef.current.style.backfaceVisibility = 'hidden';
         }
         
-        // Verificar disponibilidad de linterna
+        // Verificar disponibilidad de linterna - con tiempo de espera para estabilidad
         if (capabilities.torch) {
           console.log("CameraView: Este dispositivo tiene linterna disponible");
           setDeviceSupportsTorch(true);
           
-          videoTrack.applyConstraints({
-            advanced: [{ torch: true }]
-          }).then(() => {
-            setTorchEnabled(true);
-            requestedTorch.current = true;
-            console.log("CameraView: Linterna activada para medición PPG");
-          }).catch(err => {
-            console.error("CameraView: Error activando linterna:", err);
-            torchAttempts.current++;
-            
-            // Intentarlo de nuevo inmediatamente
-            setTimeout(() => {
-              videoTrack.applyConstraints({
-                advanced: [{ torch: true }]
-              }).then(() => {
-                setTorchEnabled(true);
-                console.log("CameraView: Linterna activada en segundo intento");
-              }).catch(retryErr => {
-                console.error("CameraView: Error en segundo intento de linterna:", retryErr);
-              });
-            }, 1000);
-          });
+          // Esperar un momento antes de activar la linterna
+          setTimeout(() => {
+            videoTrack.applyConstraints({
+              advanced: [{ torch: true }]
+            }).then(() => {
+              setTorchEnabled(true);
+              requestedTorch.current = true;
+              console.log("CameraView: Linterna activada para medición PPG");
+            }).catch(err => {
+              console.error("CameraView: Error activando linterna:", err);
+              torchAttempts.current++;
+              
+              // Intentarlo de nuevo después de un tiempo
+              setTimeout(() => {
+                videoTrack.applyConstraints({
+                  advanced: [{ torch: true }]
+                }).then(() => {
+                  setTorchEnabled(true);
+                  console.log("CameraView: Linterna activada en segundo intento");
+                }).catch(retryErr => {
+                  console.error("CameraView: Error en segundo intento de linterna:", retryErr);
+                });
+              }, 1500); // Tiempo de espera mayor
+            });
+          }, 500);
         } else {
           console.log("CameraView: Este dispositivo no tiene linterna disponible");
           setDeviceSupportsTorch(false);
@@ -272,14 +286,23 @@ const CameraView = ({
     setStream(newStream);
     cameraInitialized.current = true;
     
-    // CRÍTICO: Asegurar que el callback se llame correctamente
+    // CRÍTICO: Asegurar que el callback se llame correctamente después de que el video esté listo
     if (onStreamReady) {
-      console.log("CameraView: Llamando onStreamReady con stream:", {
-        hasVideoTracks: newStream.getVideoTracks().length > 0,
-        streamActive: newStream.active,
-        timestamp: new Date().toISOString()
-      });
-      onStreamReady(newStream);
+      // Esperar a que el video esté listo antes de llamar al callback
+      videoRef.current?.addEventListener('loadedmetadata', () => {
+        console.log("CameraView: Video metadata cargada, llamando onStreamReady");
+        if (onStreamReady && streamRef.current) {
+          onStreamReady(streamRef.current);
+        }
+      }, { once: true });
+      
+      // Respaldo: si después de 1 segundo no se ha disparado el evento, llamar al callback
+      setTimeout(() => {
+        if (onStreamReady && streamRef.current && cameraInitialized.current) {
+          console.log("CameraView: Llamando onStreamReady (respaldo por timeout)");
+          onStreamReady(streamRef.current);
+        }
+      }, 1000);
     }
   };
 
@@ -313,9 +336,12 @@ const CameraView = ({
      * se reactiva cuando sea necesario.
      */
     const keepTorchOn = () => {
-      if (!isMonitoring || !deviceSupportsTorch) return;
+      if (!isMonitoring || !deviceSupportsTorch || !stream) return;
 
-      const torchIsReallyOn = videoTrack.getSettings && (videoTrack.getSettings() as any).torch === true;
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack || !videoTrack.getSettings) return;
+
+      const torchIsReallyOn = (videoTrack.getSettings() as any).torch === true;
 
       if (!torchIsReallyOn) {
         console.log("CameraView: Re-activando linterna (torch)");
@@ -358,6 +384,8 @@ const CameraView = ({
     const focusIntervalTime = isFingerDetected ? 4000 : 1500;
     
     const attemptRefocus = () => {
+      if (!stream) return;
+      
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && videoTrack.getCapabilities()?.focusMode) {
         console.log("CameraView: Ajustando enfoque para optimizar detección");
