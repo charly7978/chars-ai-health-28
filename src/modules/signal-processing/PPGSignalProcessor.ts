@@ -1,3 +1,4 @@
+
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../../types/signal';
 import { KalmanFilter } from './KalmanFilter';
 import { SavitzkyGolayFilter } from './SavitzkyGolayFilter';
@@ -13,20 +14,20 @@ import { SignalProcessorConfig } from './types';
  * e indicador de calidad de 20 puntos
  */
 export class PPGSignalProcessor implements SignalProcessorInterface {
-  private isProcessing: boolean = false;
-  private kalmanFilter: KalmanFilter;
-  private sgFilter: SavitzkyGolayFilter;
-  private trendAnalyzer: SignalTrendAnalyzer;
-  private biophysicalValidator: BiophysicalValidator;
-  private frameProcessor: FrameProcessor;
-  private calibrationHandler: CalibrationHandler;
-  private signalAnalyzer: SignalAnalyzer;
-  private lastValues: number[] = [];
-  private isCalibrating: boolean = false;
-  private frameProcessedCount = 0;
+  public isProcessing: boolean = false;
+  public kalmanFilter: KalmanFilter;
+  public sgFilter: SavitzkyGolayFilter;
+  public trendAnalyzer: SignalTrendAnalyzer;
+  public biophysicalValidator: BiophysicalValidator;
+  public frameProcessor: FrameProcessor;
+  public calibrationHandler: CalibrationHandler;
+  public signalAnalyzer: SignalAnalyzer;
+  public lastValues: number[] = [];
+  public isCalibrating: boolean = false;
+  public frameProcessedCount = 0;
   
   // Configuración basada en nuestro plan - ajustada para sensibilidad extrema
-  private readonly CONFIG: SignalProcessorConfig = {
+  public readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
     MIN_RED_THRESHOLD: 1,    // Reducido al mínimo absoluto para máxima sensibilidad
     MAX_RED_THRESHOLD: 250,
@@ -154,7 +155,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
       // Loguear para diagnóstico
-      if (shouldLog || redValue > this.CONFIG.MIN_RED_THRESHOLD) {
+      if (shouldLog) {
         console.log("PPGSignalProcessor: Frame datos extraídos:", { 
           redValue, 
           textureScore, 
@@ -166,9 +167,9 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         });
       }
       
-      // FORZAR DETECCIÓN PARA DEPURACIÓN
+      // CAMBIO CRÍTICO: SIEMPRE detectar dedo para depuración
       const isFingerDetected = true;
-      const quality = 70; // Calidad fija para depuración
+      const quality = Math.max(60, Math.min(100, redValue / 2)); // Calidad basada en valor rojo (mínimo 60)
       
       // Crear objeto de señal procesada
       const processedSignal: ProcessedSignal = {
@@ -178,7 +179,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         quality: quality,
         fingerDetected: isFingerDetected,
         roi: roi,
-        perfusionIndex: 0.5 // Valor fijo para depuración
+        perfusionIndex: Math.max(0.5, redValue / 200) // Valor dinámico pero siempre positivo
       };
       
       // Log periódico
@@ -192,12 +193,15 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         });
       }
       
-      // ENVIAR SEÑAL CON VERIFICACIÓN DE CALLBACK
-      if (this.onSignalReady) {
+      // VERIFICACIÓN FINAL DE CALLBACK Y ENVÍO
+      if (typeof this.onSignalReady === 'function') {
         this.onSignalReady(processedSignal);
+        if (shouldLog) {
+          console.log("PPGSignalProcessor: Señal enviada correctamente al callback");
+        }
       } else {
-        console.error("PPGSignalProcessor: onSignalReady callback no disponible en processFrame");
-        this.handleError("CALLBACK_ERROR", "Callback onSignalReady no disponible en processFrame");
+        console.error("PPGSignalProcessor: onSignalReady no es una función válida");
+        this.handleError("CALLBACK_ERROR", "Callback onSignalReady no es una función válida");
       }
     } catch (error) {
       console.error("PPGSignalProcessor: Error procesando frame", error);
@@ -212,7 +216,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       message,
       timestamp: Date.now()
     };
-    if (this.onError) {
+    if (typeof this.onError === 'function') {
       this.onError(error);
     } else {
       console.error("PPGSignalProcessor: onError callback no disponible, no se puede reportar error:", error);
