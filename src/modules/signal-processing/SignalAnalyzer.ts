@@ -156,16 +156,15 @@ export class SignalAnalyzer {
     this.calibrationSamples = [];
   }
 
-  // LÓGICA ULTRA-SIMPLIFICADA: solo detecta dedo si el canal rojo supera un umbral mínimo absoluto
+  // LÓGICA ULTRA-SIMPLIFICADA: solo detecta dedo si el canal rojo supera un umbral adaptativo
   analyzeSignalMultiDetector(
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Solo un umbral absoluto de rojo, sin checks de pulsatilidad ni estabilidad
+    // LÓGICA ULTRA-SIMPLIFICADA: solo detecta dedo si el canal rojo supera un umbral adaptativo
     const rojoOk = this.detectorScores.redChannel > this.adaptiveThreshold;
     if (!rojoOk) {
       this.isCurrentlyDetected = false;
-      this.consecutiveDetections = 0;
       return {
         isFingerDetected: false,
         quality: 0,
@@ -175,7 +174,7 @@ export class SignalAnalyzer {
         }
       };
     }
-    // Si pasa el umbral, detectar dedo tras 3 frames consecutivos
+    // Acumula detecciones sin reiniciarlas prematuramente
     this.consecutiveDetections++;
     this.consecutiveNoDetections = 0;
     if (this.consecutiveDetections >= 3) {
