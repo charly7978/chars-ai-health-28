@@ -474,12 +474,10 @@ export class HeartBeatProcessor {
     if (timeSinceLastPeak < this.DEFAULT_MIN_PEAK_TIME_MS) {
       return { isPeak: false, confidence: 0 };
     }
-    
-    // Detección de pico simplificada: solo basado en amplitud sobre umbral adaptativo
-    const isOverThreshold = normalizedValue > this.adaptiveSignalThreshold * 0.8;
-    
-    // Confianza basada en proporción de amplitud al umbral
-    const confidence = Math.min(Math.max(normalizedValue / (this.adaptiveSignalThreshold * 0.8), 0), 1);
+    // Detectar pico en máximo local: derivada negativa
+    const isOverThreshold = derivative < 0;
+    // Confianza máxima en cada detección de pico
+    const confidence = 1;
 
     return { isPeak: isOverThreshold, confidence, rawDerivative: derivative };
   }

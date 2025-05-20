@@ -162,14 +162,14 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Detección simplificada basada en media de calidad con hysteresis
+    // Ventana más amplia para suavizar detección de dedo
     this.qualityHistory.push(this.detectorScores.redChannel);
-    if (this.qualityHistory.length > 5) {
+    if (this.qualityHistory.length > 15) {
       this.qualityHistory.shift();
     }
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    const thresholdOn = 0.15;
-    const thresholdOff = 0.1;
+    const thresholdOn = 0.05; // Menor para reconocer dedo más débil
+    const thresholdOff = 0.02; // Menor para no perder dedo estable
     if (this.isCurrentlyDetected) {
       if (avgQuality < thresholdOff) {
         this.isCurrentlyDetected = false;
