@@ -28,8 +28,13 @@ export class SignalAnalyzer {
   private qualityHistory: number[] = [];
   private motionArtifactScore: number = 0;
   private readonly DETECTION_TIMEOUT = 3000; // Reducido para respuesta más rápida (antes 5000)
-  private readonly MOTION_ARTIFACT_THRESHOLD = 0.7; // Aumentado para ser más tolerante
+  private readonly MOTION_ARTIFACT_THRESHOLD = 0.75; // Ajustado para mejor equilibrio (era 0.7)
   private valueHistory: number[] = []; // Track signal history for artifact detection
+  // Nuevo: calibración adaptativa
+  private calibrationPhase: boolean = true;
+  private calibrationSamples: number[] = [];
+  private readonly CALIBRATION_SAMPLE_SIZE = 20;
+  private adaptiveThreshold: number = 0.03; // Umbral inicial que se ajustará
   
   constructor(config: { 
     QUALITY_LEVELS: number;
@@ -40,7 +45,7 @@ export class SignalAnalyzer {
     // Modificar configuración para ser más sensible
     this.CONFIG = {
       ...config,
-      MIN_CONSECUTIVE_DETECTIONS: Math.max(1, Math.floor(config.MIN_CONSECUTIVE_DETECTIONS / 2)), // Reducido para detección más rápida
+      MIN_CONSECUTIVE_DETECTIONS: Math.max(1, Math.floor(config.MIN_CONSECUTIVE_DETECTIONS / 3)), // Reducido aún más para detección más rápida (antes /2)
       MAX_CONSECUTIVE_NO_DETECTIONS: Math.ceil(config.MAX_CONSECUTIVE_NO_DETECTIONS * 1.5) // Aumentado para ser más tolerante
     };
   }
@@ -52,13 +57,19 @@ export class SignalAnalyzer {
     pulsatility: number;
     biophysical: number;
     periodicity: number;
+    textureScore?: number; // Opcional para compatibilidad
   }): void {
-    // Store actual scores without manipulation
-    this.detectorScores.redChannel = Math.max(0, Math.min(1, scores.redChannel * 1.1)); // Incrementado para mayor sensibilidad
-    this.detectorScores.stability = Math.max(0, Math.min(1, scores.stability * 1.05)); // Incrementado levemente
-    this.detectorScores.pulsatility = Math.max(0, Math.min(1, scores.pulsatility * 1.15)); // Incrementado para mayor sensibilidad
-    this.detectorScores.biophysical = Math.max(0, Math.min(1, scores.biophysical)); // Mantiene el valor original
-    this.detectorScores.periodicity = Math.max(0, Math.min(1, scores.periodicity));
+    // Store actual scores with enhancement multipliers
+    this.detectorScores.redChannel = Math.max(0, Math.min(1, scores.redChannel * 1.2)); // Aumentado (antes 1.1)
+    this.detectorScores.stability = Math.max(0, Math.min(1, scores.stability * 1.1)); // Incrementado levemente (antes 1.05)
+    this.detectorScores.pulsatility = Math.max(0, Math.min(1, scores.pulsatility * 1.25)); // Aumentado significativamente (antes 1.15)
+    this.detectorScores.biophysical = Math.max(0, Math.min(1, scores.biophysical * 1.1)); // Ahora también se aumenta (antes sin multiplicador)
+    this.detectorScores.periodicity = Math.max(0, Math.min(1, scores.periodicity * 1.1)); // Aumentado levemente (antes sin multiplicador)
+    
+    // Store texture score if available
+    if (typeof scores.textureScore !== 'undefined') {
+      this.detectorScores.textureScore = scores.textureScore;
+    }
     
     // Track values for motion artifact detection
     this.valueHistory.push(scores.redValue);
@@ -66,7 +77,7 @@ export class SignalAnalyzer {
       this.valueHistory.shift();
     }
     
-    // Detectar artefactos de movimiento con tolerancia aumentada
+    // Detectar artefactos de movimiento con tolerancia ajustada
     if (this.valueHistory.length >= 5) {
       const recentValues = this.valueHistory.slice(-5);
       const maxChange = Math.max(...recentValues) - Math.min(...recentValues);
@@ -76,11 +87,22 @@ export class SignalAnalyzer {
       const normalizedChange = meanValue > 0 ? maxChange / meanValue : 0;
       
       // Update motion artifact score with smoothing
-      this.motionArtifactScore = this.motionArtifactScore * 0.7 + (normalizedChange > 0.5 ? 0.3 : 0); // Umbral aumentado
+      this.motionArtifactScore = this.motionArtifactScore * 0.7 + (normalizedChange > 0.55 ? 0.3 : 0); // Umbral aumentado (antes 0.5)
       
       // Aplicar penalización de artefacto más suave
       if (this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD) {
-        this.detectorScores.stability *= 0.6; // Penalización más suave (antes 0.4)
+        this.detectorScores.stability *= 0.7; // Penalización más suave (antes 0.6)
+      }
+    }
+    
+    // Calibración adaptativa - recolectar muestras en fase de calibración
+    if (this.calibrationPhase && this.detectorScores.redChannel > 0.1) {
+      this.calibrationSamples.push(scores.redValue);
+      
+      // Cuando tenemos suficientes muestras, calibramos el umbral
+      if (this.calibrationSamples.length >= this.CALIBRATION_SAMPLE_SIZE) {
+        this.calibrateAdaptiveThreshold();
+        this.calibrationPhase = false;
       }
     }
     
@@ -91,24 +113,60 @@ export class SignalAnalyzer {
       pulsatility: this.detectorScores.pulsatility,
       biophysical: this.detectorScores.biophysical,
       periodicity: this.detectorScores.periodicity,
-      motionArtifact: this.motionArtifactScore
+      motionArtifact: this.motionArtifactScore,
+      adaptiveThreshold: this.adaptiveThreshold,
+      calibrationPhase: this.calibrationPhase
     });
+  }
+
+  // Nuevo método para calibración adaptativa del umbral
+  private calibrateAdaptiveThreshold(): void {
+    // Ordenar muestras y eliminar valores extremos (10% superior e inferior)
+    const sortedSamples = [...this.calibrationSamples].sort((a, b) => a - b);
+    const trimCount = Math.floor(sortedSamples.length * 0.1);
+    const trimmedSamples = sortedSamples.slice(trimCount, sortedSamples.length - trimCount);
+    
+    // Calcular media y desviación estándar
+    const mean = trimmedSamples.reduce((sum, val) => sum + val, 0) / trimmedSamples.length;
+    const variance = trimmedSamples.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / trimmedSamples.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Calcular coeficiente de variación (CV) para ajustar sensibilidad
+    const cv = mean > 0 ? stdDev / mean : 1;
+    
+    // Ajustar umbral según variabilidad - menor variabilidad requiere umbral más alto
+    // para evitar falsos positivos, mayor variabilidad requiere umbral más bajo
+    if (cv < 0.05) { // Muy estable
+      this.adaptiveThreshold = 0.04; // Umbral más alto para evitar falsos positivos
+    } else if (cv < 0.1) { // Estable
+      this.adaptiveThreshold = 0.025; // Umbral moderado
+    } else { // Variable
+      this.adaptiveThreshold = 0.02; // Umbral más bajo para mejorar detección
+    }
+    
+    console.log("SignalAnalyzer: Calibración adaptativa completada", {
+      muestras: this.calibrationSamples.length,
+      media: mean.toFixed(2),
+      desviacionEstandar: stdDev.toFixed(2),
+      coeficienteVariacion: cv.toFixed(3),
+      umbralAdaptativo: this.adaptiveThreshold
+    });
+    
+    // Limpiar muestras de calibración
+    this.calibrationSamples = [];
   }
 
   analyzeSignalMultiDetector(
     filtered: number, 
     trendResult: 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological'
   ): DetectionResult {
-    // Implement real finger detection logic with appropriate medical thresholds
-    const currentTime = Date.now();
-    
     // SIMPLIFICACIÓN: Solo tres lógicas principales
     const rojoOk = this.detectorScores.redChannel > 0.04;
     const pulsoOk = this.detectorScores.pulsatility > 0.08;
     const estabilidadOk = this.detectorScores.stability > 0.15;
-    // Eliminar lógica de periodicidad, consistencia y tendencia fisiológica
     if (!rojoOk || !pulsoOk || !estabilidadOk) {
       this.isCurrentlyDetected = false;
+      this.consecutiveDetections = 0;
       return {
         isFingerDetected: false,
         quality: 0,
@@ -157,6 +215,9 @@ export class SignalAnalyzer {
     this.qualityHistory = [];
     this.motionArtifactScore = 0;
     this.valueHistory = [];
+    this.calibrationPhase = true; // Reiniciar fase de calibración
+    this.calibrationSamples = []; // Limpiar muestras de calibración
+    this.adaptiveThreshold = 0.03; // Restablecer umbral adaptativo
     this.detectorScores = {
       redChannel: 0,
       stability: 0,
