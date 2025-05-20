@@ -1,4 +1,4 @@
-import { ProcessedSignal, ProcessingError, SignalProcessor } from '../types/signal';
+import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../types/signal';
 
 class KalmanFilter {
   private R: number = 0.01;
@@ -21,7 +21,7 @@ class KalmanFilter {
   }
 }
 
-export class SignalProcessor {
+export class PPGSignalProcessor implements SignalProcessorInterface {
   private isProcessing: boolean = false;
   private kalmanFilter: KalmanFilter;
   private lastValues: number[] = [];
