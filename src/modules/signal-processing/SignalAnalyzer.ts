@@ -168,26 +168,30 @@ export class SignalAnalyzer {
       this.qualityHistory.shift();
     }
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    // Umbrales para calidad, estabilidad y pulsatilidad
+    // Umbrales de calidad para detección inicial
     const qualityOn = this.adaptiveThreshold;
     const qualityOff = this.adaptiveThreshold * 0.5;
-    const stabilityOn = 0.4;
-    const stabilityOff = 0.3;
-    const pulseOn = 0.3;
-    const pulseOff = 0.25;
-    // Histeresis combinando calidad, tendencia estable, estabilidad y pulsatilidad
-    if (avgQuality > qualityOn && trendResult === 'stable' &&
-        this.detectorScores.stability > stabilityOn &&
-        this.detectorScores.pulsatility > pulseOn) {
-      this.consecutiveDetections++;
-      this.consecutiveNoDetections = 0;
-    } else if (avgQuality < qualityOff || trendResult !== 'stable' ||
-               this.detectorScores.stability < stabilityOff ||
-               this.detectorScores.pulsatility < pulseOff) {
-      this.consecutiveNoDetections++;
-      this.consecutiveDetections = 0;
+    // Lógica de histeresis: adquisición vs mantenimiento
+    if (!this.isCurrentlyDetected) {
+      // Detección inicial: solo calidad y señal fisiológica
+      if (avgQuality > qualityOn && trendResult !== 'non_physiological') {
+        this.consecutiveDetections++;
+      } else {
+        this.consecutiveDetections = 0;
+      }
+    } else {
+      // Mantenimiento: añadir estabilidad y pulsatilidad para reducir falsos positivos
+      const stabilityOff = 0.3;
+      const pulseOff = 0.25;
+      if (avgQuality < qualityOff || trendResult === 'non_physiological' ||
+          this.detectorScores.stability < stabilityOff ||
+          this.detectorScores.pulsatility < pulseOff) {
+        this.consecutiveNoDetections++;
+      } else {
+        this.consecutiveNoDetections = 0;
+      }
     }
-    // Confirmar o perder detección según contadores configurables
+    // Cambiar estado tras N cuadros consecutivos
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
     }
