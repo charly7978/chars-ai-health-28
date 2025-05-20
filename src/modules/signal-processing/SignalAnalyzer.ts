@@ -171,10 +171,15 @@ export class SignalAnalyzer {
     // Umbrales de calidad para detección inicial
     const qualityOn = this.adaptiveThreshold;
     const qualityOff = this.adaptiveThreshold * 0.5;
+    // Umbrales adicionales para robustez en adquisición
+    const stabilityOn = 0.4;
+    const pulseOn = 0.3;
     // Lógica de histeresis: adquisición vs mantenimiento
     if (!this.isCurrentlyDetected) {
-      // Detección inicial: solo calidad y señal fisiológica
-      if (avgQuality > qualityOn && trendResult !== 'non_physiological') {
+      // Detección inicial: calidad, estabilidad, pulsatilidad y tendencia válida
+      if (avgQuality > qualityOn && trendResult !== 'non_physiological' &&
+          this.detectorScores.stability > stabilityOn &&
+          this.detectorScores.pulsatility > pulseOn) {
         this.consecutiveDetections++;
       } else {
         this.consecutiveDetections = 0;
