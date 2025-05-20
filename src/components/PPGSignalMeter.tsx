@@ -44,8 +44,8 @@ const PPGSignalMeter = ({
   const CANVAS_HEIGHT = 900;
   const GRID_SIZE_X = 10;
   const GRID_SIZE_Y = 10;
-  const verticalScale = 200.0;
-  const SMOOTHING_FACTOR = 1.7;
+  const verticalScale = 1000.0;
+  const SMOOTHING_FACTOR = 1.0;
   const TARGET_FPS = 60;
   const FRAME_TIME = 1000 / TARGET_FPS;
   const BUFFER_SIZE = 600;
@@ -246,7 +246,7 @@ const PPGSignalMeter = ({
     if (baselineRef.current === null) {
       baselineRef.current = value;
     } else {
-      baselineRef.current = baselineRef.current * 0.95 + value * 0.05;
+      baselineRef.current = baselineRef.current * 0.995 + value * 0.005;
     }
     
     const smoothedValue = smoothValue(value, lastValueRef.current);
