@@ -91,10 +91,8 @@ const CameraView = ({
           
           if (capabilities.exposureMode) {
             advancedConstraints.push({ 
-              exposureMode: 'continuous',
-              // Fijamos un valor de exposición manual si está disponible
-              exposureTime: capabilities.exposureTime?.max ? 
-                capabilities.exposureTime.max / 2 : undefined
+              exposureMode: 'continuous'
+              // Eliminamos exposureTime ya que no es compatible con la definición de tipos
             });
             console.log("CameraView: Modo de exposición continua aplicado");
           }
@@ -235,10 +233,8 @@ const CameraView = ({
         console.log("CameraView: Intentando re-enfocar la cámara");
         videoTrack.applyConstraints({
           advanced: [{ 
-            focusMode: 'continuous',
-            // Enfoque macro cuando hay dedo para captar mejor detalles cercanos
-            focusDistance: isFingerDetected ? 
-              { ideal: 0.1, min: 0.05, max: 0.2 } : undefined
+            focusMode: 'continuous'
+            // Eliminamos focusDistance ya que no es compatible con la definición de tipos
           }]
         }).catch(err => {
           console.warn("CameraView: Error al intentar re-enfocar:", err);

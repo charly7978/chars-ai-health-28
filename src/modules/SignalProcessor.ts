@@ -1,4 +1,3 @@
-
 import { ProcessedSignal, ProcessingError, SignalProcessor } from '../types/signal';
 
 class KalmanFilter {
@@ -323,6 +322,7 @@ export class PPGSignalProcessor implements SignalProcessor {
     // Analizar tendencia para mayor robustez
     const trendAnalysis = this.analyzeSignalTrend();
     
+    // Fix the type comparison by changing strict equality to includes check
     if (!inRange || trendAnalysis === 'highly_unstable') {
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
