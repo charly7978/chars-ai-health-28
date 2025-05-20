@@ -4,11 +4,11 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_WINDOW_SIZE = 40;
   private readonly DEFAULT_MIN_BPM = 30;
   private readonly DEFAULT_MAX_BPM = 220;
-  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.12; // Reducido para mejor sensibilidad
-  private readonly DEFAULT_MIN_CONFIDENCE = 0.50; // Reducido para mejor detección
-  private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.008; // Ajustado para mejor sensibilidad
-  private readonly DEFAULT_MIN_PEAK_TIME_MS = 500; // Restaurado a valor médicamente apropiado
-  private readonly WARMUP_TIME_MS = 1500; // Reducido para obtener lecturas más rápido
+  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.05; // Reducido para mejor sensibilidad
+  private readonly DEFAULT_MIN_CONFIDENCE = 0.30; // Reducido para mejor detección
+  private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.005; // Ajustado para mejor sensibilidad
+  private readonly DEFAULT_MIN_PEAK_TIME_MS = 300; // Restaurado a valor médicamente apropiado
+  private readonly WARMUP_TIME_MS = 1000; // Reducido para obtener lecturas más rápido
 
   // Parámetros de filtrado ajustados para precisión médica
   private readonly MEDIAN_FILTER_WINDOW = 3;
@@ -77,7 +77,7 @@ export class HeartBeatProcessor {
   
   // Variables para mejorar la detección
   private peakValidationBuffer: number[] = [];
-  private readonly PEAK_VALIDATION_THRESHOLD = 0.4; // Reducido para validación más permisiva
+  private readonly PEAK_VALIDATION_THRESHOLD = 0.3; // Reducido para validación más permisiva
   private lastSignalStrength: number = 0;
   private recentSignalStrengths: number[] = [];
   private readonly SIGNAL_STRENGTH_HISTORY = 30;
