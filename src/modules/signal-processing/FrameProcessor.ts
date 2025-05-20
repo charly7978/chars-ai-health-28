@@ -1,3 +1,4 @@
+
 import { FrameData } from './types';
 import { ProcessedSignal } from '../../types/signal';
 
@@ -32,6 +33,8 @@ export class FrameProcessor {
       cells.push({ red: 0, green: 0, blue: 0, count: 0 });
     }
     
+    // DETECCIÓN EXTREMADAMENTE SENSIBLE
+    // Contar cualquier pixel con mínima presencia de color
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
         const i = (y * imageData.width + x) * 4;
@@ -49,14 +52,12 @@ export class FrameProcessor {
         cells[cellIdx].blue += b;
         cells[cellIdx].count++;
         
-        // *** CAMBIO CRÍTICO: CRITERIO DE DETECCIÓN EXTREMADAMENTE PERMISIVO ***
-        // Cualquier pixel con mínima presencia de rojo es considerado
-        if (r > 0) {  // Simplemente detectar cualquier valor de rojo
-          redSum += r;
-          greenSum += g;
-          blueSum += b;
-          pixelCount++;
-        }
+        // CAMBIO CRÍTICO: INCLUIR TODOS LOS PIXELS
+        // No hay criterio de filtrado, todos los pixels se consideran
+        redSum += r;
+        greenSum += g;
+        blueSum += b;
+        pixelCount++;
       }
     }
     
@@ -98,8 +99,8 @@ export class FrameProcessor {
           const avgVariation = totalVariation / comparisonCount;
           
           // Mayor variación indica más textura
-          // Normalizar a rango 0-1 con curva óptima para piel
-          const normalizedVar = avgVariation / 10; // Reducido drásticamente para ser mucho más sensible
+          // EXTREMA SENSIBILIDAD: Cualquier variación es suficiente
+          const normalizedVar = avgVariation / 5; // Reducido drásticamente
           textureScore = Math.min(1, normalizedVar);
         }
       }
@@ -107,7 +108,7 @@ export class FrameProcessor {
     
     // Si no hay pixels rojos, retornar valores por defecto
     if (pixelCount < 1) {
-      console.log("FrameProcessor: No se detectaron pixels rojos en este frame");
+      console.log("FrameProcessor: No se detectaron pixels en este frame");
       return { 
         redValue: 0, 
         textureScore: 0, 
@@ -123,6 +124,15 @@ export class FrameProcessor {
     // Calcular índices de ratio de color
     const rToGRatio = avgRed / Math.max(1, avgGreen);
     const rToBRatio = avgRed / Math.max(1, avgBlue);
+    
+    console.log("FrameProcessor: Datos extraídos:", {
+      avgRed, 
+      avgGreen, 
+      avgBlue,
+      textureScore,
+      rToGRatio, 
+      rToBRatio
+    });
     
     return {
       redValue: avgRed,
