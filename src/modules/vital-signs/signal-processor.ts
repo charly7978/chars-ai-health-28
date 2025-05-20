@@ -1,312 +1,266 @@
+
 /**
  * Enhanced Signal Processor based on advanced biomedical signal processing techniques
  * Implements wavelet denoising and adaptive filter techniques from IEEE publications
  */
 export class SignalProcessor {
   // Ajuste: reducimos la ventana del SMA para mayor reactividad
-  private readonly SMA_WINDOW = 3; // antes: 5
+  private readonly SMA_WINDOW = 2; // antes: 3, MAYOR REACTIVIDAD
   private ppgValues: number[] = [];
-  private readonly WINDOW_SIZE = 300;
+  private readonly WINDOW_SIZE = 250; // Reducido para más rápida adaptación
   
   // Advanced filter coefficients based on Savitzky-Golay filter research
   private readonly SG_COEFFS = [0.2, 0.3, 0.5, 0.7, 1.0, 0.7, 0.5, 0.3, 0.2];
   private readonly SG_NORM = 4.4; // Normalization factor for coefficients
   
   // Wavelet denoising thresholds - INCREASED SENSITIVITY VALUES
-  private readonly WAVELET_THRESHOLD = 0.01; // Reducido para mayor sensibilidad (antes 0.03)
-  private readonly BASELINE_FACTOR = 0.96; // Incrementado para mejor seguimiento (antes 0.92)
+  private readonly WAVELET_THRESHOLD = 0.005; // Reducido al mínimo para máxima sensibilidad (antes 0.01)
+  private readonly BASELINE_FACTOR = 0.97; // Incrementado para mejor seguimiento (antes 0.96)
   private baselineValue: number = 0;
   
-  // Multi-spectral analysis parameters (based on research from Univ. of Texas)
-  private readonly RED_ABSORPTION_COEFF = 0.684; // Red light absorption coefficient
-  private readonly IR_ABSORPTION_COEFF = 0.823;  // IR estimated absorption coefficient
-  private readonly GLUCOSE_CALIBRATION = 0.0452; // Calibration factor from Caltech paper
-  private readonly LIPID_CALIBRATION = 0.0319;   // Based on spectroscopic research (Harvard)
+  // NUEVOS PARÁMETROS DE SENSIBILIDAD EXTREMA
+  private readonly PEAK_ENHANCEMENT = 3.5; // Factor de amplificación para picos
+  private readonly MIN_SIGNAL_BOOST = 8.0; // Amplificación mínima para señales débiles
+  private readonly ADAPTIVE_GAIN_ENABLED = true; // Activar ganancia adaptativa
+  private readonly NOISE_SUPPRESSION = 0.8; // Supresión de ruido mejorada (0-1)
+  
+  // Seguimiento de máximos y mínimos para normalización
+  private recentMax: number = 0;
+  private recentMin: number = 0;
+  private readonly NORMALIZATION_FACTOR = 0.95; // Cuánto recordamos del historial
   
   /**
-   * Applies a wavelet-based noise reduction followed by Savitzky-Golay filtering
-   * Technique adapted from "Advanced methods for ECG signal processing" (IEEE)
+   * Procesamiento principal - ahora con amplificación extrema para señales débiles
+   * y mejor preservación de picos cardíacos
    */
   public applySMAFilter(value: number): number {
+    // Añadir valor al buffer
     this.ppgValues.push(value);
     if (this.ppgValues.length > this.WINDOW_SIZE) {
       this.ppgValues.shift();
     }
     
-    // Initialize baseline value if needed
+    // Actualizar línea base con seguimiento más rápido
     if (this.baselineValue === 0 && this.ppgValues.length > 0) {
       this.baselineValue = value;
     } else {
-      // Adaptive baseline tracking - IMPROVED WITH FASTER ADAPTATION
-      this.baselineValue = this.baselineValue * this.BASELINE_FACTOR + 
-                           value * (1 - this.BASELINE_FACTOR);
+      // Adaptación dinámica más rápida
+      const adaptationSpeed = this.detectSignalChange() ? 0.2 : 0.05;
+      this.baselineValue = this.baselineValue * (1 - adaptationSpeed) + value * adaptationSpeed;
     }
     
-    // Simple Moving Average as first stage filter with ADDED AMPLITUDE BOOST
+    // Usar SMA como filtro inicial
     const smaBuffer = this.ppgValues.slice(-this.SMA_WINDOW);
     const smaValue = smaBuffer.reduce((a, b) => a + b, 0) / smaBuffer.length;
     
-    // ENHANCEMENT: Apply signal amplification for weak signals
-    const amplifiedValue = this.amplifyWeakSignals(smaValue);
+    // MEJORA CRÍTICA: Amplificación potente para señales débiles
+    let amplifiedValue = this.amplifyWeakSignals(smaValue);
     
-    // Apply wavelet-based denoising (simplified implementation)
+    // Denoising con umbral adaptativo ultra-bajo
     const denoised = this.waveletDenoise(amplifiedValue);
     
-    // Apply Savitzky-Golay smoothing if we have enough data points
+    // Aplicar Savitzky-Golay filtrado si hay suficientes puntos
     if (this.ppgValues.length >= this.SG_COEFFS.length) {
-      return this.applySavitzkyGolayFilter(denoised);
+      // NUEVO: Detección inteligente de picos con preservación avanzada
+      const sgFiltered = this.applySavitzkyGolayFilter(denoised);
+      
+      // NUEVO: Reanálisis final con énfasis en picos
+      return this.enhanceCardiacComponent(sgFiltered);
     }
     
     return denoised;
   }
   
   /**
-   * NEW: Signal amplification method specifically for weak heartbeat signals
-   * Based on research published in IEEE Transactions on Biomedical Engineering
+   * NUEVO: Detecta cambios significativos en la señal para adaptar filtros
    */
-  private amplifyWeakSignals(value: number): number {
-    // Determine if signal is weak based on amplitude
-    const recentValues = this.ppgValues.slice(-15);
-    if (recentValues.length < 5) return value;
+  private detectSignalChange(): boolean {
+    if (this.ppgValues.length < 10) return false;
     
-    const max = Math.max(...recentValues);
-    const min = Math.min(...recentValues);
-    const range = max - min;
+    const current = this.ppgValues.slice(-5);
+    const previous = this.ppgValues.slice(-10, -5);
     
-    // If signal range is small, apply non-linear amplification
-    // with adaptive gain control
-    if (range < 5.0) {
-      // Apply higher gain for very weak signals
-      const amplificationFactor = Math.min(6.0, 10.0 / (range + 1.0));
-      const normalized = value - this.baselineValue;
-      
-      // Non-linear amplification that preserves signal shape
-      const amplified = Math.sign(normalized) * Math.pow(Math.abs(normalized), 0.8) * amplificationFactor;
-      return this.baselineValue + amplified;
-    }
+    const currentAvg = current.reduce((a, b) => a + b, 0) / current.length;
+    const prevAvg = previous.reduce((a, b) => a + b, 0) / previous.length;
     
-    return value;
+    // Detectar cambio significativo
+    return Math.abs(currentAvg - prevAvg) > 3.0;
   }
   
   /**
-   * Improved wavelet denoising based on soft thresholding
-   * Adapted from "Wavelet-based denoising for biomedical signals" research
+   * MEJORADO: Amplificación adaptativa extrema para señales cardíacas débiles
+   * Usando técnicas de procesamiento de señales biomédicas avanzadas
+   */
+  private amplifyWeakSignals(value: number): number {
+    // Determinar si la señal es débil analizando el historial reciente
+    const recentValues = this.ppgValues.slice(-15);
+    if (recentValues.length < 3) return value * this.MIN_SIGNAL_BOOST;
+    
+    // Actualizar máximos y mínimos con memoria histórica
+    const currentMax = Math.max(...recentValues);
+    const currentMin = Math.min(...recentValues);
+    
+    // Actualizar con memoria
+    if (this.recentMax === 0) this.recentMax = currentMax;
+    if (this.recentMin === 0) this.recentMin = currentMin;
+    
+    this.recentMax = this.recentMax * this.NORMALIZATION_FACTOR + 
+                     currentMax * (1 - this.NORMALIZATION_FACTOR);
+    this.recentMin = this.recentMin * this.NORMALIZATION_FACTOR + 
+                     currentMin * (1 - this.NORMALIZATION_FACTOR);
+    
+    // Calcular rango de la señal
+    const range = this.recentMax - this.recentMin;
+    const normalizedValue = value - this.baselineValue;
+    
+    // AMPLIFICACIÓN EXTREMA para señales débiles
+    // Usar algoritmo no lineal para preservar forma de onda
+    if (range < 8.0) {
+      // Amplificación extrema para señales muy débiles
+      const amplificationFactor = Math.max(this.MIN_SIGNAL_BOOST, 
+                                          20.0 / (range + 0.5));
+      
+      // Amplificación no lineal para preservar forma de onda
+      const sign = Math.sign(normalizedValue);
+      // Compresión logarítmica para evitar saturación
+      const magnitude = Math.pow(Math.abs(normalizedValue), 0.7);
+      const amplified = sign * magnitude * amplificationFactor;
+      
+      return this.baselineValue + amplified;
+    }
+    
+    // Para señales normales, aplicar amplificación moderada
+    return this.baselineValue + normalizedValue * this.MIN_SIGNAL_BOOST;
+  }
+  
+  /**
+   * Denoising avanzado con umbral adaptativo extremadamente bajo
+   * y preservación agresiva de componentes cardíacos
    */
   private waveletDenoise(value: number): number {
     const normalizedValue = value - this.baselineValue;
     
-    // Dynamic thresholding based on recent signal history
-    const dynamicThreshold = this.calculateDynamicThreshold();
+    // Umbral dinámico ultra-bajo para preservar señal máxima
+    const dynamicThreshold = this.calculateDynamicThreshold() * 0.3; // 70% más bajo
     
-    // Soft thresholding technique (enhanced wavelet approach)
+    // NUEVO: Preservar señal con compresión para señales débiles
     if (Math.abs(normalizedValue) < dynamicThreshold) {
-      // For very small values, instead of zeroing them completely,
-      // apply gradual attenuation to preserve weak pulse signals
-      const attenuationFactor = Math.abs(normalizedValue) / dynamicThreshold;
-      return this.baselineValue + (normalizedValue * Math.pow(attenuationFactor, 0.5));
+      // Preservación modificada para señales muy débiles
+      const attenuationFactor = Math.pow(Math.abs(normalizedValue) / dynamicThreshold, 0.3);
+      return this.baselineValue + (normalizedValue * Math.pow(attenuationFactor, 0.3));
     }
     
+    // Conservar picos cardíacos con mínima atenuación
     const sign = normalizedValue >= 0 ? 1 : -1;
-    // Enhanced denoising with less aggressive attenuation of peaks
-    const denoisedValue = sign * (Math.abs(normalizedValue) - dynamicThreshold * 0.7);
+    // Reducir atenuación al mínimo (solo 30% del umbral)
+    const denoisedValue = sign * (Math.abs(normalizedValue) - dynamicThreshold * 0.3);
     
     return this.baselineValue + denoisedValue;
   }
   
   /**
-   * NEW: Dynamic threshold calculation based on signal history
-   * Adaptively adjusts to the current signal characteristics
+   * Umbral dinámico ultra-sensible para preservar señal cardíaca
    */
   private calculateDynamicThreshold(): number {
-    if (this.ppgValues.length < 10) return this.WAVELET_THRESHOLD;
+    if (this.ppgValues.length < 5) return this.WAVELET_THRESHOLD * 0.5; // Reducido a la mitad
     
-    const recentValues = this.ppgValues.slice(-20);
-    // Calculate signal variance
+    const recentValues = this.ppgValues.slice(-10);
     const mean = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
     const variance = recentValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentValues.length;
     const stdDev = Math.sqrt(variance);
     
-    // Scale threshold based on signal characteristics
-    // - Lower threshold for clean signals (low variance)
-    // - Higher threshold for noisy signals
-    const baseThreshold = this.WAVELET_THRESHOLD;
-    const noiseEstimate = Math.min(stdDev * 0.15, baseThreshold * 2);
+    // Ultra-bajo umbral base para máxima sensibilidad
+    const baseThreshold = this.WAVELET_THRESHOLD * 0.5;
+    // Estimación de ruido mínima
+    const noiseEstimate = Math.min(stdDev * 0.08, baseThreshold);
     
-    return Math.max(baseThreshold * 0.5, Math.min(noiseEstimate, baseThreshold * 1.5));
+    return Math.max(baseThreshold * 0.2, Math.min(noiseEstimate, baseThreshold * 0.7));
   }
   
   /**
-   * Implements Savitzky-Golay filtering which preserves peaks better than simple moving average
-   * Based on research paper "Preserving peak features in biomedical signals"
-   * ENHANCED with peak preservation techniques
+   * Filtrado Savitzky-Golay mejorado con preservación extrema de picos cardíacos
    */
   private applySavitzkyGolayFilter(value: number): number {
     const recentValues = this.ppgValues.slice(-this.SG_COEFFS.length);
     let filteredValue = 0;
     
-    // Apply Savitzky-Golay convolution
+    // Aplicar convolución SG
     for (let i = 0; i < this.SG_COEFFS.length; i++) {
       filteredValue += recentValues[i] * this.SG_COEFFS[i];
     }
     
-    // Enhanced peak preservation
     const normalizedFiltered = filteredValue / this.SG_NORM;
     
-    // Check if current point might be a peak
+    // Detección mejorada de picos cardíacos
     const midPoint = Math.floor(recentValues.length / 2);
     let isPotentialPeak = true;
     
-    // Simple peak detection logic
-    for (let i = Math.max(0, midPoint - 3); i < Math.min(recentValues.length, midPoint + 3); i++) {
+    // Lógica de detección de picos más sensible
+    for (let i = Math.max(0, midPoint - 2); i < Math.min(recentValues.length, midPoint + 2); i++) {
       if (i !== midPoint && recentValues[i] > recentValues[midPoint]) {
         isPotentialPeak = false;
         break;
       }
     }
     
-    // If it's a potential peak, preserve it better by reducing filtering
+    // NUEVO: Preservación extrema de picos cardíacos
     if (isPotentialPeak && recentValues[midPoint] > this.baselineValue) {
-      // Mix filtered value with original value, giving more weight to original
-      // at potential peaks to preserve amplitude
-      const peakPreservationFactor = 0.7;
-      return peakPreservationFactor * recentValues[midPoint] + (1 - peakPreservationFactor) * normalizedFiltered;
+      // Dar más peso al valor original para preservar amplitud completamente
+      const peakPreservationFactor = 0.9; // Antes 0.7
+      return peakPreservationFactor * recentValues[midPoint] + 
+             (1 - peakPreservationFactor) * normalizedFiltered;
     }
     
     return normalizedFiltered;
   }
 
   /**
-   * Estimates blood glucose levels based on PPG waveform characteristics
-   * Algorithm based on research from MIT and Stanford publications on 
-   * non-invasive glucose monitoring using optical methods
-   * 
-   * Reference: "Non-invasive glucose monitoring using modified PPG techniques"
-   * IEEE Transactions on Biomedical Engineering, 2021
+   * NUEVO: Potenciación final de componentes cardíacos
+   * Amplifica específicamente patrones que se parecen a pulsaciones cardíacas
    */
-  public estimateGlucose(): number {
-    if (this.ppgValues.length < 120) return 0; // Need sufficient data
+  private enhanceCardiacComponent(value: number): number {
+    if (this.ppgValues.length < 20) return value;
     
-    // Use last 2 seconds of data (assuming 60fps)
-    const recentPPG = this.ppgValues.slice(-120);
+    // Verificar si hay un patrón cardíaco (subida seguida de bajada)
+    const recentValues = this.ppgValues.slice(-20).map(v => v - this.baselineValue);
     
-    // Calculate pulse waveform derivative and its properties
-    const derivatives = [];
-    for (let i = 1; i < recentPPG.length; i++) {
-      derivatives.push(recentPPG[i] - recentPPG[i-1]);
+    let upwardTrend = 0;
+    let downwardTrend = 0;
+    
+    // Detectar patrón de subida/bajada característico del pulso
+    for (let i = 1; i < recentValues.length; i++) {
+      if (recentValues[i] > recentValues[i-1]) upwardTrend++;
+      else if (recentValues[i] < recentValues[i-1]) downwardTrend++;
     }
     
-    // Calculate key metrics from derivatives (based on Stanford research)
-    const maxDerivative = Math.max(...derivatives);
-    const minDerivative = Math.min(...derivatives);
-    const meanPPG = recentPPG.reduce((a, b) => a + b, 0) / recentPPG.length;
+    // Si hay un patrón similar a un latido (subida seguida de bajada)
+    const hasCardiacPattern = upwardTrend > 3 && downwardTrend > 3;
     
-    // Calculate glucose concentration using experimentally validated model
-    // Based on "Correlation between PPG features and blood glucose" (2019, Univ. of Washington)
-    const derivativeRatio = Math.abs(maxDerivative / minDerivative);
-    const variabilityIndex = derivatives.reduce((sum, val) => sum + Math.abs(val), 0) / derivatives.length;
-    const peakTroughRatio = Math.max(...recentPPG) / Math.min(...recentPPG);
-    
-    // Apply multi-parameter regression model from the research paper
-    const baseGlucose = 83; // Baseline value in mg/dL
-    const glucoseVariation = (derivativeRatio * 0.42) * (variabilityIndex * 0.31) * (peakTroughRatio * 0.27);
-    const glucoseEstimate = baseGlucose + (glucoseVariation * this.GLUCOSE_CALIBRATION * 100);
-    
-    // Constrain to physiologically relevant range (70-180 mg/dL for non-diabetics)
-    return Math.max(70, Math.min(180, glucoseEstimate));
-  }
-  
-  /**
-   * Estimates lipid profile based on PPG characteristics and spectral analysis
-   * Based on research from Johns Hopkins and Harvard Medical School on
-   * optical assessment of blood parameters
-   * 
-   * References: 
-   * 1. "Correlations between PPG features and serum lipid measurements" (2020)
-   * 2. "Multi-wavelength PPG analysis for lipid detection" (2018)
-   */
-  public estimateLipidProfile(): { totalCholesterol: number, triglycerides: number } {
-    if (this.ppgValues.length < 180) return { totalCholesterol: 0, triglycerides: 0 };
-    
-    // Use 3 seconds of signal data for stable assessment
-    const signal = this.ppgValues.slice(-180);
-    
-    // Calculate waveform characteristics
-    const amplitude = Math.max(...signal) - Math.min(...signal);
-    const mean = signal.reduce((a, b) => a + b, 0) / signal.length;
-    
-    // Calculate autocorrelation (biomarker for viscosity, linked to lipid levels)
-    let autocorr = 0;
-    for (let lag = 1; lag <= 20; lag++) {
-      let sum = 0;
-      for (let i = 0; i < signal.length - lag; i++) {
-        sum += (signal[i] - mean) * (signal[i + lag] - mean);
+    // Amplificar aún más los valores que siguen patrones cardíacos
+    if (hasCardiacPattern) {
+      const normalizedValue = value - this.baselineValue;
+      // Amplificar componentes cardíacos (especialmente picos)
+      if (normalizedValue > 0) {
+        // Amplificar picos positivos que son característicos de latidos
+        return this.baselineValue + normalizedValue * this.PEAK_ENHANCEMENT;
       }
-      autocorr += sum / (signal.length - lag);
-    }
-    autocorr = autocorr / 20; // Average autocorrelation value
-    
-    // Calculate signal energy in specific frequency bands (USC research correlates
-    // specific spectral components with lipid concentrations)
-    const dwtComponents = this.performSimplifiedDWT(signal);
-    const lowFreqEnergy = dwtComponents.lowFreq;
-    const highFreqEnergy = dwtComponents.highFreq;
-    const energyRatio = lowFreqEnergy / (highFreqEnergy + 0.001);
-    
-    // Apply regression model developed at Harvard Medical School
-    // (Correlation between PPG features and lipid profiles in 2,450 subjects)
-    const baseCholesterol = 165; // mg/dL
-    const baseTriglycerides = 110; // mg/dL
-    
-    // Multi-parameter regression model from research papers
-    const cholesterolFactor = (amplitude * 0.37) * (autocorr * 0.41) * (energyRatio * 0.22);
-    const triglycerideFactor = (amplitude * 0.29) * (autocorr * 0.52) * (energyRatio * 0.19);
-    
-    // Calculate final estimates (calibration based on sensitivity analysis from multiple studies)
-    const cholesterol = baseCholesterol + (cholesterolFactor * this.LIPID_CALIBRATION * 100);
-    const triglycerides = baseTriglycerides + (triglycerideFactor * this.LIPID_CALIBRATION * 80);
-    
-    // Constrain to typical diagnostic ranges
-    return {
-      totalCholesterol: Math.max(130, Math.min(240, cholesterol)),
-      triglycerides: Math.max(50, Math.min(200, triglycerides))
-    };
-  }
-  
-  /**
-   * Simplified Discrete Wavelet Transform for frequency band analysis
-   * Based on biomedical signal processing techniques for decomposing PPG signals
-   */
-  private performSimplifiedDWT(signal: number[]): { lowFreq: number, highFreq: number } {
-    // Simplified wavelet transform implementation focusing on relevant frequency bands
-    // Based on "Wavelet analysis for cardiovascular monitoring" (Mayo Clinic, 2019)
-    const lowPass = [0.4, 0.6, 0.4]; // Simplified wavelet filter
-    const highPass = [-0.3, 0.6, -0.3]; 
-    
-    let lowFreqEnergy = 0;
-    let highFreqEnergy = 0;
-    
-    // Convolve with filters and calculate energy
-    for (let i = 1; i < signal.length - 1; i++) {
-      const lowComponent = lowPass[0] * signal[i-1] + lowPass[1] * signal[i] + lowPass[2] * signal[i+1];
-      const highComponent = highPass[0] * signal[i-1] + highPass[1] * signal[i] + highPass[2] * signal[i+1];
-      
-      lowFreqEnergy += lowComponent * lowComponent;
-      highFreqEnergy += highComponent * highComponent;
     }
     
-    return { lowFreq: lowFreqEnergy, highFreq: highFreqEnergy };
+    return value;
   }
 
   /**
-   * Reset the signal processor state
+   * Reset del procesador de señales
    */
   public reset(): void {
     this.ppgValues = [];
     this.baselineValue = 0;
+    this.recentMax = 0;
+    this.recentMin = 0;
   }
 
   /**
-   * Get the current PPG values buffer
+   * Obtener buffer de valores PPG
    */
   public getPPGValues(): number[] {
     return [...this.ppgValues];

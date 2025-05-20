@@ -4,8 +4,11 @@
 import { PPGSignalProcessor as OriginalPPGSignalProcessor } from './signal-processing/PPGSignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 
-// Ahora extendemos la clase original en lugar de implementar su interfaz
+// Extender la clase original en lugar de implementar su interfaz
 export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
+  // Bandera para monitorear inicialización correcta
+  private isInitialized: boolean = false;
+  
   constructor(
     onSignalReady?: (signal: ProcessedSignal) => void,
     onError?: (error: ProcessingError) => void
@@ -17,6 +20,46 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
     
     // Llamar al constructor de la clase padre
     super(onSignalReady, onError);
+    
+    // Verificar inicialización
+    setTimeout(() => {
+      this.checkInitialization();
+    }, 1000);
+  }
+  
+  // Verificación de inicialización correcta
+  private checkInitialization() {
+    if (!this.isInitialized) {
+      console.log("⚠️ PPGSignalProcessor: Inicialización verificada manualmente");
+      this.initialize().then(() => {
+        console.log("✅ PPGSignalProcessor: Inicialización manual exitosa");
+        this.isInitialized = true;
+      }).catch(err => {
+        console.error("❌ PPGSignalProcessor: Error en inicialización manual", err);
+      });
+    }
+  }
+  
+  // Sobrescribimos initialize para marcar como inicializado
+  async initialize(): Promise<void> {
+    console.log("PPGSignalProcessor wrapper: Inicializando con callbacks", {
+      hasOnSignalReadyCallback: !!this.onSignalReady,
+      hasOnErrorCallback: !!this.onError
+    });
+    
+    // Asegurar que el padre tenga los callbacks correctos
+    if (this.onSignalReady) {
+      super.onSignalReady = this.onSignalReady;
+    }
+    
+    if (this.onError) {
+      super.onError = this.onError;
+    }
+    
+    // Llamar al initialize del padre
+    const result = await super.initialize();
+    this.isInitialized = true;
+    return result;
   }
 
   // Sobrescribimos processFrame para asegurar que los callbacks estén actualizados
@@ -40,28 +83,20 @@ export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
       timestamp: new Date().toISOString()
     });
     
-    // Llamar al método de la clase padre
-    super.processFrame(imageData);
-  }
-  
-  // Sobrescribir initialize para asegurar callbacks correctos
-  async initialize(): Promise<void> {
-    console.log("PPGSignalProcessor wrapper: Inicializando con callbacks", {
-      hasOnSignalReadyCallback: !!this.onSignalReady,
-      hasOnErrorCallback: !!this.onError
-    });
-    
-    // Asegurar que el padre tenga los callbacks correctos
-    if (this.onSignalReady) {
-      super.onSignalReady = this.onSignalReady;
+    // Si no se ha inicializado, hacerlo ahora
+    if (!this.isInitialized) {
+      console.log("PPGSignalProcessor: Inicializando en processFrame");
+      this.initialize().then(() => {
+        console.log("PPGSignalProcessor: Inicializado correctamente, procesando frame");
+        // Llamar al método de la clase padre
+        super.processFrame(imageData);
+      }).catch(error => {
+        console.error("PPGSignalProcessor: Error al inicializar", error);
+      });
+    } else {
+      // Llamar al método de la clase padre
+      super.processFrame(imageData);
     }
-    
-    if (this.onError) {
-      super.onError = this.onError;
-    }
-    
-    // Llamar al initialize del padre
-    return super.initialize();
   }
 }
 
