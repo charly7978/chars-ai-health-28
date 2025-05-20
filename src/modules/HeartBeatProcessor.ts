@@ -1,3 +1,4 @@
+
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -120,7 +121,7 @@ export class HeartBeatProcessor {
       const gainNode1 = this.audioContext.createGain();
       
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 180; // Frecuencia aumentada para "lub"
+      oscillator1.frequency.value = 140; // Frecuencia entre 130Hz y 150Hz para "lub"
       
       gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
       gainNode1.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.03);
