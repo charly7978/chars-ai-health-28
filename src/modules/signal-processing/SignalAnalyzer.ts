@@ -162,19 +162,23 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // CALIDAD DINÁMICA: métrica compuesta de redChannel, estabilidad, pulsatilidad y periodicidad
-    const { redChannel, stability, pulsatility, periodicity } = this.detectorScores;
-    // Raw compuesto (0-1)
-    const rawQuality = (redChannel + stability + pulsatility + periodicity) / 4;
-    // Guardar en historial para suavizar
-    this.qualityHistory.push(rawQuality);
+    // Actualizar historial de calidad y calcular calidad media
+    this.qualityHistory.push(this.detectorScores.redChannel);
     if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
       this.qualityHistory.shift();
     }
-    const smoothQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    // Umbrales de gating más sensibles
-    const qualityOn = 0.4;  // 40%
-    const qualityOff = 0.2; // 20%
+    const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
+    // CALIDAD COMPUESTA: combinación de calidad, estabilidad, pulsatilidad y periodicidad
+    const compositeQualityRaw = avgQuality * 0.3
+      + this.detectorScores.stability * 0.2
+      + this.detectorScores.pulsatility * 0.3
+      + this.detectorScores.periodicity * 0.2;
+    // Ajustar calidad penalizando artefactos de movimiento
+    const compositeQualityAdj = compositeQualityRaw * (1 - this.motionArtifactScore);
+    const quality = Math.round(Math.max(0, Math.min(1, compositeQualityAdj)) * 100);
+    // Umbrales de calidad para detección inicial
+    const qualityOn = this.adaptiveThreshold;
+    const qualityOff = this.adaptiveThreshold * 0.5;
     // Umbrales adicionales para robustez en adquisición
     const stabilityOn = 0.4;
     const pulseOn = 0.3;
@@ -182,8 +186,8 @@ export class SignalAnalyzer {
     const periodicityOn = 0.5;
     // Lógica de histeresis: adquisición vs mantenimiento
     if (!this.isCurrentlyDetected) {
-      // Detección inicial: calidad compuesta, tendencia válida, estabilidad, pulsatilidad y periodicidad
-      if (smoothQuality > qualityOn && trendResult !== 'non_physiological' &&
+      // Detección inicial: calidad, tendencia válida, estabilidad, pulsatilidad y periodicidad
+      if (avgQuality > qualityOn && trendResult !== 'non_physiological' &&
           this.detectorScores.stability > stabilityOn &&
           this.detectorScores.pulsatility > pulseOn &&
           this.detectorScores.periodicity > periodicityOn) {
@@ -196,7 +200,7 @@ export class SignalAnalyzer {
       const stabilityOff = 0.3;
       const pulseOff = 0.25;
       const periodicityOff = 0.4;
-      if (smoothQuality < qualityOff || trendResult === 'non_physiological' ||
+      if (avgQuality < qualityOff || trendResult === 'non_physiological' ||
           this.detectorScores.stability < stabilityOff ||
           this.detectorScores.pulsatility < pulseOff ||
           this.detectorScores.periodicity < periodicityOff) {
@@ -214,11 +218,12 @@ export class SignalAnalyzer {
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(smoothQuality * 100),
+      quality,
       detectorDetails: {
         ...this.detectorScores,
-        avgQuality: parseFloat(smoothQuality.toFixed(3)),
-        rawQuality: parseFloat(rawQuality.toFixed(3)),
+        avgQuality,
+        compositeQualityRaw: parseFloat(compositeQualityRaw.toFixed(3)),
+        compositeQualityAdj: parseFloat(compositeQualityAdj.toFixed(3)),
         consecutiveDetections: this.consecutiveDetections,
         consecutiveNoDetections: this.consecutiveNoDetections
       }
