@@ -26,7 +26,6 @@ const Index = () => {
   });
   const [heartRate, setHeartRate] = useState(0);
   const [heartbeatSignal, setHeartbeatSignal] = useState(0);
-  const [beatMarker, setBeatMarker] = useState(0);
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -364,7 +363,6 @@ const Index = () => {
     setElapsedTime(0);
     setHeartRate(0);
     setHeartbeatSignal(0);
-    setBeatMarker(0);
     setVitalSigns({ 
       spo2: 0,
       pressure: "--/--",
@@ -512,7 +510,6 @@ const Index = () => {
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       setHeartRate(heartBeatResult.bpm);
       setHeartbeatSignal(heartBeatResult.filteredValue);
-      setBeatMarker(heartBeatResult.isPeak ? 1 : 0);
       // Actualizar últimos intervalos RR para debug
       if (heartBeatResult.rrData && heartBeatResult.rrData.intervals) {
         setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
@@ -619,7 +616,7 @@ const Index = () => {
 
           <div className="flex-1">
             <PPGSignalMeter 
-              value={heartbeatSignal * 30}
+              value={heartbeatSignal * 20}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
               onStartMeasurement={startMonitoring}
