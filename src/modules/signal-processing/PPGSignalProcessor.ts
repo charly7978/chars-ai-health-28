@@ -29,7 +29,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   // Configuration with stricter medically appropriate thresholds
   public readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 10,    // Reducido para facilitar detección en dispositivos con señal débil
+    MIN_RED_THRESHOLD: 0,     // Umbral mínimo de rojo a 0 para aceptar señales débiles
     MAX_RED_THRESHOLD: 240,
     STABILITY_WINDOW: 10,      // Increased for more stability assessment
     MIN_STABILITY_COUNT: 5,   // Requires more stability for detection
@@ -215,6 +215,9 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // 2. Apply multi-stage filtering to the signal
       let filteredValue = this.kalmanFilter.filter(redValue);
       filteredValue = this.sgFilter.filter(filteredValue);
+      // Amplificar moderadamente PPG para visualizar variaciones reales
+      const AMPLIFICATION_FACTOR = 30;
+      filteredValue = filteredValue * AMPLIFICATION_FACTOR;
 
       // 3. Perform signal trend analysis with strict physiological validation
       const trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
