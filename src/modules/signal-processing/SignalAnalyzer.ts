@@ -204,6 +204,38 @@ export class SignalAnalyzer {
       detectionThreshold
     });
     
+    // Nueva lógica: solo permitir detección si hay suficiente rojo y pulsatility
+    const rojoOk = this.detectorScores.redChannel > 0.04;
+    const pulsoOk = this.detectorScores.pulsatility > 0.05;
+    // Si el rojo es bajo, nunca detectar dedo aunque haya variabilidad
+    if (!rojoOk) {
+      this.isCurrentlyDetected = false;
+      return {
+        isFingerDetected: false,
+        quality: 0,
+        detectorDetails: {
+          ...this.detectorScores,
+          normalizedScore,
+          trendType: trendResult,
+          reason: 'Rojo insuficiente'
+        }
+      };
+    }
+    // Si la señal es fisiológicamente absurda pero hay rojo, solo rechazar si la periodicidad es absurda
+    if (trendResult === 'non_physiological' && (!pulsoOk || !rojoOk)) {
+      this.isCurrentlyDetected = false;
+      return {
+        isFingerDetected: false,
+        quality: 0,
+        detectorDetails: {
+          ...this.detectorScores,
+          normalizedScore,
+          trendType: trendResult,
+          reason: 'Tendencia no fisiológica y sin pulso'
+        }
+      };
+    }
+    
     return {
       isFingerDetected: this.isCurrentlyDetected,
       quality: quality,
