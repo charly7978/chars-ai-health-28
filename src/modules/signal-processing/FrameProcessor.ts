@@ -1,5 +1,6 @@
 
 import { FrameData } from './types';
+import { ProcessedSignal } from '../../types/signal';
 
 export class FrameProcessor {
   private readonly CONFIG: { TEXTURE_GRID_SIZE: number, ROI_SIZE_FACTOR: number };
