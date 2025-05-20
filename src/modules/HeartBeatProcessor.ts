@@ -1,4 +1,3 @@
-
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 60; //ANTES 3
@@ -413,7 +412,7 @@ export class HeartBeatProcessor {
     const cut = Math.round(sorted.length * 0.1);
     const finalSet = sorted.slice(cut, sorted.length - cut);
     if (!finalSet.length) return 0;
-    const sum = finalSet.reduce((acc, val) => acc + val, 0);
+    const sum = finalSet.reduce((acc, val) => acc + val, 0) / finalSet.length;
     return Math.round(sum / finalSet.length);
   }
 
