@@ -227,12 +227,6 @@ const CameraView = ({
           timestamp: new Date().toISOString()
         });
         onStreamReady(newStream);
-        
-        // Verificación adicional: llamar de nuevo después de un retraso
-        setTimeout(() => {
-          console.log("CameraView: Llamando onStreamReady de nuevo después de retraso");
-          onStreamReady(newStream);
-        }, 1000);
       }
     } catch (err) {
       console.error("CameraView: Error al iniciar la cámara:", err);
