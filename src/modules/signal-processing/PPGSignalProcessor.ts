@@ -161,21 +161,6 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
-      // DEBUGGING: Log extracted redValue and ROI
-      if (shouldLog) {
-        console.log("PPGSignalProcessor DEBUG:", {
-          step: "FrameExtraction",
-          redValue: redValue,
-          roiX: roi.x,
-          roiY: roi.y,
-          roiWidth: roi.width,
-          roiHeight: roi.height,
-          textureScore,
-          rToGRatio,
-          rToBRatio
-        });
-      }
-      
       // Early rejection of invalid frames - stricter thresholds
       if (redValue < this.CONFIG.MIN_RED_THRESHOLD * 0.9) {
         // Create minimal processed signal with no detection
@@ -194,10 +179,6 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         };
         
         this.onSignalReady(minimalSignal);
-        // DEBUGGING: Log signal sent on early rejection
-        if (shouldLog) {
-          console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Early Reject - Weak Signal):", minimalSignal);
-        }
         return;
       }
       
@@ -237,10 +218,6 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         };
         
         this.onSignalReady(rejectSignal);
-        // DEBUGGING: Log signal sent on non-physiological trend rejection
-        if (shouldLog) {
-          console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Reject - Non-Physiological Trend):", rejectSignal);
-        }
         return;
       }
       
@@ -264,10 +241,6 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         };
         
         this.onSignalReady(rejectSignal);
-        // DEBUGGING: Log signal sent on non-physiological color ratio rejection
-        if (shouldLog) {
-          console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Reject - Non-Physiological Color Ratio):", rejectSignal);
-        }
         return;
       }
       
@@ -304,25 +277,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         perfusionIndex: Math.max(0, perfusionIndex)
       };
       
-      // Periodic logging
-      if (shouldLog) {
-        console.log("PPGSignalProcessor: Sending validated signal:", {
-          fingerDetected: isFingerDetected,
-          quality,
-          redValue,
-          filteredValue,
-          timestamp: new Date().toISOString()
-        });
-      }
-      
       // FINAL VALIDATION before sending
       if (typeof this.onSignalReady === 'function') {
         // No force detection - only send actual detected signals
         this.onSignalReady(processedSignal);
-        // DEBUGGING: Log final processed signal sent
-        if (shouldLog) {
-          console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Final):", processedSignal);
-        }
       } else {
         console.error("PPGSignalProcessor: onSignalReady is not a valid function");
         this.handleError("CALLBACK_ERROR", "Callback onSignalReady is not a valid function");
