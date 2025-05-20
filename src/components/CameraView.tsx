@@ -1,5 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
+import { toast } from "@/components/ui/use-toast";
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -22,6 +23,7 @@ const CameraView = ({
   const [deviceSupportsAutoFocus, setDeviceSupportsAutoFocus] = useState(false);
   const [deviceSupportsTorch, setDeviceSupportsTorch] = useState(false);
   const torchAttempts = useRef<number>(0);
+  const cameraInitialized = useRef<boolean>(false);
 
   const stopCamera = async () => {
     if (stream) {
@@ -44,21 +46,29 @@ const CameraView = ({
       
       setStream(null);
       setTorchEnabled(false);
+      cameraInitialized.current = false;
     }
   };
 
   const startCamera = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
+        toast({
+          title: "Error",
+          description: "Su dispositivo no soporta acceso a la cámara",
+          variant: "destructive"
+        });
         throw new Error("getUserMedia no está soportado");
       }
 
       const isAndroid = /android/i.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
+      // Configuración optimizada para captura PPG
       const baseVideoConstraints: MediaTrackConstraints = {
         facingMode: 'environment',
-        width: { ideal: 720 },
-        height: { ideal: 480 }
+        width: { ideal: isIOS ? 1280 : 720 },
+        height: { ideal: isIOS ? 720 : 480 }
       };
 
       if (isAndroid) {
@@ -66,6 +76,11 @@ const CameraView = ({
         Object.assign(baseVideoConstraints, {
           frameRate: { ideal: 30, max: 30 },
           resizeMode: 'crop-and-scale'
+        });
+      } else if (isIOS) {
+        // Ajustes específicos para iOS
+        Object.assign(baseVideoConstraints, {
+          frameRate: { ideal: 60, min: 30 },
         });
       }
 
@@ -89,10 +104,10 @@ const CameraView = ({
           
           const advancedConstraints: MediaTrackConstraintSet[] = [];
           
+          // Configuración optimizada para captura PPG
           if (capabilities.exposureMode) {
             advancedConstraints.push({ 
               exposureMode: 'continuous'
-              // Eliminamos exposureTime ya que no es compatible con la definición de tipos
             });
             console.log("CameraView: Modo de exposición continua aplicado");
           }
@@ -120,25 +135,36 @@ const CameraView = ({
             videoRef.current.style.backfaceVisibility = 'hidden';
           }
           
-          // Linterna activada en base a disponibilidad
+          // Verificar disponibilidad de linterna
           if (capabilities.torch) {
             console.log("CameraView: Este dispositivo tiene linterna disponible");
             setDeviceSupportsTorch(true);
             
-            // Activamos la linterna inmediatamente al iniciar la medición
             try {
               await videoTrack.applyConstraints({
                 advanced: [{ torch: true }]
               });
               setTorchEnabled(true);
-              console.log("CameraView: Linterna activada inmediatamente al iniciar la medición");
+              console.log("CameraView: Linterna activada para medición PPG");
             } catch (err) {
               console.error("CameraView: Error activando linterna:", err);
               torchAttempts.current++;
+              // Notificar al usuario
+              toast({
+                title: "Aviso",
+                description: "No se pudo activar la linterna. La calidad de la medición puede verse afectada.",
+                duration: 5000,
+              });
             }
           } else {
             console.log("CameraView: Este dispositivo no tiene linterna disponible");
             setDeviceSupportsTorch(false);
+            // Notificar al usuario
+            toast({
+              title: "Aviso",
+              description: "Su dispositivo no tiene linterna. Ubique su dedo en un ambiente bien iluminado.",
+              duration: 5000,
+            });
           }
         } catch (err) {
           console.log("CameraView: No se pudieron aplicar algunas optimizaciones:", err);
@@ -154,12 +180,18 @@ const CameraView = ({
       }
 
       setStream(newStream);
+      cameraInitialized.current = true;
       
       if (onStreamReady) {
         onStreamReady(newStream);
       }
     } catch (err) {
       console.error("CameraView: Error al iniciar la cámara:", err);
+      toast({
+        title: "Error de cámara",
+        description: "No se pudo acceder a la cámara. Por favor verifique los permisos.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -178,7 +210,7 @@ const CameraView = ({
     };
   }, [isMonitoring]);
 
-  // Efecto para asegurar que la linterna permanezca encendida durante toda la medición
+  // Efecto para mantener la linterna encendida durante toda la medición
   useEffect(() => {
     if (!stream || !deviceSupportsTorch || !isMonitoring) return;
     
@@ -188,7 +220,7 @@ const CameraView = ({
     const keepTorchOn = async () => {
       if (!torchEnabled) {
         try {
-          console.log("CameraView: Manteniendo linterna encendida durante la medición");
+          console.log("CameraView: Asegurando que la linterna esté encendida");
           await videoTrack.applyConstraints({
             advanced: [{ torch: true }]
           });
@@ -198,8 +230,12 @@ const CameraView = ({
           torchAttempts.current++;
           
           // Si hay demasiados fallos, informamos
-          if (torchAttempts.current > 3) {
-            console.warn("CameraView: Múltiples fallas al activar linterna, posible problema de hardware");
+          if (torchAttempts.current > 2 && torchAttempts.current % 2 === 0) {
+            toast({
+              title: "Problemas con la linterna",
+              description: "Se están experimentando dificultades con la linterna. La calidad puede verse afectada.",
+              variant: "destructive",
+            });
           }
         }
       }
@@ -228,12 +264,9 @@ const CameraView = ({
     const attemptRefocus = () => {
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && videoTrack.getCapabilities()?.focusMode) {
-        console.log("CameraView: Intentando re-enfocar la cámara");
+        console.log("CameraView: Ajustando enfoque para optimizar detección");
         videoTrack.applyConstraints({
-          advanced: [{ 
-            focusMode: 'continuous'
-            // Eliminamos focusDistance ya que no es compatible con la definición de tipos
-          }]
+          advanced: [{ focusMode: 'continuous' }]
         }).catch(err => {
           console.warn("CameraView: Error al intentar re-enfocar:", err);
         });
@@ -249,9 +282,6 @@ const CameraView = ({
       clearInterval(focusInterval);
     };
   }, [stream, isMonitoring, isFingerDetected, deviceSupportsAutoFocus]);
-
-  // Cambiar la tasa de cuadros a, por ejemplo, 12 FPS:
-  const targetFrameInterval = 1000/12; // Apunta a 12 FPS para menor consumo
 
   return (
     <video

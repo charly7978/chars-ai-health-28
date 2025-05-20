@@ -1,17 +1,25 @@
+
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../types/signal';
 
+/**
+ * Implementación de Filtro Kalman para procesamiento de señal
+ */
 class KalmanFilter {
-  private R: number = 0.01;
-  private Q: number = 0.1;
-  private P: number = 1;
-  private X: number = 0;
-  private K: number = 0;
+  private R: number = 0.01; // Varianza de la medición (ruido del sensor)
+  private Q: number = 0.1;  // Varianza del proceso
+  private P: number = 1;    // Covarianza del error estimado
+  private X: number = 0;    // Estado estimado
+  private K: number = 0;    // Ganancia de Kalman
 
   filter(measurement: number): number {
+    // Predicción
     this.P = this.P + this.Q;
+    
+    // Actualización
     this.K = this.P / (this.P + this.R);
     this.X = this.X + this.K * (measurement - this.X);
     this.P = (1 - this.K) * this.P;
+    
     return this.X;
   }
 
@@ -21,55 +29,381 @@ class KalmanFilter {
   }
 }
 
+/**
+ * Implementación de filtro Savitzky-Golay para suavizado 
+ * preservando características de picos en la señal
+ */
+class SavitzkyGolayFilter {
+  private readonly coefficients: number[];
+  private readonly normFactor: number;
+  private buffer: number[] = [];
+  private readonly windowSize: number;
+
+  constructor(windowSize: number = 9) {
+    // Coeficientes para ventana de 9 puntos (polinomio de grado 2)
+    this.windowSize = windowSize;
+    this.coefficients = [0.035, 0.105, 0.175, 0.245, 0.285, 0.245, 0.175, 0.105, 0.035];
+    this.normFactor = 1.405;
+    this.buffer = new Array(windowSize).fill(0);
+  }
+
+  filter(value: number): number {
+    // Actualizar buffer
+    this.buffer.push(value);
+    if (this.buffer.length > this.windowSize) {
+      this.buffer.shift();
+    }
+    
+    if (this.buffer.length < this.windowSize) {
+      return value; // No tenemos suficientes puntos
+    }
+    
+    // Aplicar convolución con coeficientes S-G
+    let filtered = 0;
+    for (let i = 0; i < this.windowSize; i++) {
+      filtered += this.buffer[i] * this.coefficients[i];
+    }
+    
+    return filtered / this.normFactor;
+  }
+
+  reset(): void {
+    this.buffer = new Array(this.windowSize).fill(0);
+  }
+}
+
+/**
+ * Clase para análisis de tendencias de la señal PPG
+ * Implementa detección de patrones y estabilidad
+ */
+class SignalTrendAnalyzer {
+  private readonly historyLength: number;
+  private valueHistory: number[] = [];
+  private diffHistory: number[] = [];
+  private patternHistory: string[] = [];
+  private trendScores: {
+    stability: number;
+    periodicity: number;
+    consistency: number;
+    physiological: number;
+  } = { stability: 0, periodicity: 0, consistency: 0, physiological: 0 };
+
+  constructor(historyLength: number = 30) {
+    this.historyLength = historyLength;
+  }
+
+  addValue(value: number): void {
+    // Actualizar historiales
+    this.valueHistory.push(value);
+    if (this.valueHistory.length > this.historyLength) {
+      this.valueHistory.shift();
+    }
+    
+    // Calcular diferencias
+    if (this.valueHistory.length >= 2) {
+      const diff = value - this.valueHistory[this.valueHistory.length - 2];
+      this.diffHistory.push(diff);
+      if (this.diffHistory.length > this.historyLength - 1) {
+        this.diffHistory.shift();
+      }
+      
+      // Detectar dirección (subiendo/bajando)
+      const pattern = diff > 0 ? "+" : (diff < 0 ? "-" : "=");
+      this.patternHistory.push(pattern);
+      if (this.patternHistory.length > this.historyLength - 1) {
+        this.patternHistory.shift();
+      }
+    }
+    
+    // Actualizar análisis
+    this.updateAnalysis();
+  }
+
+  private updateAnalysis(): void {
+    if (this.valueHistory.length < 10) return;
+    
+    // 1. Calcular estabilidad (basada en desviación estándar normalizada)
+    const mean = this.valueHistory.reduce((sum, val) => sum + val, 0) / this.valueHistory.length;
+    const variance = this.valueHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / this.valueHistory.length;
+    const stdDev = Math.sqrt(variance);
+    const normalizedStdDev = stdDev / Math.max(1, Math.abs(mean));
+    this.trendScores.stability = Math.max(0, Math.min(1, 1 - normalizedStdDev * 5));
+    
+    // 2. Calcular periodicidad (basada en cruces por cero y cambios de dirección)
+    let directionChanges = 0;
+    for (let i = 1; i < this.patternHistory.length; i++) {
+      if (this.patternHistory[i] !== this.patternHistory[i-1]) {
+        directionChanges++;
+      }
+    }
+    
+    // Normalizar cambios de dirección a valor 0-1 (óptimo: entre 8-20 para ventana de 30)
+    const normalizedChanges = directionChanges / this.patternHistory.length;
+    this.trendScores.periodicity = normalizedChanges < 0.2 ? normalizedChanges * 5 : 
+                                 normalizedChanges > 0.6 ? Math.max(0, 1 - (normalizedChanges - 0.6) * 2.5) :
+                                 1;
+    
+    // 3. Calcular consistencia temporal (patrones repetitivos)
+    let patternScore = 0;
+    if (this.patternHistory.length >= 6) {
+      // Buscar patrones tipo "+-+-+-" o "-+-+-+"
+      const pattern = this.patternHistory.join('');
+      const alternatingPattern1 = "+-".repeat(10);
+      const alternatingPattern2 = "-+".repeat(10);
+      
+      if (pattern.includes("+-+-+") || pattern.includes("-+-+-")) {
+        patternScore += 0.6;
+      }
+      
+      // Verificar secuencia de longitud 4
+      for (let i = 0; i < this.patternHistory.length - 4; i++) {
+        const subPattern = this.patternHistory.slice(i, i + 4).join('');
+        if (pattern.lastIndexOf(subPattern) > i + 3) {
+          patternScore += 0.4;
+          break;
+        }
+      }
+    }
+    this.trendScores.consistency = Math.min(1, patternScore);
+    
+    // 4. Verificar si el comportamiento es fisiológicamente plausible (frecuencias en rango de pulso)
+    let physiologicalScore = 0;
+    if (this.valueHistory.length >= 15 && directionChanges >= 4) {
+      const peaksPerSecond = directionChanges / 2 / (this.valueHistory.length / 30); // Asumir 30fps
+      const equivalentBPM = peaksPerSecond * 60;
+      
+      // Verificar si está en el rango fisiológico (40-180 BPM)
+      if (equivalentBPM >= 40 && equivalentBPM <= 180) {
+        physiologicalScore = 1;
+      } else if (equivalentBPM > 30 && equivalentBPM < 200) {
+        // Cerca del rango fisiológico
+        physiologicalScore = 0.5;
+      }
+    }
+    this.trendScores.physiological = physiologicalScore;
+  }
+
+  getScores(): { stability: number; periodicity: number; consistency: number; physiological: number } {
+    return { ...this.trendScores };
+  }
+
+  getAnalysisResult(): 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological' {
+    const { stability, periodicity, consistency, physiological } = this.trendScores;
+    const compositeScore = stability * 0.3 + periodicity * 0.3 + consistency * 0.2 + physiological * 0.2;
+    
+    // Reglas especiales
+    if (physiological < 0.3 && this.valueHistory.length > 15) {
+      return 'non_physiological';
+    }
+    
+    if (compositeScore > 0.8) return 'highly_stable';
+    if (compositeScore > 0.65) return 'stable';
+    if (compositeScore > 0.45) return 'moderately_stable';
+    if (compositeScore > 0.25) return 'unstable';
+    return 'highly_unstable';
+  }
+
+  reset(): void {
+    this.valueHistory = [];
+    this.diffHistory = [];
+    this.patternHistory = [];
+    this.trendScores = { stability: 0, periodicity: 0, consistency: 0, physiological: 0 };
+  }
+}
+
+/**
+ * Sistema de detección multiespectral de tejido vivo
+ * basado en características de la piel humana y patrones PPG
+ */
+class BiophysicalValidator {
+  private readonly MIN_R_TO_G_RATIO = 1.15;
+  private readonly MIN_R_TO_B_RATIO = 1.15;
+  private readonly MIN_PULSATILITY = 0.8;
+  private readonly MAX_PULSATILITY = 4.5;
+  private readonly MIN_TEXTURE_SCORE = 0.45;
+  private perfusionHistory: number[] = [];
+  private colorRatioHistory: { rToG: number, rToB: number }[] = [];
+
+  addSample(pixelData: { 
+    r: number, 
+    g: number, 
+    b: number, 
+    perfusionIdx?: number,
+    textureScore?: number 
+  }): { isValidTissue: boolean; confidence: number; metrics: Record<string, number> } {
+    const { r, g, b, perfusionIdx = 0, textureScore = 0 } = pixelData;
+    
+    // 1. Validar dominancia de canal rojo (característica de hemoglobina)
+    const rToGRatio = r / Math.max(1, g);
+    const rToBRatio = r / Math.max(1, b);
+    
+    // Guardar historiales
+    this.colorRatioHistory.push({ rToG: rToGRatio, rToB: rToBRatio });
+    if (this.colorRatioHistory.length > 10) this.colorRatioHistory.shift();
+    
+    if (perfusionIdx > 0) {
+      this.perfusionHistory.push(perfusionIdx);
+      if (this.perfusionHistory.length > 10) this.perfusionHistory.shift();
+    }
+    
+    // 2. Calcular métricas promediadas
+    const avgRToG = this.colorRatioHistory.reduce((sum, item) => sum + item.rToG, 0) / 
+                   this.colorRatioHistory.length;
+    const avgRToB = this.colorRatioHistory.reduce((sum, item) => sum + item.rToB, 0) / 
+                   this.colorRatioHistory.length;
+    
+    // 3. Calcular puntuaciones individuales
+    const colorRatioScore = (
+      (avgRToG > this.MIN_R_TO_G_RATIO ? avgRToG / this.MIN_R_TO_G_RATIO : 0) +
+      (avgRToB > this.MIN_R_TO_B_RATIO ? avgRToB / this.MIN_R_TO_B_RATIO : 0)
+    ) / 2;
+    
+    // Limitar a máximo 1.0
+    const normalizedColorScore = Math.min(1.0, colorRatioScore);
+    
+    // 4. Evaluar perfusión (si está disponible)
+    let perfusionScore = 0;
+    if (this.perfusionHistory.length > 0) {
+      const avgPerfusion = this.perfusionHistory.reduce((sum, val) => sum + val, 0) / 
+                          this.perfusionHistory.length;
+      
+      perfusionScore = avgPerfusion > this.MIN_PULSATILITY && avgPerfusion < this.MAX_PULSATILITY ?
+                      1.0 : 0;
+    }
+    
+    // 5. Evaluar textura (si está disponible)
+    const textureScore = textureScore > this.MIN_TEXTURE_SCORE ? 
+                       textureScore : 0;
+    
+    // 6. Combinar puntuaciones
+    const availableMetrics = [
+      normalizedColorScore > 0 ? 1 : 0,
+      perfusionScore > 0 ? 1 : 0,
+      textureScore > 0 ? 1 : 0
+    ].filter(Boolean).length;
+    
+    // Calcular confianza basada en métricas disponibles
+    const totalScore = (normalizedColorScore + perfusionScore + textureScore) / 
+                      Math.max(1, availableMetrics);
+    
+    // Umbral para considerar tejido vivo
+    const isValidTissue = totalScore > 0.6;
+    
+    return {
+      isValidTissue,
+      confidence: totalScore,
+      metrics: {
+        colorRatio: normalizedColorScore,
+        perfusion: perfusionScore,
+        texture: textureScore
+      }
+    };
+  }
+
+  reset(): void {
+    this.perfusionHistory = [];
+    this.colorRatioHistory = [];
+  }
+}
+
+/**
+ * Procesador avanzado de señal PPG con detección robusta de dedo
+ * e indicador de calidad de 20 puntos
+ */
 export class PPGSignalProcessor implements SignalProcessorInterface {
   private isProcessing: boolean = false;
   private kalmanFilter: KalmanFilter;
+  private sgFilter: SavitzkyGolayFilter;
+  private trendAnalyzer: SignalTrendAnalyzer;
+  private biophysicalValidator: BiophysicalValidator;
   private lastValues: number[] = [];
-  private readonly DEFAULT_CONFIG = {
+  
+  // Configuración basada en nuestro plan
+  private readonly CONFIG = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 45, // Aumentado de 40 a 45 para exigir más señal
+    MIN_RED_THRESHOLD: 40, 
     MAX_RED_THRESHOLD: 250,
-    STABILITY_WINDOW: 8,  // Aumentado de 6 a 8 para exigir más estabilidad
-    MIN_STABILITY_COUNT: 5, // Aumentado de 4 a 5 para mayor confiabilidad
-    HYSTERESIS: 4, // Reducido de 5 a 4 para ser menos permisivo
-    MIN_CONSECUTIVE_DETECTIONS: 3, // Aumentado de 2 a 3 para exigir más consistencia
-    MAX_CONSECUTIVE_NO_DETECTIONS: 2 // Reducido de 3 a 2 para desactivar más rápido
+    STABILITY_WINDOW: 6,
+    MIN_STABILITY_COUNT: 4, 
+    HYSTERESIS: 3,
+    MIN_CONSECUTIVE_DETECTIONS: 3,
+    MAX_CONSECUTIVE_NO_DETECTIONS: 2,
+    QUALITY_LEVELS: 20,
+    QUALITY_HISTORY_SIZE: 10,
+    CALIBRATION_SAMPLES: 30,
+    TEXTURE_GRID_SIZE: 8,
+    ROI_SIZE_FACTOR: 0.25
+  };
+  
+  private calibrationValues = {
+    baselineRed: 0,
+    baselineVariance: 0,
+    minRedThreshold: 0,
+    maxRedThreshold: 0,
+    isCalibrated: false
   };
 
-  private currentConfig: typeof this.DEFAULT_CONFIG;
   private stableFrameCount: number = 0;
   private lastStableValue: number = 0;
   private consecutiveDetections: number = 0;
   private consecutiveNoDetections: number = 0;
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
-  private readonly DETECTION_TIMEOUT = 250; // Reducido de 300ms a 250ms para respuesta más rápida
-  private signalHistory: number[] = []; // Nuevo: historial de señales para análisis de tendencia
-
+  private readonly DETECTION_TIMEOUT = 250;
+  private qualityHistory: number[] = [];
+  private detectorScores: Record<string, number> = {
+    redChannel: 0,
+    stability: 0,
+    pulsatility: 0,
+    biophysical: 0,
+    periodicity: 0
+  };
+  private isCalibrating: boolean = false;
+  private calibrationSamples: number[] = [];
+  
   constructor(
     public onSignalReady?: (signal: ProcessedSignal) => void,
     public onError?: (error: ProcessingError) => void
   ) {
     this.kalmanFilter = new KalmanFilter();
-    this.currentConfig = { ...this.DEFAULT_CONFIG };
-    console.log("PPGSignalProcessor: Instancia creada con configuración", this.currentConfig);
+    this.sgFilter = new SavitzkyGolayFilter();
+    this.trendAnalyzer = new SignalTrendAnalyzer();
+    this.biophysicalValidator = new BiophysicalValidator();
+    console.log("PPGSignalProcessor: Instancia avanzada creada con nueva configuración", this.CONFIG);
   }
 
   async initialize(): Promise<void> {
     try {
       this.lastValues = [];
-      this.signalHistory = []; // Limpiar el historial de señales
       this.stableFrameCount = 0;
       this.lastStableValue = 0;
       this.consecutiveDetections = 0;
       this.consecutiveNoDetections = 0;
       this.isCurrentlyDetected = false;
       this.lastDetectionTime = 0;
+      this.qualityHistory = [];
+      this.detectorScores = {
+        redChannel: 0,
+        stability: 0,
+        pulsatility: 0,
+        biophysical: 0,
+        periodicity: 0
+      };
       this.kalmanFilter.reset();
-      console.log("PPGSignalProcessor: Inicializado con nuevos parámetros");
+      this.sgFilter.reset();
+      this.trendAnalyzer.reset();
+      this.biophysicalValidator.reset();
+      
+      if (!this.calibrationValues.isCalibrated) {
+        // Usar valores predeterminados hasta calibración
+        this.calibrationValues.minRedThreshold = this.CONFIG.MIN_RED_THRESHOLD;
+        this.calibrationValues.maxRedThreshold = this.CONFIG.MAX_RED_THRESHOLD;
+      }
+      
+      console.log("PPGSignalProcessor: Sistema inicializado con nueva arquitectura");
     } catch (error) {
       console.error("PPGSignalProcessor: Error de inicialización", error);
-      this.handleError("INIT_ERROR", "Error al inicializar el procesador");
+      this.handleError("INIT_ERROR", "Error al inicializar el procesador avanzado");
     }
   }
 
@@ -77,7 +411,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     if (this.isProcessing) return;
     this.isProcessing = true;
     this.initialize();
-    console.log("PPGSignalProcessor: Iniciado");
+    console.log("PPGSignalProcessor: Sistema avanzado iniciado");
   }
 
   stop(): void {
@@ -86,30 +420,33 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     this.stableFrameCount = 0;
     this.lastStableValue = 0;
     this.consecutiveDetections = 0;
-    this.consecutiveNoDetections = 0; // Resetear contador de no detecciones
+    this.consecutiveNoDetections = 0;
     this.isCurrentlyDetected = false;
     this.kalmanFilter.reset();
-    console.log("PPGSignalProcessor: Detenido");
+    this.sgFilter.reset();
+    this.trendAnalyzer.reset();
+    this.biophysicalValidator.reset();
+    console.log("PPGSignalProcessor: Sistema avanzado detenido");
   }
 
   async calibrate(): Promise<boolean> {
     try {
-      console.log("PPGSignalProcessor: Iniciando calibración avanzada");
+      console.log("PPGSignalProcessor: Iniciando calibración adaptativa");
       await this.initialize();
       
-      // Realizar ajustes específicos para la calibración
-      this.currentConfig = {
-        ...this.DEFAULT_CONFIG,
-        // Ajustamos temporalmente algunos parámetros para calibración inicial
-        MIN_STABILITY_COUNT: 4, // Más flexible durante calibración
-        MIN_CONSECUTIVE_DETECTIONS: 2 // Más sensible durante calibración
-      };
+      // Marcar modo de calibración
+      this.isCalibrating = true;
+      this.calibrationSamples = [];
       
-      console.log("PPGSignalProcessor: Calibración completada con parámetros:", this.currentConfig);
+      // La recolección de muestras se hará en processFrame
+      // y la calibración se completará automáticamente
+      
+      console.log("PPGSignalProcessor: Calibración adaptativa iniciada");
       return true;
     } catch (error) {
       console.error("PPGSignalProcessor: Error de calibración", error);
-      this.handleError("CALIBRATION_ERROR", "Error durante la calibración");
+      this.handleError("CALIBRATION_ERROR", "Error durante la calibración adaptativa");
+      this.isCalibrating = false;
       return false;
     }
   }
@@ -120,105 +457,140 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     }
 
     try {
-      // Extraer y procesar el canal rojo (el más importante para PPG)
-      const redValue = this.extractRedChannel(imageData);
+      // 1. Extraer características del frame
+      const extractionResult = this.extractFrameData(imageData);
+      const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
+      const roi = this.detectROI(redValue, imageData);
       
-      // Guardar en historial para análisis de tendencias
-      this.signalHistory.push(redValue);
-      if (this.signalHistory.length > 30) { // 1 segundo a 30fps
-        this.signalHistory.shift();
+      // 2. Manejo de calibración si está activa
+      if (this.isCalibrating) {
+        this.handleCalibration(redValue);
+        
+        // Si estamos calibrando, generamos una señal provisional
+        if (this.onSignalReady) {
+          const provSignal: ProcessedSignal = {
+            timestamp: Date.now(),
+            rawValue: redValue,
+            filteredValue: this.kalmanFilter.filter(redValue),
+            quality: 40, // Calidad fija durante calibración
+            fingerDetected: redValue > 10,
+            roi: roi,
+            perfusionIndex: 0.1
+          };
+          this.onSignalReady(provSignal);
+        }
+        
+        return; // No continuamos el procesamiento normal
       }
       
-      // Aplicar filtro Kalman para suavizar la señal y reducir el ruido
-      const filtered = this.kalmanFilter.filter(redValue);
+      // 3. Aplicar filtrado avanzado
+      const kalmanFiltered = this.kalmanFilter.filter(redValue);
+      const sgFiltered = this.sgFilter.filter(kalmanFiltered);
       
-      // Análisis avanzado de la señal con verificación de tendencias
-      const { isFingerDetected, quality } = this.analyzeSignalAdvanced(filtered, redValue);
+      // 4. Actualizar analizador de tendencias
+      this.trendAnalyzer.addValue(sgFiltered);
+      const trendResult = this.trendAnalyzer.getAnalysisResult();
+      const trendScores = this.trendAnalyzer.getScores();
       
-      // Calcular coordenadas del ROI (región de interés) con mayor precisión
-      const roi = this.detectROI(redValue);
-      
-      // Métricas adicionales para evaluación de calidad
+      // 5. Estimar índice de perfusión
       const perfusionIndex = redValue > 0 ? 
-        Math.abs(filtered - this.lastStableValue) / Math.max(1, redValue) : 0;
+        Math.abs(sgFiltered - this.lastStableValue) / Math.max(1, redValue) : 0;
       
-      const signalTrend = this.analyzeSignalTrend();
+      // 6. Validación biofísica
+      const biophysicalResult = this.biophysicalValidator.addSample({
+        r: extractionResult.avgRed || 0,
+        g: extractionResult.avgGreen || 0,
+        b: extractionResult.avgBlue || 0,
+        perfusionIdx: perfusionIndex,
+        textureScore: textureScore
+      });
       
-      // Crear objeto de señal procesada con todos los datos relevantes
+      // 7. Actualizar puntuaciones de detectores
+      this.updateDetectorScores({
+        redValue,
+        redChannel: redValue > this.calibrationValues.minRedThreshold ? 
+                   Math.min(1, (redValue - this.calibrationValues.minRedThreshold) / 
+                          (this.calibrationValues.maxRedThreshold - this.calibrationValues.minRedThreshold)) : 0,
+        stability: trendScores.stability,
+        pulsatility: perfusionIndex > 0.08 && perfusionIndex < 2 ? 
+                    Math.min(1, perfusionIndex * 2) : 0,
+        biophysical: biophysicalResult.confidence,
+        periodicity: trendScores.periodicity
+      });
+      
+      // 8. Análisis avanzado con múltiples detectores
+      const { isFingerDetected, quality, detectorDetails } = 
+        this.analyzeSignalMultiDetector(sgFiltered, trendResult);
+      
+      // 9. Crear objeto de señal procesada
       const processedSignal: ProcessedSignal = {
         timestamp: Date.now(),
         rawValue: redValue,
-        filteredValue: filtered,
+        filteredValue: sgFiltered,
         quality: quality,
         fingerDetected: isFingerDetected,
         roi: roi,
         perfusionIndex: perfusionIndex
       };
       
-      // Logs adicionales para debugging de detección de dedo
-      if (this.isCurrentlyDetected !== isFingerDetected) {
-        console.log(`Estado de detección cambiado: ${this.isCurrentlyDetected} -> ${isFingerDetected}`, {
-          rawValue: redValue,
-          consecutiveDetections: this.consecutiveDetections,
-          consecutiveNoDetections: this.consecutiveNoDetections,
-          signalTrend: signalTrend,
-          timestamp: new Date().toISOString()
+      // 10. Reportar métricas de depuración
+      if (isFingerDetected !== this.isCurrentlyDetected) {
+        console.log(`PPGSignalProcessor: Cambio en detección: ${this.isCurrentlyDetected} → ${isFingerDetected}`, {
+          rawRed: redValue,
+          filtered: sgFiltered,
+          quality,
+          detectorScores: this.detectorScores,
+          detectorDetails,
+          trendResult,
+          calibration: this.calibrationValues
         });
       }
       
-      // Enviar feedback sobre el uso de la linterna cuando es necesario
-      if (isFingerDetected && quality < 45 && redValue < 120 && this.onError) {
-        // Señal detectada pero débil - podría indicar poca iluminación
-        this.onError({
-          code: "LOW_LIGHT",
-          message: "Señal débil. Por favor asegúrese de que la linterna esté encendida y el dedo cubra completamente la cámara.",
-          timestamp: Date.now()
-        });
+      // 11. Almacenar último valor estable y enviar señal
+      if (isFingerDetected) {
+        this.lastStableValue = sgFiltered;
       }
       
-      // Advertir si hay sobreexposición (saturación) que afecta la calidad
-      if (isFingerDetected && redValue > 240 && this.onError) {
-        this.onError({
-          code: "OVEREXPOSED",
-          message: "La imagen está sobreexpuesta. Intente ajustar la posición del dedo para reducir el brillo.",
-          timestamp: Date.now()
-        });
-      }
-      
-      // Enviar la señal procesada al callback
       if (this.onSignalReady) {
         this.onSignalReady(processedSignal);
       }
-      
-      // Almacenar el último valor procesado para cálculos futuros
-      this.lastStableValue = isFingerDetected ? filtered : this.lastStableValue;
-
     } catch (error) {
       console.error("PPGSignalProcessor: Error procesando frame", error);
-      this.handleError("PROCESSING_ERROR", "Error al procesar frame");
+      this.handleError("PROCESSING_ERROR", "Error en el procesamiento avanzado de frame");
     }
   }
 
-  private extractRedChannel(imageData: ImageData): number {
+  private extractFrameData(imageData: ImageData): {
+    redValue: number;
+    avgRed?: number;
+    avgGreen?: number;
+    avgBlue?: number;
+    textureScore: number;
+    rToGRatio: number;
+    rToBRatio: number;
+  } {
     const data = imageData.data;
     let redSum = 0;
+    let greenSum = 0;
+    let blueSum = 0;
     let pixelCount = 0;
-    let maxRed = 0;
-    let minRed = 255;
     
-    // ROI más centrada para mejor precisión
+    // Centro de la imagen
     const centerX = Math.floor(imageData.width / 2);
     const centerY = Math.floor(imageData.height / 2);
-    const roiSize = Math.min(imageData.width, imageData.height) * 0.25; // Reducido a 25% para mayor precisión
+    const roiSize = Math.min(imageData.width, imageData.height) * this.CONFIG.ROI_SIZE_FACTOR;
     
     const startX = Math.max(0, Math.floor(centerX - roiSize / 2));
     const endX = Math.min(imageData.width, Math.floor(centerX + roiSize / 2));
     const startY = Math.max(0, Math.floor(centerY - roiSize / 2));
     const endY = Math.min(imageData.height, Math.floor(centerY + roiSize / 2));
     
-    // Matriz para detectar la mejor área
-    const regionSize = 10;
-    const regions: Record<string, {redSum: number, count: number, x: number, y: number}> = {};
+    // Cuadrícula para análisis de textura
+    const gridSize = this.CONFIG.TEXTURE_GRID_SIZE;
+    const cells: Array<{ red: number, green: number, blue: number, count: number }> = [];
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      cells.push({ red: 0, green: 0, blue: 0, count: 0 });
+    }
     
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
@@ -227,265 +599,291 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         const g = data[i+1];   // Canal verde
         const b = data[i+2];   // Canal azul
         
-        // Criterio más estricto para dominancia de rojo
-        if (r > g * 1.10 && r > b * 1.10) { // Aumentado de 1.05 a 1.10
+        // Calcular celda de la cuadrícula
+        const gridX = Math.min(gridSize - 1, Math.floor(((x - startX) / (endX - startX)) * gridSize));
+        const gridY = Math.min(gridSize - 1, Math.floor(((y - startY) / (endY - startY)) * gridSize));
+        const cellIdx = gridY * gridSize + gridX;
+        
+        cells[cellIdx].red += r;
+        cells[cellIdx].green += g;
+        cells[cellIdx].blue += b;
+        cells[cellIdx].count++;
+        
+        // Criterio de dominancia de rojo más adaptativo
+        if (r > g * 1.05 && r > b * 1.05) {
           redSum += r;
+          greenSum += g;
+          blueSum += b;
           pixelCount++;
-          
-          // Registrar valores para calcular contraste
-          maxRed = Math.max(maxRed, r);
-          minRed = Math.min(minRed, r);
-          
-          // Registrar región para análisis
-          const regionX = Math.floor((x - startX) / regionSize);
-          const regionY = Math.floor((y - startY) / regionSize);
-          const regionKey = `${regionX},${regionY}`;
-          
-          if (!regions[regionKey]) {
-            regions[regionKey] = {
-              redSum: 0,
-              count: 0,
-              x: regionX,
-              y: regionY
-            };
+        }
+      }
+    }
+    
+    // Calcular textura (variación entre celdas)
+    let textureScore = 0;
+    if (cells.some(cell => cell.count > 0)) {
+      // Normalizar celdas por conteo
+      const normCells = cells
+        .filter(cell => cell.count > 0)
+        .map(cell => ({
+          red: cell.red / cell.count,
+          green: cell.green / cell.count,
+          blue: cell.blue / cell.count
+        }));
+      
+      if (normCells.length > 1) {
+        // Calcular variaciones entre celdas adyacentes
+        let totalVariation = 0;
+        let comparisonCount = 0;
+        
+        for (let i = 0; i < normCells.length; i++) {
+          for (let j = i + 1; j < normCells.length; j++) {
+            const cell1 = normCells[i];
+            const cell2 = normCells[j];
+            
+            // Calcula diferencia de color
+            const redDiff = Math.abs(cell1.red - cell2.red);
+            const greenDiff = Math.abs(cell1.green - cell2.green);
+            const blueDiff = Math.abs(cell1.blue - cell2.blue);
+            
+            // Promedio de diferencias
+            const avgDiff = (redDiff + greenDiff + blueDiff) / 3;
+            totalVariation += avgDiff;
+            comparisonCount++;
           }
+        }
+        
+        if (comparisonCount > 0) {
+          const avgVariation = totalVariation / comparisonCount;
           
-          regions[regionKey].redSum += r;
-          regions[regionKey].count++;
+          // Mayor variación indica más textura
+          // Normalizar a rango 0-1 con curva óptima para piel
+          const normalizedVar = avgVariation / 25; // 25 es un valor típico para textura de piel
+          textureScore = Math.min(1, normalizedVar);
         }
       }
     }
     
-    // Exigimos más píxeles para considerar una señal válida
-    if (pixelCount < 40) { // Aumentado de 30 a 40
-      return 0;
+    if (pixelCount < 10) {
+      return { 
+        redValue: 0, 
+        textureScore: 0, 
+        rToGRatio: 0, 
+        rToBRatio: 0 
+      };
     }
     
-    // Encontrar la región con la mayor intensidad de rojo
-    let bestRegion = null;
-    let bestAvgRed = 0;
-    
-    for (const key in regions) {
-      const region = regions[key];
-      // Requerimos más píxeles por región
-      if (region.count > 8) { // Aumentado de 5 a 8
-        const avgRed = region.redSum / region.count;
-        if (avgRed > bestAvgRed) {
-          bestAvgRed = avgRed;
-          bestRegion = region;
-        }
-      }
-    }
-    
-    // Umbral más estricto para la detección regional
-    if (bestRegion && bestAvgRed > 90) { // Aumentado de 80 a 90
-      return bestAvgRed;
-    }
-    
-    // Cálculo con verificación de contraste y rango
     const avgRed = redSum / pixelCount;
+    const avgGreen = greenSum / pixelCount;
+    const avgBlue = blueSum / pixelCount;
     
-    // Umbral de contraste más exigente para evitar falsos positivos
-    const contrast = maxRed - minRed;
-    const hasGoodContrast = contrast > 15; // Aumentado de 10 a 15
+    // Calcular índices de ratio de color
+    const rToGRatio = avgRed / Math.max(1, avgGreen);
+    const rToBRatio = avgRed / Math.max(1, avgBlue);
     
-    // Rango de valores más restrictivo
-    const isInRange = avgRed > 45 && avgRed < 250; // Umbral inferior aumentado de 40 a 45
-    
-    return (hasGoodContrast && isInRange) ? avgRed : 0;
-  }
-
-  private analyzeSignalAdvanced(filtered: number, rawValue: number): { isFingerDetected: boolean, quality: number } {
-    const currentTime = Date.now();
-    
-    // If the value of input is 0, definitely no finger
-    if (rawValue <= 0) {
-      this.consecutiveNoDetections++;
-      this.consecutiveDetections = 0;
-      this.stableFrameCount = Math.max(0, this.stableFrameCount - 2); // Decremento más agresivo
-      
-      // Requerimos menos frames sin detección para cancelar
-      if (this.consecutiveNoDetections >= this.currentConfig.MAX_CONSECUTIVE_NO_DETECTIONS) {
-        this.isCurrentlyDetected = false;
-      }
-      
-      return { isFingerDetected: false, quality: 0 };
-    }
-    
-    // Verificar si el valor está dentro del rango válido con histéresis
-    const inRange = this.isCurrentlyDetected
-      ? rawValue >= (this.currentConfig.MIN_RED_THRESHOLD - this.currentConfig.HYSTERESIS) &&
-        rawValue <= (this.currentConfig.MAX_RED_THRESHOLD + this.currentConfig.HYSTERESIS)
-      : rawValue >= this.currentConfig.MIN_RED_THRESHOLD &&
-        rawValue <= this.currentConfig.MAX_RED_THRESHOLD;
-
-    // Analizar tendencia para mayor robustez
-    const trendAnalysis = this.analyzeSignalTrend();
-    
-    // Fix: use correct type comparison by checking if the string equals the literal
-    if (!inRange || trendAnalysis === 'highly_unstable') {
-      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
-      this.consecutiveNoDetections++;
-      this.stableFrameCount = Math.max(0, this.stableFrameCount - 1);
-      
-      // Cancelamos la detección más rápidamente cuando hay inestabilidad
-      if (this.consecutiveNoDetections >= this.currentConfig.MAX_CONSECUTIVE_NO_DETECTIONS) {
-        this.isCurrentlyDetected = false;
-      }
-      
-      // Reportamos calidad reducida si aún hay detección
-      const quality = this.isCurrentlyDetected ? Math.max(10, this.calculateStability() * 40) : 0;
-      return { isFingerDetected: this.isCurrentlyDetected, quality };
-    }
-
-    // Reseteamos el contador de no detecciones cuando hay señal válida
-    this.consecutiveNoDetections = Math.max(0, this.consecutiveNoDetections - 1);
-    
-    // Calcular estabilidad temporal de la señal con más precisión
-    const stability = this.calculateStability();
-    
-    // Añadir el valor a nuestro historial para análisis
-    this.lastValues.push(filtered);
-    if (this.lastValues.length > this.currentConfig.BUFFER_SIZE) {
-      this.lastValues.shift();
-    }
-    
-    // Actualizar contadores de estabilidad según la calidad
-    if (stability > 0.85) {
-      // Señal muy estable
-      this.stableFrameCount += 2;
-    } else if (stability > 0.65) {
-      // Señal moderadamente estable
-      this.stableFrameCount += 1.5;
-    } else if (stability > 0.45) {
-      // Señal con estabilidad media
-      this.stableFrameCount += 1;
-    } else {
-      // Señal inestable
-      this.stableFrameCount = Math.max(0, this.stableFrameCount - 0.5);
-    }
-    
-    // Limitamos el máximo valor de estabilidad
-    this.stableFrameCount = Math.min(
-      this.stableFrameCount, 
-      this.currentConfig.MIN_STABILITY_COUNT * 2
-    );
-
-    // Actualizar estado de detección
-    const isStableNow = this.stableFrameCount >= this.currentConfig.MIN_STABILITY_COUNT;
-
-    if (isStableNow && trendAnalysis !== 'highly_unstable') {
-      this.consecutiveDetections++;
-      if (this.consecutiveDetections >= this.currentConfig.MIN_CONSECUTIVE_DETECTIONS) {
-        this.isCurrentlyDetected = true;
-        this.lastDetectionTime = currentTime;
-        this.lastStableValue = filtered;
-      }
-    } else {
-      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 0.5);
-    }
-
-    // Calcular calidad de la señal con criterios más estrictos
-    const stabilityScore = Math.min(1, this.stableFrameCount / (this.currentConfig.MIN_STABILITY_COUNT * 2));
-    
-    // Puntaje por intensidad óptima
-    const optimalValue = (this.currentConfig.MAX_RED_THRESHOLD + this.currentConfig.MIN_RED_THRESHOLD) / 2;
-    const distanceFromOptimal = Math.abs(rawValue - optimalValue) / optimalValue;
-    const intensityScore = Math.max(0, 1 - distanceFromOptimal * 1.5); // Más penalización por desviarse
-    
-    // Puntaje por variabilidad periódica (esencial para PPG)
-    let variabilityScore = 0;
-    if (this.lastValues.length >= 6) { // Aumentado de 5 a 6
-      const variations = [];
-      for (let i = 1; i < this.lastValues.length; i++) {
-        variations.push(Math.abs(this.lastValues[i] - this.lastValues[i-1]));
-      }
-      
-      const avgVariation = variations.reduce((sum, val) => sum + val, 0) / variations.length;
-      
-      // Rango óptimo más estrecho
-      variabilityScore = avgVariation > 0.6 && avgVariation < 3.5 ? 1 : 
-                         avgVariation < 0.3 ? 0 : 
-                         avgVariation > 8 ? 0 : 
-                         0.5;
-    }
-    
-    // Análisis de tendencia influye en la calidad
-    const trendScore = trendAnalysis === 'stable' ? 1 :
-                      trendAnalysis === 'moderately_stable' ? 0.8 :
-                      trendAnalysis === 'unstable' ? 0.5 :
-                      0.2;
-    
-    // Combinar los puntajes con pesos ajustados
-    const qualityRaw = stabilityScore * 0.4 + intensityScore * 0.25 + variabilityScore * 0.2 + trendScore * 0.15;
-    
-    // Escalar a 0-100 y redondear
-    const quality = Math.round(qualityRaw * 100);
-    
-    // Solo reportamos calidad si hay detección confirmada
     return {
-      isFingerDetected: this.isCurrentlyDetected,
-      quality: this.isCurrentlyDetected ? quality : 0
+      redValue: avgRed,
+      avgRed,
+      avgGreen,
+      avgBlue,
+      textureScore,
+      rToGRatio,
+      rToBRatio
     };
   }
 
-  private calculateStability(): number {
-    if (this.lastValues.length < 3) return 0; // Requerimos más valores para evaluar estabilidad
+  private handleCalibration(redValue: number): void {
+    // Si el valor es muy bajo, ignoramos
+    if (redValue < 10) return;
     
-    // Calculamos variaciones entre frames consecutivos
-    const variations = this.lastValues.slice(1).map((val, i) => 
-      Math.abs(val - this.lastValues[i])
-    );
+    this.calibrationSamples.push(redValue);
     
-    // Verificamos si hay outliers extremos que afecten la estabilidad
-    const maxVariation = Math.max(...variations);
-    const avgVariation = variations.reduce((sum, val) => sum + val, 0) / variations.length;
-    
-    // Penalizar más las variaciones extremas
-    const hasOutliers = maxVariation > avgVariation * 5;
-    
-    // Normalizar con escala más sensible
-    return Math.max(0, Math.min(1, 1 - (avgVariation / 40))) * (hasOutliers ? 0.7 : 1);
+    // Si tenemos suficientes muestras, completar calibración
+    if (this.calibrationSamples.length >= this.CONFIG.CALIBRATION_SAMPLES) {
+      // Ordenar muestras para análisis
+      const sortedSamples = [...this.calibrationSamples].sort((a, b) => a - b);
+      
+      // Eliminar valores extremos (10% superior e inferior)
+      const trimmedSamples = sortedSamples.slice(
+        Math.floor(sortedSamples.length * 0.1),
+        Math.ceil(sortedSamples.length * 0.9)
+      );
+      
+      // Calcular estadísticas
+      const sum = trimmedSamples.reduce((acc, val) => acc + val, 0);
+      const mean = sum / trimmedSamples.length;
+      
+      const variance = trimmedSamples.reduce(
+        (acc, val) => acc + Math.pow(val - mean, 2), 0
+      ) / trimmedSamples.length;
+      
+      // Establecer umbrales calibrados
+      this.calibrationValues.baselineRed = mean;
+      this.calibrationValues.baselineVariance = variance;
+      this.calibrationValues.minRedThreshold = Math.max(
+        30, 
+        mean - Math.sqrt(variance) * 2
+      );
+      this.calibrationValues.maxRedThreshold = Math.min(
+        250,
+        mean + Math.sqrt(variance) * 5
+      );
+      this.calibrationValues.isCalibrated = true;
+      
+      console.log("PPGSignalProcessor: Calibración completada:", this.calibrationValues);
+      
+      // Salir de modo calibración
+      this.isCalibrating = false;
+      this.calibrationSamples = [];
+    }
   }
 
-  private analyzeSignalTrend(): 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' {
-    if (this.signalHistory.length < 10) return 'moderately_stable';
+  private updateDetectorScores(scores: {
+    redValue: number;
+    redChannel: number;
+    stability: number;
+    pulsatility: number;
+    biophysical: number;
+    periodicity: number;
+  }): void {
+    // Factor de suavizado para cambios
+    const alpha = 0.2;
     
-    // Obtain the last values for trend analysis
-    const recentValues = this.signalHistory.slice(-10);
+    // Actualizar cada puntuación con suavizado
+    this.detectorScores.redChannel = 
+      (1 - alpha) * this.detectorScores.redChannel + alpha * scores.redChannel;
     
-    // Calculate the differences between consecutive values
-    const differences = [];
-    for (let i = 1; i < recentValues.length; i++) {
-      differences.push(recentValues[i] - recentValues[i-1]);
+    this.detectorScores.stability = 
+      (1 - alpha) * this.detectorScores.stability + alpha * scores.stability;
+    
+    this.detectorScores.pulsatility = 
+      (1 - alpha) * this.detectorScores.pulsatility + alpha * scores.pulsatility;
+    
+    this.detectorScores.biophysical = 
+      (1 - alpha) * this.detectorScores.biophysical + alpha * scores.biophysical;
+    
+    this.detectorScores.periodicity = 
+      (1 - alpha) * this.detectorScores.periodicity + alpha * scores.periodicity;
+  }
+
+  private analyzeSignalMultiDetector(
+    filtered: number, 
+    trendResult: 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological'
+  ): { isFingerDetected: boolean; quality: number; detectorDetails: Record<string, number> } {
+    const currentTime = Date.now();
+    
+    // Aplicar ponderación a los detectores (total: 100)
+    const detectorWeights = {
+      redChannel: 20,    // 20% al valor de rojo
+      stability: 20,     // 20% a estabilidad
+      pulsatility: 25,   // 25% a pulsatilidad
+      biophysical: 15,   // 15% a validación biofísica
+      periodicity: 20    // 20% a periodicidad fisiológica
+    };
+    
+    // Calcular puntuación ponderada
+    let weightedScore = 0;
+    
+    for (const [detector, weight] of Object.entries(detectorWeights)) {
+      weightedScore += (this.detectorScores[detector] || 0) * weight;
     }
     
-    // Calculate direction changes (sign) between consecutive differences
-    let directionChanges = 0;
-    for (let i = 1; i < differences.length; i++) {
-      if (Math.sign(differences[i]) !== Math.sign(differences[i-1])) {
-        directionChanges++;
+    // Normalizar a 100
+    const normalizedScore = weightedScore / 100;
+    
+    // Reglas de detección con histéresis
+    let detectionChanged = false;
+    
+    if (normalizedScore > 0.68) {
+      // Puntuación alta -> incrementar detecciones consecutivas
+      this.consecutiveDetections++;
+      this.consecutiveNoDetections = Math.max(0, this.consecutiveNoDetections - 1);
+      
+      if (this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS && !this.isCurrentlyDetected) {
+        this.isCurrentlyDetected = true;
+        this.lastDetectionTime = currentTime;
+        detectionChanged = true;
+      }
+    } else if (normalizedScore < 0.45 || trendResult === 'non_physiological') {
+      // Puntuación baja o señal no fisiológica -> decrementar detecciones
+      this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
+      this.consecutiveNoDetections++;
+      
+      if (this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS && this.isCurrentlyDetected) {
+        this.isCurrentlyDetected = false;
+        detectionChanged = true;
       }
     }
     
-    // Calculate total variation (standard deviation)
-    const mean = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
-    const variance = recentValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentValues.length;
-    const stdDev = Math.sqrt(variance);
+    // Timeout de seguridad para señal perdida
+    if (this.isCurrentlyDetected && currentTime - this.lastDetectionTime > 1000) {
+      console.log("PPGSignalProcessor: Timeout de detección activado");
+      this.isCurrentlyDetected = false;
+      detectionChanged = true;
+    }
     
-    // Evaluate stability based on multiple factors
-    if (stdDev > 50) return 'highly_unstable';
-    if (directionChanges > 6) return 'unstable';
-    if (stdDev > 25 || directionChanges > 4) return 'moderately_stable';
-    return 'stable';
+    // Calcular calidad en escala 0-100 con niveles más granulares
+    let qualityValue: number;
+    
+    if (!this.isCurrentlyDetected) {
+      qualityValue = 0;
+    } else {
+      // Sistema de 20 niveles de calidad (multiplica por 5 para obtener 0-100)
+      const baseQuality = normalizedScore * 20;
+      
+      // Ajustes basados en reglas
+      let adjustments = 0;
+      
+      // Penalizar inestabilidad
+      if (trendResult === 'unstable') adjustments -= 1;
+      if (trendResult === 'highly_unstable') adjustments -= 3;
+      
+      // Premiar estabilidad
+      if (trendResult === 'stable') adjustments += 1;
+      if (trendResult === 'highly_stable') adjustments += 2;
+      
+      // Aplicar ajustes y limitar a rango 0-20
+      const adjustedQuality = Math.max(0, Math.min(20, baseQuality + adjustments));
+      
+      // Convertir a escala 0-100
+      qualityValue = Math.round(adjustedQuality * 5);
+    }
+    
+    // Añadir a historial de calidad
+    this.qualityHistory.push(qualityValue);
+    if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
+      this.qualityHistory.shift();
+    }
+    
+    // Calcular calidad promedio para estabilidad
+    const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / 
+                      Math.max(1, this.qualityHistory.length);
+    
+    // Si la calidad es baja pero no cero, aplicar un mínimo
+    const finalQuality = avgQuality > 0 && avgQuality < 15 ? Math.max(15, avgQuality) : avgQuality;
+    
+    return {
+      isFingerDetected: this.isCurrentlyDetected,
+      quality: Math.round(finalQuality),
+      detectorDetails: {
+        ...this.detectorScores,
+        normalizedScore,
+        trendType: trendResult
+      }
+    };
   }
 
-  private detectROI(redValue: number): ProcessedSignal['roi'] {
+  private detectROI(redValue: number, imageData: ImageData): ProcessedSignal['roi'] {
+    // ROI centrado por defecto
+    const centerX = Math.floor(imageData.width / 2);
+    const centerY = Math.floor(imageData.height / 2);
+    const roiSize = Math.min(imageData.width, imageData.height) * this.CONFIG.ROI_SIZE_FACTOR;
+    
     return {
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100
+      x: centerX - roiSize / 2,
+      y: centerY - roiSize / 2,
+      width: roiSize,
+      height: roiSize
     };
   }
 

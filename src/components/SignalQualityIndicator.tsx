@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface SignalQualityIndicatorProps {
@@ -8,19 +9,32 @@ interface SignalQualityIndicatorProps {
 const SignalQualityIndicator = ({ quality, isMonitoring = false }: SignalQualityIndicatorProps) => {
   const displayQuality = isMonitoring ? quality : 0;
 
+  // Función mejorada para dar colores más precisos en 20 niveles
   const getQualityColor = (q: number) => {
-    if (q === 0) return '#666666';
-    if (q > 75) return '#00ff00';
-    if (q > 50) return '#ffff00';
-    return '#ff0000';
+    if (q === 0) return '#666666'; // Sin señal
+    if (q >= 90) return '#00ff00'; // Excelente
+    if (q >= 75) return '#80ff00'; // Muy buena
+    if (q >= 60) return '#ccff00'; // Buena
+    if (q >= 45) return '#ffff00'; // Aceptable
+    if (q >= 30) return '#ffcc00'; // Regular
+    if (q >= 15) return '#ff6600'; // Débil
+    return '#ff0000';              // Muy débil
   };
 
+  // Función mejorada para mostrar texto descriptivo más preciso
   const getQualityText = (q: number) => {
     if (q === 0) return 'Sin Dedo';
-    if (q > 75) return 'Excelente';
-    if (q > 50) return 'Buena';
-    return 'Baja';
+    if (q >= 90) return 'Excelente';
+    if (q >= 75) return 'Muy Buena';
+    if (q >= 60) return 'Buena';
+    if (q >= 45) return 'Aceptable';
+    if (q >= 30) return 'Regular';
+    if (q >= 15) return 'Débil';
+    return 'Muy Débil';
   };
+  
+  // Determinar si mostrar advertencia para calidad insuficiente
+  const showWarning = displayQuality > 0 && displayQuality < 30;
 
   return (
     <div className="bg-black/30 backdrop-blur-md rounded p-2 w-full">
@@ -55,6 +69,14 @@ const SignalQualityIndicator = ({ quality, isMonitoring = false }: SignalQuality
               }}
             />
           </div>
+          
+          {showWarning && (
+            <div className="mt-1 flex items-center">
+              <span className="text-[10px] text-amber-400">
+                Ajuste la posición del dedo para mejorar la calidad
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
