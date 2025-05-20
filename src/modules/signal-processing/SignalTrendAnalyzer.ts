@@ -20,7 +20,12 @@ export class SignalTrendAnalyzer {
 
   analyzeTrend(value: number): 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological' {
     this.addValue(value);
-    return this.getAnalysisResult();
+    // Permitir más tendencias como fisiológicas
+    const result = this.getAnalysisResult();
+    if (result === 'moderately_stable' || result === 'unstable') {
+      return 'stable'; // Trátalas como fisiológicas para la lógica de validación
+    }
+    return result;
   }
 
   getStabilityScore(): number {
@@ -66,8 +71,8 @@ export class SignalTrendAnalyzer {
     const variance = this.valueHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / this.valueHistory.length;
     const stdDev = Math.sqrt(variance);
     const normalizedStdDev = stdDev / Math.max(1, Math.abs(mean));
-    // Menor penalización por ruido, estabilidad sube más rápido
-    this.trendScores.stability = Math.max(0, Math.min(1, 1 - normalizedStdDev * 2.2)); // Antes *5
+    // Menor penalización por ruido, estabilidad sube mucho más rápido
+    this.trendScores.stability = Math.max(0, Math.min(1, 1 - normalizedStdDev * 1.1)); // Antes *2.2
     
     // 2. Calcular periodicidad (basada en cruces por cero y cambios de dirección)
     let directionChanges = 0;
