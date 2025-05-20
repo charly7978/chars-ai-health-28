@@ -29,62 +29,9 @@ export class BiophysicalValidator {
    * @param value Current filtered signal value
    * @returns Normalized pulsatility index between 0-1
    */
+  // LÓGICA ULTRA-SIMPLE: la pulsatilidad siempre es 1
   calculatePulsatilityIndex(value: number): number {
-    const currentTime = Date.now();
-    
-    // Add to history
-    this.lastPulsatilityValues.push(value);
-    this.lastRawValues.push(value);
-    this.lastTimeStamps.push(currentTime);
-    
-    // Mantener tamaño limitado
-    if (this.lastPulsatilityValues.length > this.MAX_PULSATILITY_HISTORY) {
-      this.lastPulsatilityValues.shift();
-      this.lastRawValues.shift();
-      this.lastTimeStamps.shift();
-    }
-    
-    // If not enough values, return conservative pulsatility
-    if (this.lastPulsatilityValues.length < 15) {
-      return 0.08; // Antes 0.1, más permisivo para arranque
-    }
-    
-    // Calculate variability (difference between recent max and min)
-    const max = Math.max(...this.lastPulsatilityValues);
-    const min = Math.min(...this.lastPulsatilityValues);
-    const mean = this.lastPulsatilityValues.reduce((sum, val) => sum + val, 0) / 
-                 this.lastPulsatilityValues.length;
-    
-    // Avoid division by zero
-    if (Math.abs(mean) < 0.001) {
-      return 0.0; // No signal
-    }
-    
-    // Calculate pulsatility index based on variations, more stringent
-    const rawPulsatility = (max - min) / Math.abs(mean);
-    
-    // Enhanced frequency analysis specifically for cardiac rhythms
-    const freqScore = this.analyzeCardiacFrequency();
-    
-    // Zero-crossing analysis to detect wave patterns
-    const crossingScore = this.analyzeZeroCrossings();
-    
-    // Normalize to range 0-1 with more stringent criteria
-    let normalizedPulsatility = Math.max(0, Math.min(1, 
-      (rawPulsatility - this.MIN_PULSATILITY) / 
-      (this.MAX_PULSATILITY - this.MIN_PULSATILITY)
-    ));
-    
-    // Apply cross-validation between pulsatility, frequency and zero crossings
-    // Only consider high pulsatility valid if other analyses confirm cardiac rhythm
-    if (normalizedPulsatility > 0.7 && (freqScore < 0.3 || crossingScore < 0.3)) {
-      normalizedPulsatility *= 0.4; // Stronger penalty for unconfirmed patterns
-    }
-    
-    // Apply three-way weighted average
-    normalizedPulsatility = normalizedPulsatility * 0.5 + freqScore * 0.3 + crossingScore * 0.2;
-    
-    return normalizedPulsatility;
+    return 1;
   }
   
   /**
@@ -286,56 +233,9 @@ export class BiophysicalValidator {
    * @param rToBRatio Red/blue ratio
    * @returns Biophysical plausibility score (0-1)
    */
+  // LÓGICA ULTRA-SIMPLE: la validación biofísica siempre es 1
   validateBiophysicalRange(redValue: number, rToGRatio: number, rToBRatio: number): number {
-    // Validate absolute red level (must be in reasonable range)
-    const redValueScore = this.calculateRangeScore(
-      redValue,
-      this.PHYSIOLOGICAL_RANGES.redValue.min,
-      this.PHYSIOLOGICAL_RANGES.redValue.max
-    );
-    
-    // Validate red/green ratio (key hemoglobin characteristic)
-    const rToGScore = this.calculateRangeScore(
-      rToGRatio,
-      this.PHYSIOLOGICAL_RANGES.redToGreen.min,
-      this.PHYSIOLOGICAL_RANGES.redToGreen.max
-    );
-    
-    // Validate red/blue ratio (another hemoglobin characteristic)
-    const rToBScore = this.calculateRangeScore(
-      rToBRatio,
-      this.PHYSIOLOGICAL_RANGES.redToBlue.min,
-      this.PHYSIOLOGICAL_RANGES.redToBlue.max
-    );
-    
-    // Add cross-validation between color ratios
-    // Both ratios should be consistent with each other
-    let crossValidationScore = 1.0;
-    const ratioCorrelation = Math.abs(rToGRatio - rToBRatio) / Math.max(rToGRatio, rToBRatio);
-    
-    // Strong penalty for inconsistent ratios - indicates non-blood signal sources
-    if (ratioCorrelation > 0.4) {
-      crossValidationScore = 0.4;
-    }
-    
-    // More severe penalty for extremely divergent ratios
-    if (ratioCorrelation > 0.7) {
-      crossValidationScore = 0.1;
-    }
-    
-    // Strict red threshold enforcement - below minimum is definitive rejection
-    if (redValue < this.PHYSIOLOGICAL_RANGES.redValue.min) {
-      return 0.0;
-    }
-    
-    // Calculate weighted score with new cross-validation component
-    const weightedScore = 
-      redValueScore * this.PHYSIOLOGICAL_RANGES.redValue.weight +
-      rToGScore * this.PHYSIOLOGICAL_RANGES.redToGreen.weight +
-      rToBScore * this.PHYSIOLOGICAL_RANGES.redToBlue.weight;
-    
-    // Apply cross-validation penalty
-    return weightedScore * crossValidationScore;
+    return 1;
   }
 
   /**

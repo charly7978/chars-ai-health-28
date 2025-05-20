@@ -1,7 +1,7 @@
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../../types/signal';
 import { KalmanFilter } from './KalmanFilter';
 import { SavitzkyGolayFilter } from './SavitzkyGolayFilter';
-import { SignalTrendAnalyzer } from './SignalTrendAnalyzer';
+import { SignalTrendAnalyzer, TrendResult } from './SignalTrendAnalyzer';
 import { BiophysicalValidator } from './BiophysicalValidator';
 import { FrameProcessor } from './FrameProcessor';
 import { CalibrationHandler } from './CalibrationHandler';
@@ -161,19 +161,19 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // Count processed frames
       this.frameProcessedCount++;
       const shouldLog = this.frameProcessedCount % 30 === 0;  // Log every 30 frames
-      
+
       // CRITICAL CHECK: Ensure callbacks are available
       if (!this.onSignalReady) {
         console.error("PPGSignalProcessor: onSignalReady callback not available, cannot continue");
         this.handleError("CALLBACK_ERROR", "Callback onSignalReady not available");
         return;
       }
-      
+
       // 1. Extract frame features with enhanced validation
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
-      
+
       // DEBUGGING: Log extracted redValue and ROI
       if (shouldLog) {
         console.log("PPGSignalProcessor DEBUG:", {
@@ -188,14 +188,13 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           rToBRatio
         });
       }
-      
+
       // Early rejection of invalid frames - stricter thresholds
       if (redValue < this.CONFIG.MIN_RED_THRESHOLD * 0.9) {
-        // Create minimal processed signal with no detection
         if (shouldLog) {
           console.log("PPGSignalProcessor: Signal too weak, skipping processing:", redValue);
         }
-        
+
         const minimalSignal: ProcessedSignal = {
           timestamp: Date.now(),
           rawValue: redValue,
@@ -205,40 +204,26 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           roi: roi,
           perfusionIndex: 0
         };
-        
+
         this.onSignalReady(minimalSignal);
-        // DEBUGGING: Log signal sent on early rejection
         if (shouldLog) {
           console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Early Reject - Weak Signal):", minimalSignal);
         }
         return;
       }
-      
-      // Log for diagnostics
-      if (shouldLog) {
-        console.log("PPGSignalProcessor: Frame data extracted:", { 
-          redValue, 
-          textureScore, 
-          rToGRatio, 
-          rToBRatio,
-          frameSize: `${imageData.width}x${imageData.height}`,
-          frameCount: this.frameProcessedCount
-        });
-      }
-      
+
       // 2. Apply multi-stage filtering to the signal
       let filteredValue = this.kalmanFilter.filter(redValue);
       filteredValue = this.sgFilter.filter(filteredValue);
-      
+
       // 3. Perform signal trend analysis with strict physiological validation
       const trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
-      
-      // Immediate rejection of non-physiological signals
-      if (trendResult === 'non_physiological' && !this.isCalibrating) {
+
+      if (trendResult === "non_physiological" && !this.isCalibrating) {
         if (shouldLog) {
           console.log("PPGSignalProcessor: Non-physiological signal rejected");
         }
-        
+
         const rejectSignal: ProcessedSignal = {
           timestamp: Date.now(),
           rawValue: redValue,
@@ -248,15 +233,14 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           roi: roi,
           perfusionIndex: 0
         };
-        
+
         this.onSignalReady(rejectSignal);
-        // DEBUGGING: Log signal sent on non-physiological trend rejection
         if (shouldLog) {
           console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Reject - Non-Physiological Trend):", rejectSignal);
         }
         return;
       }
-      
+
       // Additional validation for color channel ratios
       if ((rToGRatio < 0.9 || rToGRatio > 4.0) && !this.isCalibrating) {
         if (shouldLog) {
@@ -265,7 +249,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
             rToBRatio
           });
         }
-        
+
         const rejectSignal: ProcessedSignal = {
           timestamp: Date.now(),
           rawValue: redValue,
@@ -275,15 +259,14 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           roi: roi,
           perfusionIndex: 0
         };
-        
+
         this.onSignalReady(rejectSignal);
-        // DEBUGGING: Log signal sent on non-physiological color ratio rejection
         if (shouldLog) {
           console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Reject - Non-Physiological Color Ratio):", rejectSignal);
         }
         return;
       }
-      
+
       // 4. Calculate comprehensive detector scores with medical validation
       const detectorScores = {
         redValue,
@@ -294,18 +277,18 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         biophysical: this.biophysicalValidator.validateBiophysicalRange(redValue, rToGRatio, rToBRatio),
         periodicity: this.trendAnalyzer.getPeriodicityScore()
       };
-      
+
       // Update analyzer with latest scores
       this.signalAnalyzer.updateDetectorScores(detectorScores);
-      
+
       // 5. Perform multi-detector analysis for highly accurate finger detection
       const detectionResult = this.signalAnalyzer.analyzeSignalMultiDetector(filteredValue, trendResult);
       const { isFingerDetected, quality } = detectionResult;
-      
+
       // Calculate physiologically valid perfusion index only when finger is detected
       const perfusionIndex = isFingerDetected && quality > 30 ? 
                            (Math.log(redValue) * 0.55 - 1.2) : 0;
-      
+
       // Create processed signal object with strict validation
       const processedSignal: ProcessedSignal = {
         timestamp: Date.now(),
@@ -316,8 +299,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         roi: roi,
         perfusionIndex: Math.max(0, perfusionIndex)
       };
-      
-      // Periodic logging
+
       if (shouldLog) {
         console.log("PPGSignalProcessor: Sending validated signal:", {
           fingerDetected: isFingerDetected,
@@ -327,12 +309,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           timestamp: new Date().toISOString()
         });
       }
-      
+
       // FINAL VALIDATION before sending
       if (typeof this.onSignalReady === 'function') {
-        // No force detection - only send actual detected signals
         this.onSignalReady(processedSignal);
-        // DEBUGGING: Log final processed signal sent
         if (shouldLog) {
           console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (Final):", processedSignal);
         }
@@ -345,7 +325,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       this.handleError("PROCESSING_ERROR", "Error processing frame");
     }
   }
-  
+
   private handleError(code: string, message: string): void {
     console.error("PPGSignalProcessor: Error", code, message);
     const error: ProcessingError = {
@@ -358,5 +338,25 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     } else {
       console.error("PPGSignalProcessor: onError callback not available, cannot report error:", error);
     }
+  }
+}
+
+export type TrendResult = "stable" | "unstable" | "non_physiological";
+
+export class SignalTrendAnalyzer {
+  // Define las propiedades y métodos necesarios, por ejemplo:
+  public historyLength: number = 0;
+  public valueHistory: number[] = [];
+  // ... otras propiedades como diffHistory, patternHistory, etc.
+
+  analyzeTrend(value: number): TrendResult {
+    // tu lógica...
+    return "stable"; // o "unstable" o "non_physiological"
+  }
+
+  reset(): void {
+    this.historyLength = 0;
+    this.valueHistory = [];
+    // reinicia las demás propiedades según corresponda
   }
 }

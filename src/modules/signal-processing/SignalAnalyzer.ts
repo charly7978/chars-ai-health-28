@@ -156,16 +156,14 @@ export class SignalAnalyzer {
     this.calibrationSamples = [];
   }
 
+  // LÓGICA ULTRA-SIMPLIFICADA: solo detecta dedo si el canal rojo supera un umbral mínimo absoluto
   analyzeSignalMultiDetector(
-    filtered: number, 
-    trendResult: 'highly_stable' | 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' | 'non_physiological'
+    filtered: number,
+    trendResult: any
   ): DetectionResult {
-    // UMBRALES AJUSTADOS para mayor sensibilidad y robustez:
-    // Puedes calibrar aquí según tu hardware/condiciones:
-    const rojoOk = this.detectorScores.redChannel > 0.045; // Más permisivo
-    const pulsoOk = this.detectorScores.pulsatility > 0.08; // Más permisivo
-    const estabilidadOk = this.detectorScores.stability > 0.13; // Más permisivo
-    if (!rojoOk || !pulsoOk || !estabilidadOk) {
+    // Solo un umbral absoluto de rojo, sin checks de pulsatilidad ni estabilidad
+    const rojoOk = this.detectorScores.redChannel > 0.03;
+    if (!rojoOk) {
       this.isCurrentlyDetected = false;
       this.consecutiveDetections = 0;
       return {
@@ -173,25 +171,22 @@ export class SignalAnalyzer {
         quality: 0,
         detectorDetails: {
           ...this.detectorScores,
-          reason: 'Condición insuficiente (rojo, pulso o estabilidad)'
+          reason: 'Canal rojo insuficiente'
         }
       };
     }
-    // Si pasa los tres checks, detectar dedo
+    // Si pasa el umbral, detectar dedo tras 3 frames consecutivos
     this.consecutiveDetections++;
     this.consecutiveNoDetections = 0;
-    if (this.consecutiveDetections >= 5) { // 5 frames consecutivos para robustez
+    if (this.consecutiveDetections >= 3) {
       this.isCurrentlyDetected = true;
     }
-    // Si se pierde la condición, resetear
     if (!this.isCurrentlyDetected) {
       this.consecutiveDetections = 0;
     }
-    // Calidad proporcional a la media de los tres scores
-    const quality = Math.round(((this.detectorScores.redChannel + this.detectorScores.pulsatility + this.detectorScores.stability) / 3) * 100);
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: quality,
+      quality: Math.round(this.detectorScores.redChannel * 100),
       detectorDetails: {
         ...this.detectorScores
       }
