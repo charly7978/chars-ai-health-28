@@ -1,4 +1,3 @@
-
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../../types/signal';
 import { KalmanFilter } from './KalmanFilter';
 import { SavitzkyGolayFilter } from './SavitzkyGolayFilter';
@@ -277,17 +276,6 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         roi: roi,
         perfusionIndex: Math.max(0, perfusionIndex)
       };
-      
-      // Periodic logging
-      if (shouldLog) {
-        console.log("PPGSignalProcessor: Sending validated signal:", {
-          fingerDetected: isFingerDetected,
-          quality,
-          redValue,
-          filteredValue,
-          timestamp: new Date().toISOString()
-        });
-      }
       
       // FINAL VALIDATION before sending
       if (typeof this.onSignalReady === 'function') {
