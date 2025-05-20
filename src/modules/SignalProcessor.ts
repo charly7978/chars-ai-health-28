@@ -4,53 +4,36 @@
 import { PPGSignalProcessor as OriginalPPGSignalProcessor } from './signal-processing/PPGSignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 
-// Creamos una versión envuelta para asegurar que los callbacks se pasen correctamente
-export class PPGSignalProcessor implements OriginalPPGSignalProcessor {
-  private processor: OriginalPPGSignalProcessor;
-
+// Ahora extendemos la clase original en lugar de implementar su interfaz
+export class PPGSignalProcessor extends OriginalPPGSignalProcessor {
   constructor(
-    public onSignalReady?: (signal: ProcessedSignal) => void,
-    public onError?: (error: ProcessingError) => void
+    onSignalReady?: (signal: ProcessedSignal) => void,
+    onError?: (error: ProcessingError) => void
   ) {
-    console.log("SignalProcessor wrapper: Creando instancia con callbacks explícitos:", {
+    console.log("PPGSignalProcessor wrapper: Creando instancia con callbacks explícitos:", {
       hasSignalReadyCallback: !!onSignalReady,
       hasErrorCallback: !!onError
     });
     
-    // Pasar los callbacks explícitamente al constructor
-    this.processor = new OriginalPPGSignalProcessor(onSignalReady, onError);
+    // Llamar al constructor de la clase padre
+    super(onSignalReady, onError);
   }
 
-  // Implementar todos los métodos de la interfaz
-  async initialize(): Promise<void> {
-    return this.processor.initialize();
-  }
-
-  start(): void {
-    this.processor.start();
-  }
-
-  stop(): void {
-    this.processor.stop();
-  }
-
-  async calibrate(): Promise<boolean> {
-    return this.processor.calibrate();
-  }
-
+  // Sobrescribimos processFrame para asegurar que los callbacks estén actualizados
   processFrame(imageData: ImageData): void {
-    // Asegurarnos que al procesar el frame, usamos los callbacks actualizados
-    if (this.onSignalReady && this.processor.onSignalReady !== this.onSignalReady) {
-      console.log("SignalProcessor wrapper: Actualizando onSignalReady callback");
-      this.processor.onSignalReady = this.onSignalReady;
+    // Asegurarnos que al procesar el frame, los callbacks están correctamente configurados
+    if (this.onSignalReady && super.onSignalReady !== this.onSignalReady) {
+      console.log("PPGSignalProcessor wrapper: Actualizando onSignalReady callback");
+      super.onSignalReady = this.onSignalReady;
     }
     
-    if (this.onError && this.processor.onError !== this.onError) {
-      console.log("SignalProcessor wrapper: Actualizando onError callback");
-      this.processor.onError = this.onError;
+    if (this.onError && super.onError !== this.onError) {
+      console.log("PPGSignalProcessor wrapper: Actualizando onError callback");
+      super.onError = this.onError;
     }
     
-    this.processor.processFrame(imageData);
+    // Llamar al método de la clase padre
+    super.processFrame(imageData);
   }
 }
 
