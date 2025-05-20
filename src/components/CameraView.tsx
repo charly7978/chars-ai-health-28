@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 
 interface CameraViewProps {
@@ -21,7 +22,6 @@ const CameraView = ({
   const [deviceSupportsAutoFocus, setDeviceSupportsAutoFocus] = useState(false);
   const [deviceSupportsTorch, setDeviceSupportsTorch] = useState(false);
   const torchAttempts = useRef<number>(0);
-  const lastFingerStateChange = useRef<number>(0);
 
   const stopCamera = async () => {
     if (stream) {
@@ -124,7 +124,18 @@ const CameraView = ({
           if (capabilities.torch) {
             console.log("CameraView: Este dispositivo tiene linterna disponible");
             setDeviceSupportsTorch(true);
-            // No activamos la linterna inmediatamente, esperamos a detectar el dedo
+            
+            // Activamos la linterna inmediatamente al iniciar la medición
+            try {
+              await videoTrack.applyConstraints({
+                advanced: [{ torch: true }]
+              });
+              setTorchEnabled(true);
+              console.log("CameraView: Linterna activada inmediatamente al iniciar la medición");
+            } catch (err) {
+              console.error("CameraView: Error activando linterna:", err);
+              torchAttempts.current++;
+            }
           } else {
             console.log("CameraView: Este dispositivo no tiene linterna disponible");
             setDeviceSupportsTorch(false);
@@ -167,56 +178,43 @@ const CameraView = ({
     };
   }, [isMonitoring]);
 
-  // Gestión mejorada de la linterna con protección contra cambios frecuentes
+  // Efecto para asegurar que la linterna permanezca encendida durante toda la medición
   useEffect(() => {
-    if (!stream || !deviceSupportsTorch) return;
+    if (!stream || !deviceSupportsTorch || !isMonitoring) return;
     
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack || !videoTrack.getCapabilities()?.torch) return;
     
-    const shouldTorchBeOn = isFingerDetected;
-    const now = Date.now();
-    
-    // Para evitar parpadeos, solo permitimos cambios después de un periodo mínimo
-    if (now - lastFingerStateChange.current < 1000) {
-      console.log("CameraView: Ignorando cambio de estado de linterna (muy frecuente)");
-      return;
-    }
-    
-    if (shouldTorchBeOn !== torchEnabled) {
-      console.log(`CameraView: ${shouldTorchBeOn ? 'Activando' : 'Desactivando'} linterna basado en detección:`, {
-        isFingerDetected,
-        torchEnabled,
-        signalQuality,
-        attempts: torchAttempts.current
-      });
-      
-      lastFingerStateChange.current = now;
-      
-      // Intentamos cambiar el estado de la linterna
-      videoTrack.applyConstraints({
-        advanced: [{ torch: shouldTorchBeOn }]
-      }).then(() => {
-        setTorchEnabled(shouldTorchBeOn);
-        // Reiniciar contador de intentos exitosos
-        if (shouldTorchBeOn) {
-          torchAttempts.current = 0;
-        }
-      }).catch(err => {
-        console.error(`CameraView: Error ${shouldTorchBeOn ? 'activando' : 'desactivando'} linterna:`, err);
-        
-        // Incrementar contador de intentos fallidos
-        if (shouldTorchBeOn) {
+    const keepTorchOn = async () => {
+      if (!torchEnabled) {
+        try {
+          console.log("CameraView: Manteniendo linterna encendida durante la medición");
+          await videoTrack.applyConstraints({
+            advanced: [{ torch: true }]
+          });
+          setTorchEnabled(true);
+        } catch (err) {
+          console.error("CameraView: Error al mantener la linterna encendida:", err);
           torchAttempts.current++;
           
-          // Si fallamos muchas veces, informamos al usuario
+          // Si hay demasiados fallos, informamos
           if (torchAttempts.current > 3) {
             console.warn("CameraView: Múltiples fallas al activar linterna, posible problema de hardware");
           }
         }
-      });
-    }
-  }, [stream, isFingerDetected, torchEnabled, deviceSupportsTorch, signalQuality]);
+      }
+    };
+    
+    // Verificar periódicamente que la linterna permanezca encendida
+    const torchCheckInterval = setInterval(keepTorchOn, 2000);
+    
+    // Activar inmediatamente
+    keepTorchOn();
+    
+    return () => {
+      clearInterval(torchCheckInterval);
+    };
+  }, [stream, isMonitoring, deviceSupportsTorch, torchEnabled]);
 
   // Enfoque automático optimizado para la detección PPG
   useEffect(() => {
