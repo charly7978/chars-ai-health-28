@@ -212,14 +212,12 @@ const CameraView = ({
 
         // Aplicar configuraciones avanzadas
         if (advancedConstraints.length > 0) {
-          try {
-            await videoTrack.applyConstraints({
-              advanced: advancedConstraints
-            });
-            console.log("CameraView: Constraints avanzados aplicados exitosamente");
-          } catch (err) {
+          videoTrack.applyConstraints({
+            advanced: advancedConstraints
+          }).catch(err => {
             console.error("CameraView: Error aplicando constraints avanzados:", err);
-          }
+          });
+          console.log("CameraView: Constraints avanzados aplicados exitosamente");
         }
 
         if (videoRef.current) {
@@ -232,30 +230,28 @@ const CameraView = ({
           console.log("CameraView: Este dispositivo tiene linterna disponible");
           setDeviceSupportsTorch(true);
           
-          try {
-            await videoTrack.applyConstraints({
-              advanced: [{ torch: true }]
-            });
+          videoTrack.applyConstraints({
+            advanced: [{ torch: true }]
+          }).then(() => {
             setTorchEnabled(true);
             requestedTorch.current = true;
             console.log("CameraView: Linterna activada para medición PPG");
-          } catch (err) {
+          }).catch(err => {
             console.error("CameraView: Error activando linterna:", err);
             torchAttempts.current++;
             
             // Intentarlo de nuevo inmediatamente
-            setTimeout(async () => {
-              try {
-                await videoTrack.applyConstraints({
-                  advanced: [{ torch: true }]
-                });
+            setTimeout(() => {
+              videoTrack.applyConstraints({
+                advanced: [{ torch: true }]
+              }).then(() => {
                 setTorchEnabled(true);
                 console.log("CameraView: Linterna activada en segundo intento");
-              } catch (err) {
-                console.error("CameraView: Error en segundo intento de linterna:", err);
-              }
+              }).catch(retryErr => {
+                console.error("CameraView: Error en segundo intento de linterna:", retryErr);
+              });
             }, 1000);
-          }
+          });
         } else {
           console.log("CameraView: Este dispositivo no tiene linterna disponible");
           setDeviceSupportsTorch(false);
@@ -316,22 +312,23 @@ const CameraView = ({
      * Ahora se comprueba directamente el estado real mediante `getSettings().torch` y
      * se reactiva cuando sea necesario.
      */
-    const keepTorchOn = async () => {
+    const keepTorchOn = () => {
       if (!isMonitoring || !deviceSupportsTorch) return;
 
       const torchIsReallyOn = videoTrack.getSettings && (videoTrack.getSettings() as any).torch === true;
 
       if (!torchIsReallyOn) {
-        try {
-          console.log("CameraView: Re-activando linterna (torch)");
-          await videoTrack.applyConstraints({ advanced: [{ torch: true }] });
-          setTorchEnabled(true);
-          requestedTorch.current = true;
-        } catch (err) {
-          console.error("CameraView: Error re-encendiendo linterna:", err);
-          torchAttempts.current++;
-          setTorchEnabled(false);
-        }
+        console.log("CameraView: Re-activando linterna (torch)");
+        videoTrack.applyConstraints({ advanced: [{ torch: true }] })
+          .then(() => {
+            setTorchEnabled(true);
+            requestedTorch.current = true;
+          })
+          .catch(err => {
+            console.error("CameraView: Error re-encendiendo linterna:", err);
+            torchAttempts.current++;
+            setTorchEnabled(false);
+          });
       } else {
         // Mantener el estado de la UI sincronizado con el estado real
         if (!torchEnabled) {
