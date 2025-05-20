@@ -38,6 +38,7 @@ const Index = () => {
     rrVariation: number;
   } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [rrIntervals, setRRIntervals] = useState<number[]>([]);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { 
@@ -509,6 +510,10 @@ const Index = () => {
       const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
       setHeartRate(heartBeatResult.bpm);
       setHeartbeatSignal(heartBeatResult.filteredValue);
+      // Actualizar últimos intervalos RR para debug
+      if (heartBeatResult.rrData && heartBeatResult.rrData.intervals) {
+        setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
+      }
       
       const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
       if (vitals) {
@@ -567,6 +572,12 @@ const Index = () => {
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
+      {/* Debug overlay de intervalos RR */}
+      {rrIntervals.length > 0 && (
+        <div className="absolute top-4 left-4 text-white z-20 bg-black/50 p-2 rounded">
+          Últimos intervalos RR: {rrIntervals.map(i => i + ' ms').join(', ')}
+        </div>
+      )}
       {/* Overlay button for re-entering fullscreen if user exits */}
       {!isFullscreen && (
         <button 

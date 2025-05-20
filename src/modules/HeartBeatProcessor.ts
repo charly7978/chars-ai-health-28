@@ -208,8 +208,9 @@ export class HeartBeatProcessor {
         // Reseteamos la bandera después de reproducir el sonido de arritmia
         this.isArrhythmiaDetected = false;
       }
+      const interval = now - this.lastBeepTime;
       this.lastBeepTime = now;
-      console.log(`HeartBeatProcessor: Reproduciendo sonido de latido en ${now}, intervalo: ${now - this.lastBeepTime}`);
+      console.log(`HeartBeatProcessor: Latido reproducido. Intervalo: ${interval} ms, BPM estimado: ${Math.round(this.getSmoothBPM())}`);
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
     }
