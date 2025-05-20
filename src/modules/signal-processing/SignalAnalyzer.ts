@@ -162,33 +162,36 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Actualizar historial de calidad de canal rojo y calcular calidad media
+    // Actualizar historial de calidad y calcular calidad media
     this.qualityHistory.push(this.detectorScores.redChannel);
     if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
       this.qualityHistory.shift();
     }
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    // Umbrales adaptativos basados en calibración
-    const thresholdOn = this.adaptiveThreshold;
-    const thresholdOff = this.adaptiveThreshold * 0.5;
-    // Histeresis con contadores para robustez
-    if (avgQuality > thresholdOn) {
+    // Umbrales para calidad, estabilidad y pulsatilidad
+    const qualityOn = this.adaptiveThreshold;
+    const qualityOff = this.adaptiveThreshold * 0.5;
+    const stabilityOn = 0.4;
+    const stabilityOff = 0.3;
+    const pulseOn = 0.3;
+    const pulseOff = 0.25;
+    // Histeresis combinando calidad, tendencia estable, estabilidad y pulsatilidad
+    if (avgQuality > qualityOn && trendResult === 'stable' &&
+        this.detectorScores.stability > stabilityOn &&
+        this.detectorScores.pulsatility > pulseOn) {
       this.consecutiveDetections++;
       this.consecutiveNoDetections = 0;
-    } else if (avgQuality < thresholdOff) {
+    } else if (avgQuality < qualityOff || trendResult !== 'stable' ||
+               this.detectorScores.stability < stabilityOff ||
+               this.detectorScores.pulsatility < pulseOff) {
       this.consecutiveNoDetections++;
       this.consecutiveDetections = 0;
     }
-    // Confirmar detección tras N cuadros consecutivos
+    // Confirmar o perder detección según contadores configurables
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
     }
-    // Perder detección tras M cuadros consecutivos por debajo del umbral
     if (this.isCurrentlyDetected && this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
-      this.isCurrentlyDetected = false;
-    }
-    // Validación adicional: descartar si no hay pulsatilidad suficiente
-    if (this.isCurrentlyDetected && this.detectorScores.pulsatility < 0.2) {
       this.isCurrentlyDetected = false;
     }
     return {
@@ -197,7 +200,6 @@ export class SignalAnalyzer {
       detectorDetails: {
         ...this.detectorScores,
         avgQuality,
-        adaptiveThreshold: this.adaptiveThreshold,
         consecutiveDetections: this.consecutiveDetections,
         consecutiveNoDetections: this.consecutiveNoDetections
       }
