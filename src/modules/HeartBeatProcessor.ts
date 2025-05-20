@@ -1,4 +1,3 @@
-
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
   private readonly SAMPLE_RATE = 30;
@@ -121,7 +120,7 @@ export class HeartBeatProcessor {
       const gainNode1 = this.audioContext.createGain();
       
       oscillator1.type = 'sine';
-      oscillator1.frequency.value = 150; // Frecuencia mucho más audible para "lub"
+      oscillator1.frequency.value = 180; // Frecuencia aumentada para "lub"
       
       gainNode1.gain.setValueAtTime(0, this.audioContext.currentTime);
       gainNode1.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.03);
@@ -138,7 +137,7 @@ export class HeartBeatProcessor {
       const gainNode2 = this.audioContext.createGain();
       
       oscillator2.type = 'sine';
-      oscillator2.frequency.value = 100; // Frecuencia más baja pero audible para "dub"
+      oscillator2.frequency.value = 120; // Frecuencia aumentada para "dub"
       
       gainNode2.gain.setValueAtTime(0, this.audioContext.currentTime + 0.1);
       gainNode2.gain.linearRampToValueAtTime(volume * 0.8, this.audioContext.currentTime + 0.13);
@@ -149,23 +148,6 @@ export class HeartBeatProcessor {
       
       oscillator2.start(this.audioContext.currentTime + 0.1);
       oscillator2.stop(this.audioContext.currentTime + 0.35);
-      
-      // Agregar un poco de "cuerpo" al sonido para hacerlo más realista
-      const oscillator3 = this.audioContext.createOscillator();
-      const gainNode3 = this.audioContext.createGain();
-      
-      oscillator3.type = 'triangle'; // Usar onda triangular para dar más textura
-      oscillator3.frequency.value = 75; // Frecuencia complementaria
-      
-      gainNode3.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gainNode3.gain.linearRampToValueAtTime(volume * 0.4, this.audioContext.currentTime + 0.05);
-      gainNode3.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.25);
-      
-      oscillator3.connect(gainNode3);
-      gainNode3.connect(this.audioContext.destination);
-      
-      oscillator3.start(this.audioContext.currentTime);
-      oscillator3.stop(this.audioContext.currentTime + 0.3);
       
       console.log("HeartBeatProcessor: Sonido de latido reproducido correctamente");
       this.lastBeepTime = now;
