@@ -1,4 +1,3 @@
-
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../../types/signal';
 import { KalmanFilter } from './KalmanFilter';
 import { SavitzkyGolayFilter } from './SavitzkyGolayFilter';
@@ -26,21 +25,21 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   private isCalibrating: boolean = false;
   private frameProcessedCount = 0;
   
-  // Configuración basada en nuestro plan - ajustada para sensibilidad máxima
+  // Configuración basada en nuestro plan - ajustada para sensibilidad extrema
   private readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 10,   // Reducido al mínimo para máxima sensibilidad
+    MIN_RED_THRESHOLD: 5,    // Reducido al mínimo absoluto para máxima sensibilidad
     MAX_RED_THRESHOLD: 250,
     STABILITY_WINDOW: 6,
     MIN_STABILITY_COUNT: 1,  // Reducido al mínimo (1) para detección inmediata 
-    HYSTERESIS: 1.5,         // Reducido para mayor sensibilidad
+    HYSTERESIS: 1.2,         // Reducido para mayor sensibilidad
     MIN_CONSECUTIVE_DETECTIONS: 1,  // Un solo frame es suficiente
-    MAX_CONSECUTIVE_NO_DETECTIONS: 8,  // Aumentado para mantener la detección más tiempo
+    MAX_CONSECUTIVE_NO_DETECTIONS: 10,  // Aumentado para mantener la detección más tiempo
     QUALITY_LEVELS: 20,
     QUALITY_HISTORY_SIZE: 10,
     CALIBRATION_SAMPLES: 10, // Reducido para calibración más rápida
     TEXTURE_GRID_SIZE: 8,
-    ROI_SIZE_FACTOR: 0.35    // Aumentado para capturar mayor área
+    ROI_SIZE_FACTOR: 0.4     // Aumentado para capturar mayor área
   };
   
   constructor(
@@ -133,28 +132,30 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
 
   processFrame(imageData: ImageData): void {
     if (!this.isProcessing) {
+      console.log("PPGSignalProcessor: No está procesando, ignorando frame");
       return;
     }
 
     try {
       // Contador de frames procesados
       this.frameProcessedCount++;
-      const shouldLog = this.frameProcessedCount % 15 === 0;  // Log cada 15 frames
+      const shouldLog = this.frameProcessedCount % 10 === 0;  // Log cada 10 frames
       
       // 1. Extraer características del frame
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
-      // Loguear siempre para diagnóstico
-      if (shouldLog) {
+      // Loguear para diagnóstico
+      if (shouldLog || redValue > this.CONFIG.MIN_RED_THRESHOLD) {
         console.log("PPGSignalProcessor: Frame datos extraídos:", { 
           redValue, 
           textureScore, 
           rToGRatio, 
           rToBRatio,
           frameSize: `${imageData.width}x${imageData.height}`,
-          frameCount: this.frameProcessedCount
+          frameCount: this.frameProcessedCount,
+          minThreshold: this.CONFIG.MIN_RED_THRESHOLD
         });
       }
       
@@ -214,13 +215,13 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       
       // Aplicamos una lógica extremadamente permisiva para el detector de canal rojo
       let redChannelScore = 0;
-      if (redValue > calibrationValues.minRedThreshold * 0.3) { // Reducido aún más
+      if (redValue > calibrationValues.minRedThreshold * 0.2) { // Reducido aún más
         // Función mucho más sensible para la puntuación de rojo
-        redChannelScore = Math.min(1.0, (redValue - calibrationValues.minRedThreshold * 0.3) / 
-                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold * 0.3));
-      } else if (redValue > 3) { // Detector incluso con valores muy bajos
+        redChannelScore = Math.min(1.0, (redValue - calibrationValues.minRedThreshold * 0.2) / 
+                           (calibrationValues.maxRedThreshold - calibrationValues.minRedThreshold * 0.2));
+      } else if (redValue > 2) { // Detector incluso con valores muy bajos
         // Puntuar valores cercanos al umbral para mejorar detección
-        redChannelScore = 0.6 * (redValue / (calibrationValues.minRedThreshold * 0.3));
+        redChannelScore = 0.7 * (redValue / (calibrationValues.minRedThreshold * 0.2));
       }
       
       this.signalAnalyzer.updateDetectorScores({

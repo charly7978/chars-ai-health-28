@@ -1,6 +1,5 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PPGSignalProcessor } from '../modules/SignalProcessor'; // Verifica esta importación
+import { PPGSignalProcessor } from '../modules/SignalProcessor'; // Esta es la importación correcta
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 import { toast } from "@/components/ui/use-toast";
 
@@ -11,30 +10,9 @@ export const useSignalProcessor = () => {
       sessionId: Math.random().toString(36).substring(2, 9)
     });
     
-    // IMPORTANTE: Asegurarnos de proporcionar los callbacks correctamente
-    const newProcessor = new PPGSignalProcessor(
-      (signal: ProcessedSignal) => {
-        console.log("Callback onSignalReady llamado correctamente", {
-          timestamp: new Date(signal.timestamp).toISOString(),
-          fingerDetected: signal.fingerDetected,
-          quality: signal.quality
-        });
-      },
-      (error: ProcessingError) => {
-        console.error("Callback onError llamado correctamente", {
-          code: error.code,
-          message: error.message,
-          timestamp: new Date(error.timestamp).toISOString()
-        });
-        toast({
-          title: "Error en el procesador de señal",
-          description: error.message,
-          variant: "destructive"
-        });
-      }
-    );
-    
-    return newProcessor;
+    // Creamos el procesador pero NO asignamos los callbacks aquí
+    // se asignarán en el useEffect
+    return new PPGSignalProcessor();
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastSignal, setLastSignal] = useState<ProcessedSignal | null>(null);
@@ -138,6 +116,14 @@ export const useSignalProcessor = () => {
     
     // IMPORTANTE: Asignar los callbacks correctamente
     processor.onSignalReady = (signal: ProcessedSignal) => {
+      console.log("Callback onSignalReady llamado correctamente", {
+        timestamp: new Date(signal.timestamp).toISOString(),
+        fingerDetected: signal.fingerDetected,
+        quality: signal.quality,
+        rawValue: signal.rawValue,
+        filteredValue: signal.filteredValue
+      });
+      
       // AUMENTAR ROI PARA AYUDAR A DETECCIÓN
       if (signal.roi) {
         signal.roi = {
@@ -201,6 +187,7 @@ export const useSignalProcessor = () => {
         formattedTime: new Date(error.timestamp).toISOString(),
         stack: new Error().stack
       });
+      
       setError(error);
       
       // Mostrar toast de error solo para errores críticos

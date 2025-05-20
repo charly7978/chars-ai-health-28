@@ -43,7 +43,7 @@ export class SignalAnalyzer {
     periodicity: number;
   }): void {
     // Factor de suavizado para cambios - más rápido para adaptarse
-    const alpha = 0.4;  // Aumentado para adaptarse más rápido
+    const alpha = 0.6;  // Aumentado para adaptarse muy rápidamente
     
     // Actualizar cada puntuación con suavizado
     this.detectorScores.redChannel = 
@@ -61,7 +61,7 @@ export class SignalAnalyzer {
     this.detectorScores.periodicity = 
       (1 - alpha) * this.detectorScores.periodicity + alpha * scores.periodicity;
 
-    // Añadir logueo para diagnóstico de valores
+    // Añadir logueo para diagnóstico
     console.log("SignalAnalyzer: Scores actualizados:", {
       redValue: scores.redValue,
       redChannel: this.detectorScores.redChannel,
@@ -80,10 +80,10 @@ export class SignalAnalyzer {
     
     // Aplicar ponderación a los detectores (total: 100) - ajustado para dar mucho más peso a señal roja
     const detectorWeights = {
-      redChannel: 55,    // Aumentado para priorizar este indicador
-      stability: 15,     
-      pulsatility: 15,   
-      biophysical: 10,
+      redChannel: 70,    // Aumentado significativamente para detectar presencia rápidamente
+      stability: 10,     
+      pulsatility: 10,   
+      biophysical: 5,
       periodicity: 5
     };
     
@@ -97,11 +97,11 @@ export class SignalAnalyzer {
     // Normalizar a 100
     const normalizedScore = weightedScore / 100;
     
-    // Reglas de detección con histéresis - UMBRALES MUY REDUCIDOS PARA AUMENTAR SENSIBILIDAD
+    // Reglas de detección con histéresis - UMBRALES EXTREMADAMENTE REDUCIDOS
     let detectionChanged = false;
     
-    // *** CAMBIO CRÍTICO: UMBRAL DRÁSTICAMENTE REDUCIDO ***
-    if (normalizedScore > 0.30) {  // Reducido a solo 0.30 (antes 0.40)
+    // *** CAMBIO CRÍTICO: UMBRAL EXTREMADAMENTE REDUCIDO ***
+    if (normalizedScore > 0.20) {  // Reducido a solo 0.20 (antes 0.30)
       // Puntuación alta -> incrementar detecciones consecutivas
       this.consecutiveDetections++;
       this.consecutiveNoDetections = 0; // Resetea completamente
@@ -111,18 +111,18 @@ export class SignalAnalyzer {
         this.isCurrentlyDetected = true;
         this.lastDetectionTime = currentTime;
         detectionChanged = true;
-        console.log("SignalAnalyzer: Detección de dedo ACTIVADA (score bajo)", { normalizedScore });
+        console.log("SignalAnalyzer: Detección de dedo ACTIVADA (score:", normalizedScore, ")");
       }
-    } else if (normalizedScore < 0.20) {  // Reducido de 0.30 a 0.20 para mayor permisividad
+    } else if (normalizedScore < 0.15) {  // Reducido de 0.20 a 0.15 para mayor permisividad
       // Puntuación baja -> decrementar detecciones
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
       
       // Requiere MÁS no-detecciones para considerar ausencia de dedo
-      if (this.consecutiveNoDetections >= 15 && this.isCurrentlyDetected) { // Aumentado a 15
+      if (this.consecutiveNoDetections >= 20 && this.isCurrentlyDetected) { // Aumentado a 20
         this.isCurrentlyDetected = false;
         detectionChanged = true;
-        console.log("SignalAnalyzer: Detección de dedo DESACTIVADA", { normalizedScore });
+        console.log("SignalAnalyzer: Detección de dedo DESACTIVADA (score:", normalizedScore, ")");
       }
     }
     

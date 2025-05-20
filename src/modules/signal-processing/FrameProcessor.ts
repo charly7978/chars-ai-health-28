@@ -1,4 +1,3 @@
-
 import { FrameData } from './types';
 import { ProcessedSignal } from '../../types/signal';
 
@@ -50,10 +49,9 @@ export class FrameProcessor {
         cells[cellIdx].blue += b;
         cells[cellIdx].count++;
         
-        // *** CAMBIO CRÍTICO: CRITERIO DE DETECCIÓN MUCHO MÁS PERMISIVO ***
-        // Detectamos cualquier pixel con predominancia de rojo mínima
-        // El umbral se redujo dramáticamente para mejorar la detección
-        if (r > g * 1.0 && r > b * 1.0) {
+        // *** CAMBIO CRÍTICO: CRITERIO DE DETECCIÓN EXTREMADAMENTE PERMISIVO ***
+        // Cualquier pixel con mínima presencia de rojo es considerado
+        if (r > 0) {  // Simplemente detectar cualquier valor de rojo
           redSum += r;
           greenSum += g;
           blueSum += b;
@@ -107,9 +105,9 @@ export class FrameProcessor {
       }
     }
     
-    // *** CAMBIO CRÍTICO: UMBRAL MÍNIMO REDUCIDO A 1 PIXEL ***
-    // Esto prácticamente garantiza que cualquier presencia de rojo se detecte
+    // Si no hay pixels rojos, retornar valores por defecto
     if (pixelCount < 1) {
+      console.log("FrameProcessor: No se detectaron pixels rojos en este frame");
       return { 
         redValue: 0, 
         textureScore: 0, 
