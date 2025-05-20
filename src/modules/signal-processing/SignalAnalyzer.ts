@@ -23,8 +23,7 @@ export class SignalAnalyzer {
   private isCurrentlyDetected: boolean = false;
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
-  // Aumentar el tiempo de retención de detección
-  private readonly DETECTION_TIMEOUT = 20000; // Aumentado a 20 segundos para máxima retención (antes 10)
+  private readonly DETECTION_TIMEOUT = 30000; // Aumentado a 30 segundos para máxima retención (antes 20)
   
   constructor(config: { 
     QUALITY_LEVELS: number;
