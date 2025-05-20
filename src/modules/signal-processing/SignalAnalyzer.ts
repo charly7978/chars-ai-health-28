@@ -162,63 +162,49 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // CALIDAD DINÁMICA: métrica compuesta de redChannel, estabilidad, pulsatilidad y periodicidad
-    const { redChannel, stability, pulsatility, periodicity } = this.detectorScores;
-    // Raw compuesto (0-1)
-    const rawQuality = (redChannel + stability + pulsatility + periodicity) / 4;
-    // Guardar en historial para suavizar
-    this.qualityHistory.push(rawQuality);
-    if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
-      this.qualityHistory.shift();
+    // Gating inicial: requerir intensidad mínima de canal rojo para descartar superficies sin dedo
+    const redScore = this.detectorScores.redChannel;
+    const RED_THRESHOLD = 0.15;
+    if (redScore < RED_THRESHOLD) {
+      // Limpia contadores y descarta detección
+      this.consecutiveDetections = 0;
+      this.consecutiveNoDetections = 0;
+      this.isCurrentlyDetected = false;
+      return {
+        isFingerDetected: false,
+        quality: 0,
+        detectorDetails: { redChannel: redScore }
+      };
     }
-    const smoothQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
-    // Umbrales de gating más sensibles
-    const qualityOn = 0.4;  // 40%
-    const qualityOff = 0.2; // 20%
-    // Umbrales adicionales para robustez en adquisición
-    const stabilityOn = 0.4;
-    const pulseOn = 0.3;
-    // Nuevo umbral de periodicidad para evitar detecciones sin pulso real
-    const periodicityOn = 0.5;
-    // Lógica de histeresis: adquisición vs mantenimiento
+    // Detección de dedo basada en pulsatilidad (latidos reales)
+    const pulseScore = this.detectorScores.pulsatility;
+    const PULSE_THRESHOLD_ON = 0.15;
+    const PULSE_THRESHOLD_OFF = 0.10;
     if (!this.isCurrentlyDetected) {
-      // Detección inicial: calidad compuesta, tendencia válida, estabilidad, pulsatilidad y periodicidad
-      if (smoothQuality > qualityOn && trendResult !== 'non_physiological' &&
-          this.detectorScores.stability > stabilityOn &&
-          this.detectorScores.pulsatility > pulseOn &&
-          this.detectorScores.periodicity > periodicityOn) {
-        this.consecutiveDetections++;
-      } else {
-        this.consecutiveDetections = 0;
-      }
+      // Adquirir detección si pulsatilidad supera threshold ON
+      this.consecutiveDetections = pulseScore > PULSE_THRESHOLD_ON
+        ? this.consecutiveDetections + 1
+        : 0;
     } else {
-      // Mantenimiento: estabilidad, pulsatilidad y periodicidad para confirmar dedo
-      const stabilityOff = 0.3;
-      const pulseOff = 0.25;
-      const periodicityOff = 0.4;
-      if (smoothQuality < qualityOff || trendResult === 'non_physiological' ||
-          this.detectorScores.stability < stabilityOff ||
-          this.detectorScores.pulsatility < pulseOff ||
-          this.detectorScores.periodicity < periodicityOff) {
-        this.consecutiveNoDetections++;
-      } else {
-        this.consecutiveNoDetections = 0;
-      }
+      // Mantener detección hasta que pulsatilidad caiga por debajo de threshold OFF
+      this.consecutiveNoDetections = pulseScore < PULSE_THRESHOLD_OFF
+        ? this.consecutiveNoDetections + 1
+        : 0;
     }
-    // Cambiar estado tras N cuadros consecutivos
+    // Confirmar o cancelar detección tras N cuadros consecutivos
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
+      this.consecutiveNoDetections = 0;
     }
     if (this.isCurrentlyDetected && this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
       this.isCurrentlyDetected = false;
+      this.consecutiveDetections = 0;
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(smoothQuality * 100),
+      quality: Math.round(pulseScore * 100),
       detectorDetails: {
-        ...this.detectorScores,
-        avgQuality: parseFloat(smoothQuality.toFixed(3)),
-        rawQuality: parseFloat(rawQuality.toFixed(3)),
+        pulsatility: pulseScore,
         consecutiveDetections: this.consecutiveDetections,
         consecutiveNoDetections: this.consecutiveNoDetections
       }
