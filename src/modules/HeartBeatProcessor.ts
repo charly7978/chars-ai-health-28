@@ -18,12 +18,12 @@ export class HeartBeatProcessor {
   private readonly BASELINE_FACTOR = 1.0; 
 
   // Parámetros de beep y vibración
-  private readonly BEEP_PRIMARY_FREQUENCY = 60; // Frecuencia más baja para sonido cardíaco
-  private readonly BEEP_SECONDARY_FREQUENCY = 30; // Frecuencia secundaria más baja
-  private readonly BEEP_DURATION = 180; // Mayor duración para simular latido cardíaco
-  private readonly BEEP_VOLUME = 0.85; // Volumen ajustado
+  private readonly BEEP_PRIMARY_FREQUENCY = 40; // Reducido aún más para un sonido más profundo
+  private readonly BEEP_SECONDARY_FREQUENCY = 20; // Frecuencia secundaria aún más baja
+  private readonly BEEP_DURATION = 200; // Mayor duración para sonido más profundo
+  private readonly BEEP_VOLUME = 0.90; // Volumen ajustado
   private readonly MIN_BEEP_INTERVAL_MS = 300;
-  private readonly VIBRATION_PATTERN = [30, 20, 60]; // Patrón que simula un latido cardíaco
+  private readonly VIBRATION_PATTERN = [40, 30, 80]; // Patrón más prolongado para simular un latido más profundo
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
   private readonly LOW_SIGNAL_THRESHOLD = 0.03;
@@ -62,41 +62,45 @@ export class HeartBeatProcessor {
       this.audioContext = new AudioContext();
       await this.audioContext.resume();
       
-      // Crear un buffer para el sonido de latido cardíaco (un sonido más rico y profundo)
+      // Crear un buffer para el sonido de latido cardíaco mucho más grave
       if (this.audioContext) {
         // Creamos un buffer para el sonido de latido cardíaco
         const sampleRate = this.audioContext.sampleRate;
-        const bufferSize = Math.floor(sampleRate * 0.3); // 300ms de duración
+        const bufferSize = Math.floor(sampleRate * 0.4); // 400ms de duración para un sonido más largo y profundo
         this.heartSoundBuffer = this.audioContext.createBuffer(1, bufferSize, sampleRate);
         
-        // Generamos un sonido de latido cardíaco más realista y de tono bajo
+        // Generamos un sonido de latido cardíaco mucho más grave y realista
         const channelData = this.heartSoundBuffer.getChannelData(0);
         
-        // Primera parte del latido (sonido "lub") - más grave
-        const attackTime = Math.floor(sampleRate * 0.03);
-        const decayTime = Math.floor(sampleRate * 0.08);
+        // Primera parte del latido (sonido "lub") - mucho más grave
+        const attackTime = Math.floor(sampleRate * 0.04);
+        const decayTime = Math.floor(sampleRate * 0.10);
         for (let i = 0; i < attackTime; i++) {
-          channelData[i] = (i / attackTime) * Math.sin(i * 0.08) * 0.9;
+          // Frecuencia mucho más baja (0.04) para un tono profundo desde el inicio
+          channelData[i] = (i / attackTime) * Math.sin(i * 0.04) * 0.9;
         }
         for (let i = attackTime; i < attackTime + decayTime; i++) {
           const decay = 1 - ((i - attackTime) / decayTime);
-          channelData[i] = decay * Math.sin(i * 0.07) * 0.85;
+          // Frecuencia reducida a 0.035 para mantener el tono grave
+          channelData[i] = decay * Math.sin(i * 0.035) * 0.85;
         }
         
         // Pequeña pausa
-        const pauseTime = Math.floor(sampleRate * 0.05);
+        const pauseTime = Math.floor(sampleRate * 0.06);
         
         // Segunda parte del latido (sonido "dub") - aún más grave
-        const secondAttackTime = Math.floor(sampleRate * 0.02);
-        const secondDecayTime = Math.floor(sampleRate * 0.15);
+        const secondAttackTime = Math.floor(sampleRate * 0.03);
+        const secondDecayTime = Math.floor(sampleRate * 0.17);
         const secondStart = attackTime + decayTime + pauseTime;
         for (let i = 0; i < secondAttackTime; i++) {
-          channelData[secondStart + i] = (i / secondAttackTime) * Math.sin(i * 0.05) * 0.7;
+          // Frecuencia aún más reducida (0.03) para la segunda parte
+          channelData[secondStart + i] = (i / secondAttackTime) * Math.sin(i * 0.03) * 0.7;
         }
         for (let i = secondAttackTime; i < secondAttackTime + secondDecayTime; i++) {
           const decay = 1 - ((i - secondAttackTime) / secondDecayTime);
           if (secondStart + i < bufferSize) {
-            channelData[secondStart + i] = decay * Math.sin(i * 0.04) * 0.65;
+            // Tono aún más grave (0.025)
+            channelData[secondStart + i] = decay * Math.sin(i * 0.025) * 0.65;
           }
         }
       }
@@ -112,11 +116,11 @@ export class HeartBeatProcessor {
     if (!this.audioContext) return;
     
     try {
-      // Usamos un tono simple pero de baja frecuencia para el sonido de prueba
+      // Usamos un tono muy bajo para el sonido de prueba
       const oscillator = this.audioContext.createOscillator();
       const gain = this.audioContext.createGain();
       
-      oscillator.frequency.setValueAtTime(220, this.audioContext.currentTime); // Frecuencia más baja para prueba
+      oscillator.frequency.setValueAtTime(100, this.audioContext.currentTime); // Frecuencia mucho más baja para prueba
       gain.gain.setValueAtTime(0, this.audioContext.currentTime);
       gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05);
@@ -188,22 +192,22 @@ export class HeartBeatProcessor {
         this.audioContext.currentTime
       );
 
-      // Envelope del sonido principal
+      // Envelope del sonido principal - inicio más suave para evitar clicks
       primaryGain.gain.setValueAtTime(0, this.audioContext.currentTime);
       primaryGain.gain.linearRampToValueAtTime(
         volume,
-        this.audioContext.currentTime + 0.01
+        this.audioContext.currentTime + 0.03 // Rampa más larga para evitar tonos agudos al inicio
       );
       primaryGain.gain.exponentialRampToValueAtTime(
         0.01,
         this.audioContext.currentTime + this.BEEP_DURATION / 1000
       );
 
-      // Envelope del sonido secundario
+      // Envelope del sonido secundario - también con inicio más suave
       secondaryGain.gain.setValueAtTime(0, this.audioContext.currentTime);
       secondaryGain.gain.linearRampToValueAtTime(
-        volume * 0.5,
-        this.audioContext.currentTime + 0.01
+        volume * 0.6,
+        this.audioContext.currentTime + 0.03 // Rampa más larga para evitar tonos agudos al inicio
       );
       secondaryGain.gain.exponentialRampToValueAtTime(
         0.01,
