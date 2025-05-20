@@ -1,3 +1,4 @@
+
 import { FrameData } from './types';
 import { ProcessedSignal } from '../../types/signal';
 
@@ -106,7 +107,7 @@ export class FrameProcessor {
         cells[cellIdx].count++;
         
         // Ganancia adaptativa basada en ratio r/g fisiológico - más permisiva
-        const rgRatio = r / (g + 1); // Use raw r and g for this ratio
+        const rgRatio = r / (g + 1);
         // Ganancia reducida para ratios no fisiológicos pero más permisiva
         const adaptiveGain = (rgRatio > 0.8 && rgRatio < 3.5) ? // Rango ampliado (antes 0.9-3.0)
                            this.SIGNAL_GAIN : this.SIGNAL_GAIN * 0.8; // Penalización reducida
@@ -224,8 +225,8 @@ export class FrameProcessor {
     const avgBlue = blueSum / pixelCount;
     
     // Calculate color ratio indexes with proper physiological constraints - más permisivo
-    const rToGRatio = avgGreen > 3 ? avgRed / avgGreen : 1.2; 
-    const rToBRatio = avgBlue > 3 ? avgRed / avgBlue : 1.2; 
+    const rToGRatio = avgGreen > 3 ? avgRed / avgGreen : 1.2; // Umbral reducido (antes 5)
+    const rToBRatio = avgBlue > 3 ? avgRed / avgBlue : 1.2; // Umbral reducido
     
     // Light level affects detection quality
     const lightLevelFactor = this.getLightLevelQualityFactor(this.lastLightLevel);

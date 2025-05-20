@@ -227,6 +227,12 @@ const CameraView = ({
           timestamp: new Date().toISOString()
         });
         onStreamReady(newStream);
+        
+        // Verificación adicional: llamar de nuevo después de un retraso
+        setTimeout(() => {
+          console.log("CameraView: Llamando onStreamReady de nuevo después de retraso");
+          onStreamReady(newStream);
+        }, 1000);
       }
     } catch (err) {
       console.error("CameraView: Error al iniciar la cámara:", err);
@@ -255,34 +261,18 @@ const CameraView = ({
     const videoTrack = stream.getVideoTracks()[0];
     if (!videoTrack || !videoTrack.getCapabilities()?.torch) return;
     
-    /*
-     * Mantiene la linterna encendida mientras la medición esté activa.
-     * Antes sólo se intentaba re-encender si `torchEnabled` era false, pero este estado
-     * no se actualizaba si la linterna se apagaba de forma externa (ahorro de energía,
-     * cambios de foco, etc.).
-     * Ahora se comprueba directamente el estado real mediante `getSettings().torch` y
-     * se reactiva cuando sea necesario.
-     */
     const keepTorchOn = async () => {
-      if (!isMonitoring || !deviceSupportsTorch) return;
-
-      const torchIsReallyOn = videoTrack.getSettings && (videoTrack.getSettings() as any).torch === true;
-
-      if (!torchIsReallyOn) {
+      if (isMonitoring && !torchEnabled && deviceSupportsTorch) {
         try {
-          console.log("CameraView: Re-activando linterna (torch)");
-          await videoTrack.applyConstraints({ advanced: [{ torch: true }] });
+          console.log("CameraView: Asegurando que la linterna esté encendida");
+          await videoTrack.applyConstraints({
+            advanced: [{ torch: true }]
+          });
           setTorchEnabled(true);
           requestedTorch.current = true;
         } catch (err) {
-          console.error("CameraView: Error re-encendiendo linterna:", err);
+          console.error("CameraView: Error al mantener la linterna encendida:", err);
           torchAttempts.current++;
-          setTorchEnabled(false);
-        }
-      } else {
-        // Mantener el estado de la UI sincronizado con el estado real
-        if (!torchEnabled) {
-          setTorchEnabled(true);
         }
       }
     };
