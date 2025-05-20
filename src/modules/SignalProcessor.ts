@@ -140,7 +140,7 @@ export class PPGSignalProcessor implements SignalProcessor {
       // Logs adicionales para debugging de detección de dedo
       if (this.isCurrentlyDetected !== isFingerDetected) {
         console.log(`Estado de detección cambiado: ${this.isCurrentlyDetected} -> ${isFingerDetected}`, {
-          rawValue,
+          rawValue: redValue,  // Fix: Uso explícito de redValue en lugar de shorthand notation
           consecutiveDetections: this.consecutiveDetections,
           consecutiveNoDetections: this.consecutiveNoDetections,
           timestamp: new Date().toISOString()
