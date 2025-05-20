@@ -162,49 +162,68 @@ export class SignalAnalyzer {
     filtered: number,
     trendResult: any
   ): DetectionResult {
-    // Gating inicial: requerir intensidad mínima de canal rojo para descartar superficies sin dedo
-    const redScore = this.detectorScores.redChannel;
-    const RED_THRESHOLD = 0.15;
-    if (redScore < RED_THRESHOLD) {
-      // Limpia contadores y descarta detección
-      this.consecutiveDetections = 0;
-      this.consecutiveNoDetections = 0;
-      this.isCurrentlyDetected = false;
-      return {
-        isFingerDetected: false,
-        quality: 0,
-        detectorDetails: { redChannel: redScore }
-      };
+    // Actualizar historial de calidad y calcular calidad media
+    this.qualityHistory.push(this.detectorScores.redChannel);
+    if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
+      this.qualityHistory.shift();
     }
-    // Detección de dedo basada en pulsatilidad (latidos reales)
-    const pulseScore = this.detectorScores.pulsatility;
-    const PULSE_THRESHOLD_ON = 0.15;
-    const PULSE_THRESHOLD_OFF = 0.10;
+    const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
+    // CALIDAD COMPUESTA: combinación de calidad, estabilidad, pulsatilidad y periodicidad
+    const compositeQualityRaw = avgQuality * 0.3
+      + this.detectorScores.stability * 0.2
+      + this.detectorScores.pulsatility * 0.3
+      + this.detectorScores.periodicity * 0.2;
+    // Ajustar calidad penalizando artefactos de movimiento
+    const compositeQualityAdj = compositeQualityRaw * (1 - this.motionArtifactScore);
+    const quality = Math.round(Math.max(0, Math.min(1, compositeQualityAdj)) * 100);
+    // Umbrales de calidad para detección inicial
+    const qualityOn = this.adaptiveThreshold;
+    const qualityOff = this.adaptiveThreshold * 0.5;
+    // Umbrales adicionales para robustez en adquisición
+    const stabilityOn = 0.4;
+    const pulseOn = 0.3;
+    // Nuevo umbral de periodicidad para evitar detecciones sin pulso real
+    const periodicityOn = 0.5;
+    // Lógica de histeresis: adquisición vs mantenimiento
     if (!this.isCurrentlyDetected) {
-      // Adquirir detección si pulsatilidad supera threshold ON
-      this.consecutiveDetections = pulseScore > PULSE_THRESHOLD_ON
-        ? this.consecutiveDetections + 1
-        : 0;
+      // Detección inicial: calidad, tendencia válida, estabilidad, pulsatilidad y periodicidad
+      if (avgQuality > qualityOn && trendResult !== 'non_physiological' &&
+          this.detectorScores.stability > stabilityOn &&
+          this.detectorScores.pulsatility > pulseOn &&
+          this.detectorScores.periodicity > periodicityOn) {
+        this.consecutiveDetections++;
+      } else {
+        this.consecutiveDetections = 0;
+      }
     } else {
-      // Mantener detección hasta que pulsatilidad caiga por debajo de threshold OFF
-      this.consecutiveNoDetections = pulseScore < PULSE_THRESHOLD_OFF
-        ? this.consecutiveNoDetections + 1
-        : 0;
+      // Mantenimiento: estabilidad, pulsatilidad y periodicidad para confirmar dedo
+      const stabilityOff = 0.3;
+      const pulseOff = 0.25;
+      const periodicityOff = 0.4;
+      if (avgQuality < qualityOff || trendResult === 'non_physiological' ||
+          this.detectorScores.stability < stabilityOff ||
+          this.detectorScores.pulsatility < pulseOff ||
+          this.detectorScores.periodicity < periodicityOff) {
+        this.consecutiveNoDetections++;
+      } else {
+        this.consecutiveNoDetections = 0;
+      }
     }
-    // Confirmar o cancelar detección tras N cuadros consecutivos
+    // Cambiar estado tras N cuadros consecutivos
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
-      this.consecutiveNoDetections = 0;
     }
     if (this.isCurrentlyDetected && this.consecutiveNoDetections >= this.CONFIG.MAX_CONSECUTIVE_NO_DETECTIONS) {
       this.isCurrentlyDetected = false;
-      this.consecutiveDetections = 0;
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(pulseScore * 100),
+      quality,
       detectorDetails: {
-        pulsatility: pulseScore,
+        ...this.detectorScores,
+        avgQuality,
+        compositeQualityRaw: parseFloat(compositeQualityRaw.toFixed(3)),
+        compositeQualityAdj: parseFloat(compositeQualityAdj.toFixed(3)),
         consecutiveDetections: this.consecutiveDetections,
         consecutiveNoDetections: this.consecutiveNoDetections
       }
