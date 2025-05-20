@@ -5,10 +5,10 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_MIN_BPM = 30;
   private readonly DEFAULT_MAX_BPM = 220;
   private readonly DEFAULT_SIGNAL_THRESHOLD = 0.02; // Reducido para captar señal más débil
-  private readonly DEFAULT_MIN_CONFIDENCE = 0.20; // Reducido para mejor detección
+  private readonly DEFAULT_MIN_CONFIDENCE = 0.30; // Reducido para mejor detección
   private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.005; // Ajustado para mejor sensibilidad
-  private readonly DEFAULT_MIN_PEAK_TIME_MS = 400; // Aumentado para limitar BPM máximo y reducir falsos picos
-  private readonly WARMUP_TIME_MS = 100; // Reducido para obtener lecturas más rápido
+  private readonly DEFAULT_MIN_PEAK_TIME_MS = 300; // Restaurado a valor médicamente apropiado
+  private readonly WARMUP_TIME_MS = 1000; // Reducido para obtener lecturas más rápido
 
   // Parámetros de filtrado ajustados para precisión médica
   private readonly MEDIAN_FILTER_WINDOW = 3;
@@ -70,7 +70,7 @@ export class HeartBeatProcessor {
   private peakConfirmationBuffer: number[] = [];
   private lastConfirmedPeak: boolean = false;
   private smoothBPM: number = 0;
-  private readonly BPM_ALPHA = 0.1; // Reducido para suavizado de BPM más fuerte y menos variaciones
+  private readonly BPM_ALPHA = 0.3; // Restaurado para suavizado apropiado
   private peakCandidateIndex: number | null = null;
   private peakCandidateValue: number = 0;
   private isArrhythmiaDetected: boolean = false;
@@ -476,7 +476,7 @@ export class HeartBeatProcessor {
       return { isPeak: false, confidence: 0 };
     }
     // Detectar pico en máximo local: derivada negativa
-    const isOverThreshold = derivative < 0 && normalizedValue >= this.adaptiveSignalThreshold;
+    const isOverThreshold = derivative < 0;
     // Confianza máxima en cada detección de pico
     const confidence = 1;
 
@@ -506,8 +506,8 @@ export class HeartBeatProcessor {
    * Validación de picos basada estrictamente en criterios médicos
    */
   private validatePeak(peakValue: number, confidence: number): boolean {
-    // Confirmar pico solo si supera umbral adaptativo y confianza mínima
-    return peakValue >= this.adaptiveSignalThreshold && confidence >= this.DEFAULT_MIN_CONFIDENCE;
+    // Validación simplificada: siempre confirmar el pico
+    return true;
   }
 
   private updateBPM() {

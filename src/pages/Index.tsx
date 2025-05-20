@@ -542,7 +542,7 @@ const Index = () => {
                 title: "¡Arritmia detectada!",
                 description: "Se activará un sonido distintivo con los latidos.",
                 variant: "destructive",
-                duration: 5000,
+                duration: 3000,
               });
             }
           }
@@ -619,7 +619,7 @@ const Index = () => {
 
           <div className="flex-1">
             <PPGSignalMeter 
-              value={heartbeatSignal * 5}
+              value={heartbeatSignal * 30}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
               onStartMeasurement={startMonitoring}
