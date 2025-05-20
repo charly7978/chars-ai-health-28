@@ -1,4 +1,3 @@
-
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES (Valores por defecto) ──────────
   private readonly DEFAULT_SAMPLE_RATE = 60;
@@ -122,7 +121,7 @@ export class HeartBeatProcessor {
     }
   }
 
-  // Modificado: Reproducir sonido de latido y resetear bandera de arritmia
+  // Volvemos a la implementación original del sonido con sincronización inmediata
   private async playHeartSound(volume: number = this.BEEP_VOLUME, playArrhythmiaTone: boolean) {
     if (!this.audioContext || this.isInWarmup()) {
       return;
@@ -140,7 +139,7 @@ export class HeartBeatProcessor {
 
       const currentTime = this.audioContext.currentTime;
 
-      // LUB
+      // LUB - primer sonido del latido (inmediato para mejor sincronización)
       const oscillator1 = this.audioContext.createOscillator();
       const gainNode1 = this.audioContext.createGain();
       oscillator1.type = 'sine';
@@ -153,19 +152,19 @@ export class HeartBeatProcessor {
       oscillator1.start(currentTime);
       oscillator1.stop(currentTime + 0.2);
 
-      // DUB
+      // DUB - segundo sonido del latido (muy cercano al primero para sincronización)
       const oscillator2 = this.audioContext.createOscillator();
       const gainNode2 = this.audioContext.createGain();
-      const dubStartTime = currentTime + 0.1;
+      const dubStartTime = currentTime + 0.08; // Más cercano para mejor sincronización
       oscillator2.type = 'sine';
       oscillator2.frequency.value = 120;
       gainNode2.gain.setValueAtTime(0, dubStartTime);
       gainNode2.gain.linearRampToValueAtTime(volume * 1.2, dubStartTime + 0.03);
-      gainNode2.gain.exponentialRampToValueAtTime(0.001, dubStartTime + 0.2);
+      gainNode2.gain.exponentialRampToValueAtTime(0.001, dubStartTime + 0.15);
       oscillator2.connect(gainNode2);
       gainNode2.connect(this.audioContext.destination);
       oscillator2.start(dubStartTime);
-      oscillator2.stop(dubStartTime + 0.25);
+      oscillator2.stop(dubStartTime + 0.20);
       
       if (playArrhythmiaTone) {
         const oscillator3 = this.audioContext.createOscillator();
@@ -173,7 +172,8 @@ export class HeartBeatProcessor {
         oscillator3.type = 'sine';
         oscillator3.frequency.value = 440;
 
-        const arrhythmiaSoundStartTime = dubStartTime + 0.01;
+        // El sonido de arritmia ahora suena inmediatamente después de los latidos principales
+        const arrhythmiaSoundStartTime = dubStartTime + 0.05;
         const arrhythmiaAttackDuration = 0.02;
         const arrhythmiaSustainDuration = 0.10;
         const arrhythmiaReleaseDuration = 0.05;
@@ -190,46 +190,13 @@ export class HeartBeatProcessor {
         oscillator3.start(arrhythmiaSoundStartTime);
         oscillator3.stop(arrhythmiaReleaseEndTime + 0.01);
         
-        // console.log("HeartBeatProcessor: Sonido de arritmia (superpuesto) reproducido.");
-        
-        // ***** LÍNEA CRÍTICA *****
-        // Reseteamos la bandera INTERNA después de programar el sonido de arritmia.
-        // Esto asegura que solo suene una vez por cada detección externa que ponga this.isArrhythmiaDetected = true.
-        this.isArrhythmiaDetected = false; 
-        // console.log("HeartBeatProcessor: Bandera isArrhythmiaDetected reseteada a false internamente después de reproducir sonido.");
+        // Reseteamos la bandera después de reproducir el sonido de arritmia
+        this.isArrhythmiaDetected = false;
       }
       this.lastBeepTime = now;
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
     }
-  }
-
-  private isInWarmup(): boolean {
-    return Date.now() - this.startTime < this.WARMUP_TIME_MS;
-  }
-
-  private medianFilter(value: number): number {
-    this.medianBuffer.push(value);
-    if (this.medianBuffer.length > this.MEDIAN_FILTER_WINDOW) {
-      this.medianBuffer.shift();
-    }
-    const sorted = [...this.medianBuffer].sort((a, b) => a - b);
-    return sorted[Math.floor(sorted.length / 2)];
-  }
-
-  private calculateMovingAverage(value: number): number {
-    this.movingAverageBuffer.push(value);
-    if (this.movingAverageBuffer.length > this.MOVING_AVERAGE_WINDOW) {
-      this.movingAverageBuffer.shift();
-    }
-    const sum = this.movingAverageBuffer.reduce((a, b) => a + b, 0);
-    return sum / this.movingAverageBuffer.length;
-  }
-
-  private calculateEMA(value: number): number {
-    this.smoothedValue =
-      this.EMA_ALPHA * value + (1 - this.EMA_ALPHA) * this.smoothedValue;
-    return this.smoothedValue;
   }
 
   public processSignal(value: number): {
@@ -287,11 +254,9 @@ export class HeartBeatProcessor {
         this.previousPeakTime = this.lastPeakTime;
         this.lastPeakTime = now;
         
-        // Aquí se pasa this.isArrhythmiaDetected. Si es true, playHeartSound
-        // lo usará y luego lo reseteará internamente.
-        // console.log(`HeartBeatProcessor: Pico detectado. this.isArrhythmiaDetected ANTES de playHeartSound: ${this.isArrhythmiaDetected}`);
-        this.playHeartSound(0.95, this.isArrhythmiaDetected); 
-        // console.log(`HeartBeatProcessor: Pico detectado. this.isArrhythmiaDetected DESPUÉS de playHeartSound: ${this.isArrhythmiaDetected}`);
+        // Reproducimos el sonido inmediatamente cuando se detecta el pico
+        // para mejor sincronización visual/auditiva
+        this.playHeartSound(0.95, this.isArrhythmiaDetected);
 
         this.updateBPM();
 
@@ -326,10 +291,36 @@ export class HeartBeatProcessor {
     };
   }
 
-  // Método para establecer externamente si se detectó una arritmia
+  private isInWarmup(): boolean {
+    return Date.now() - this.startTime < this.WARMUP_TIME_MS;
+  }
+
+  private medianFilter(value: number): number {
+    this.medianBuffer.push(value);
+    if (this.medianBuffer.length > this.MEDIAN_FILTER_WINDOW) {
+      this.medianBuffer.shift();
+    }
+    const sorted = [...this.medianBuffer].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+
+  private calculateMovingAverage(value: number): number {
+    this.movingAverageBuffer.push(value);
+    if (this.movingAverageBuffer.length > this.MOVING_AVERAGE_WINDOW) {
+      this.movingAverageBuffer.shift();
+    }
+    const sum = this.movingAverageBuffer.reduce((a, b) => a + b, 0);
+    return sum / this.movingAverageBuffer.length;
+  }
+
+  private calculateEMA(value: number): number {
+    this.smoothedValue =
+      this.EMA_ALPHA * value + (1 - this.EMA_ALPHA) * this.smoothedValue;
+    return this.smoothedValue;
+  }
+
   public setArrhythmiaDetected(isDetected: boolean): void {
     this.isArrhythmiaDetected = isDetected;
-    // Este console.log es útil para ver cuándo el sistema externo está activando la bandera.
     console.log(`HeartBeatProcessor: Estado de arritmia establecido EXTERNMENTE a ${isDetected}`);
   }
 
@@ -356,9 +347,6 @@ export class HeartBeatProcessor {
     this.lastConfirmedPeak = false;
     this.peakConfirmationBuffer = [];
     this.values = [];
-    // No reseteamos isArrhythmiaDetected aquí necesariamente, 
-    // podría ser una condición persistente que el reset de detección no debería limpiar.
-    // Se limpiará por playHeartSound o por un reset completo.
     console.log("HeartBeatProcessor: auto-reset detection states (low signal).");
   }
 
