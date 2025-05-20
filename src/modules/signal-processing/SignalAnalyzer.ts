@@ -168,6 +168,14 @@ export class SignalAnalyzer {
       this.qualityHistory.shift();
     }
     const avgQuality = this.qualityHistory.reduce((sum, q) => sum + q, 0) / this.qualityHistory.length;
+    // CALIDAD COMPUESTA: combinación de calidad, estabilidad, pulsatilidad y periodicidad
+    const compositeQualityRaw = avgQuality * 0.3
+      + this.detectorScores.stability * 0.2
+      + this.detectorScores.pulsatility * 0.3
+      + this.detectorScores.periodicity * 0.2;
+    // Ajustar calidad penalizando artefactos de movimiento
+    const compositeQualityAdj = compositeQualityRaw * (1 - this.motionArtifactScore);
+    const quality = Math.round(Math.max(0, Math.min(1, compositeQualityAdj)) * 100);
     // Umbrales de calidad para detección inicial
     const qualityOn = this.adaptiveThreshold;
     const qualityOff = this.adaptiveThreshold * 0.5;
@@ -210,10 +218,12 @@ export class SignalAnalyzer {
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(avgQuality * 100),
+      quality,
       detectorDetails: {
         ...this.detectorScores,
         avgQuality,
+        compositeQualityRaw: parseFloat(compositeQualityRaw.toFixed(3)),
+        compositeQualityAdj: parseFloat(compositeQualityAdj.toFixed(3)),
         consecutiveDetections: this.consecutiveDetections,
         consecutiveNoDetections: this.consecutiveNoDetections
       }
