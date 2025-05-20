@@ -7,7 +7,7 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_SIGNAL_THRESHOLD = 0.30;
   private readonly DEFAULT_MIN_CONFIDENCE = 0.70;
   private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.02;
-  private readonly DEFAULT_MIN_PEAK_TIME_MS = 400; // (Corresponde a 150 BPM max)
+  private readonly DEFAULT_MIN_PEAK_TIME_MS = 600; // (Corresponde a 100 BPM max)
   private readonly WARMUP_TIME_MS = 3000;
 
   // Parámetros de filtrado
@@ -19,7 +19,7 @@ export class HeartBeatProcessor {
   // Parámetros de beep y vibración - Actualizados para mejor audibilidad
   private readonly BEEP_DURATION = 450; 
   private readonly BEEP_VOLUME = 1.0; // Volumen máximo
-  private readonly MIN_BEEP_INTERVAL_MS = 300;
+  private readonly MIN_BEEP_INTERVAL_MS = 800;
   private readonly VIBRATION_PATTERN = [40, 20, 60]; // Patrón de vibración más corto y directo
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
@@ -70,6 +70,10 @@ export class HeartBeatProcessor {
   private peakCandidateIndex: number | null = null;
   private peakCandidateValue: number = 0;
   private isArrhythmiaDetected: boolean = false; // Esta es la bandera clave
+  
+  // Nueva variable para controlar falsos positivos
+  private peakValidationBuffer: number[] = [];
+  private readonly PEAK_VALIDATION_THRESHOLD = 0.6;
 
   constructor() {
     // Inicializar parámetros adaptativos con los valores por defecto
@@ -129,6 +133,7 @@ export class HeartBeatProcessor {
 
     const now = Date.now();
     if (now - this.lastBeepTime < this.MIN_BEEP_INTERVAL_MS) {
+      console.log("HeartBeatProcessor: Ignorando beep - demasiado cerca del anterior", now - this.lastBeepTime);
       return;
     }
 
@@ -194,6 +199,7 @@ export class HeartBeatProcessor {
         this.isArrhythmiaDetected = false;
       }
       this.lastBeepTime = now;
+      console.log(`HeartBeatProcessor: Reproduciendo sonido de latido en ${now}, intervalo: ${now - this.lastBeepTime}`);
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
     }
@@ -250,34 +256,40 @@ export class HeartBeatProcessor {
         ? now - this.lastPeakTime
         : Number.MAX_VALUE;
 
+      // Validación adicional para el pico detectado
       if (timeSinceLastPeak >= this.DEFAULT_MIN_PEAK_TIME_MS) {
-        this.previousPeakTime = this.lastPeakTime;
-        this.lastPeakTime = now;
-        
-        // Reproducimos el sonido inmediatamente cuando se detecta el pico
-        // para mejor sincronización visual/auditiva
-        this.playHeartSound(0.95, this.isArrhythmiaDetected);
+        // Validar la detección del pico usando la nueva lógica
+        if (this.validatePeak(normalizedValue, confidence)) {
+          this.previousPeakTime = this.lastPeakTime;
+          this.lastPeakTime = now;
+          
+          // Reproducimos el sonido inmediatamente cuando se detecta el pico
+          this.playHeartSound(0.95, this.isArrhythmiaDetected);
 
-        this.updateBPM();
+          this.updateBPM();
 
-        this.recentPeakAmplitudes.push(normalizedValue);
-        this.recentPeakConfidences.push(confidence);
-        if (rawDerivative !== undefined) this.recentPeakDerivatives.push(rawDerivative);
+          this.recentPeakAmplitudes.push(normalizedValue);
+          this.recentPeakConfidences.push(confidence);
+          if (rawDerivative !== undefined) this.recentPeakDerivatives.push(rawDerivative);
 
-        if (this.recentPeakAmplitudes.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-          this.recentPeakAmplitudes.shift();
-        }
-        if (this.recentPeakConfidences.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-          this.recentPeakConfidences.shift();
-        }
-        if (this.recentPeakDerivatives.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-          this.recentPeakDerivatives.shift();
-        }
-        
-        this.peaksSinceLastTuning++;
-        if (this.peaksSinceLastTuning >= this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-          this.performAdaptiveTuning();
-          this.peaksSinceLastTuning = 0;
+          if (this.recentPeakAmplitudes.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
+            this.recentPeakAmplitudes.shift();
+          }
+          if (this.recentPeakConfidences.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
+            this.recentPeakConfidences.shift();
+          }
+          if (this.recentPeakDerivatives.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
+            this.recentPeakDerivatives.shift();
+          }
+          
+          this.peaksSinceLastTuning++;
+          if (this.peaksSinceLastTuning >= this.ADAPTIVE_TUNING_PEAK_WINDOW) {
+            this.performAdaptiveTuning();
+            this.peaksSinceLastTuning = 0;
+          }
+        } else {
+          console.log(`HeartBeatProcessor: Pico rechazado - confianza insuficiente: ${confidence}`);
+          isPeak = false; // Rechazar el pico si no supera la validación
         }
       }
     }
@@ -491,6 +503,7 @@ export class HeartBeatProcessor {
     this.peaksSinceLastTuning = 0;
     
     this.isArrhythmiaDetected = false; // Importante resetearla aquí también
+    this.peakValidationBuffer = [];
     console.log("HeartBeatProcessor: Full reset including adaptive parameters and arrhythmia flag.");
   }
 
@@ -545,5 +558,29 @@ export class HeartBeatProcessor {
 
         this.adaptiveDerivativeThreshold = Math.max(this.MIN_ADAPTIVE_DERIVATIVE_THRESHOLD, Math.min(this.MAX_ADAPTIVE_DERIVATIVE_THRESHOLD, this.adaptiveDerivativeThreshold));
     }
+  }
+
+  // Nuevo método para validación adicional de picos
+  private validatePeak(peakValue: number, confidence: number): boolean {
+    // Agregar el valor al buffer de validación
+    this.peakValidationBuffer.push(peakValue);
+    if (this.peakValidationBuffer.length > 5) {
+      this.peakValidationBuffer.shift();
+    }
+    
+    // Para que un pico sea válido, debe tener una confianza superior al umbral
+    // y debe ser significativo en comparación con los valores recientes
+    if (confidence < this.PEAK_VALIDATION_THRESHOLD) {
+      return false;
+    }
+    
+    // Calcular el promedio de los valores recientes
+    const avgVal = this.peakValidationBuffer.reduce((sum, val) => sum + val, 0) / 
+                   Math.max(1, this.peakValidationBuffer.length);
+    
+    // El pico debe ser un porcentaje significativo mayor que el promedio
+    const isSufficientlyLarge = peakValue > avgVal * 1.15;
+    
+    return isSufficientlyLarge;
   }
 }
