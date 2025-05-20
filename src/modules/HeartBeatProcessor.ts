@@ -1,19 +1,19 @@
 
 export class HeartBeatProcessor {
   // ────────── CONFIGURACIONES PRINCIPALES ──────────
-  private readonly SAMPLE_RATE = 30;
+  private readonly SAMPLE_RATE = 60; //ANTES 3
   private readonly WINDOW_SIZE = 60;
-  private readonly MIN_BPM = 40;
+  private readonly MIN_BPM = 40; // 
   private readonly MAX_BPM = 200; // Se mantiene amplio para no perder picos fuera de rango
-  private readonly SIGNAL_THRESHOLD = 0.40; 
-  private readonly MIN_CONFIDENCE = 0.60;
-  private readonly DERIVATIVE_THRESHOLD = -0.03; 
+  private readonly SIGNAL_THRESHOLD = 0.30; //ANTES 40
+  private readonly MIN_CONFIDENCE = 0.70;  // 60
+  private readonly DERIVATIVE_THRESHOLD = -0.02; // -003
   private readonly MIN_PEAK_TIME_MS = 400; 
   private readonly WARMUP_TIME_MS = 3000; 
 
   // Parámetros de filtrado
-  private readonly MEDIAN_FILTER_WINDOW = 3; 
-  private readonly MOVING_AVERAGE_WINDOW = 3; 
+  private readonly MEDIAN_FILTER_WINDOW = 5; 
+  private readonly MOVING_AVERAGE_WINDOW = 2; 
   private readonly EMA_ALPHA = 0.4; 
   private readonly BASELINE_FACTOR = 1.0; 
 
@@ -24,7 +24,7 @@ export class HeartBeatProcessor {
   private readonly VIBRATION_PATTERN = [60, 40, 100]; 
 
   // ────────── AUTO-RESET SI LA SEÑAL ES MUY BAJA ──────────
-  private readonly LOW_SIGNAL_THRESHOLD = 0.03;
+  private readonly LOW_SIGNAL_THRESHOLD = 0.05;
   private readonly LOW_SIGNAL_FRAMES = 10;
   private lowSignalCount = 0;
 
