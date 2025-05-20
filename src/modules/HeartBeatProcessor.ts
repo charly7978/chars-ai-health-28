@@ -4,11 +4,11 @@ export class HeartBeatProcessor {
   private readonly DEFAULT_WINDOW_SIZE = 40;
   private readonly DEFAULT_MIN_BPM = 30;
   private readonly DEFAULT_MAX_BPM = 220;
-  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.15; // Restaurado a valor médicamente apropiado
-  private readonly DEFAULT_MIN_CONFIDENCE = 0.60; // Restaurado a valor médicamente apropiado
-  private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.01; // Restaurado a valor médicamente apropiado
+  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.12; // Reducido para mejor sensibilidad
+  private readonly DEFAULT_MIN_CONFIDENCE = 0.50; // Reducido para mejor detección
+  private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.008; // Ajustado para mejor sensibilidad
   private readonly DEFAULT_MIN_PEAK_TIME_MS = 500; // Restaurado a valor médicamente apropiado
-  private readonly WARMUP_TIME_MS = 2000;
+  private readonly WARMUP_TIME_MS = 1500; // Reducido para obtener lecturas más rápido
 
   // Parámetros de filtrado ajustados para precisión médica
   private readonly MEDIAN_FILTER_WINDOW = 3;
@@ -23,8 +23,8 @@ export class HeartBeatProcessor {
   private readonly VIBRATION_PATTERN = [40, 20, 60];
 
   // AUTO-RESET mejorado
-  private readonly LOW_SIGNAL_THRESHOLD = 0.02; // Restaurado a valor apropiado
-  private readonly LOW_SIGNAL_FRAMES = 15; // Restaurado a valor apropiado
+  private readonly LOW_SIGNAL_THRESHOLD = 0.01; // Reducido para no perder detecciones válidas
+  private readonly LOW_SIGNAL_FRAMES = 25; // Aumentado para mayor tolerancia
   private lowSignalCount = 0;
 
   // ────────── PARÁMETROS ADAPTATIVOS MÉDICAMENTE VÁLIDOS ──────────
@@ -33,24 +33,21 @@ export class HeartBeatProcessor {
   private adaptiveDerivativeThreshold: number;
 
   // Límites para los parámetros adaptativos - Valores médicamente apropiados
-  private readonly MIN_ADAPTIVE_SIGNAL_THRESHOLD = 0.08; 
+  private readonly MIN_ADAPTIVE_SIGNAL_THRESHOLD = 0.05; // Reducido para mejor sensibilidad
   private readonly MAX_ADAPTIVE_SIGNAL_THRESHOLD = 0.4;
-  private readonly MIN_ADAPTIVE_MIN_CONFIDENCE = 0.45;
+  private readonly MIN_ADAPTIVE_MIN_CONFIDENCE = 0.40; // Reducido para mejor detección
   private readonly MAX_ADAPTIVE_MIN_CONFIDENCE = 0.80;
   private readonly MIN_ADAPTIVE_DERIVATIVE_THRESHOLD = -0.08;
   private readonly MAX_ADAPTIVE_DERIVATIVE_THRESHOLD = -0.005;
 
   // ────────── PARÁMETROS PARA PROCESAMIENTO ──────────
-  private readonly SIGNAL_BOOST_FACTOR = 1.5; // Reducido a un valor razonable
-  private readonly PEAK_DETECTION_SENSITIVITY = 0.7; // Restaurado a valor médicamente apropiado
+  private readonly SIGNAL_BOOST_FACTOR = 1.8; // Aumentado para mejor amplificación
+  private readonly PEAK_DETECTION_SENSITIVITY = 0.6; // Aumentado para mejor detección
   
   // Control del auto-ajuste
-  private readonly ADAPTIVE_TUNING_PEAK_WINDOW = 15;
-  private readonly ADAPTIVE_TUNING_LEARNING_RATE = 0.15;
+  private readonly ADAPTIVE_TUNING_PEAK_WINDOW = 10; // Reducido para adaptarse más rápido
+  private readonly ADAPTIVE_TUNING_LEARNING_RATE = 0.20; // Aumentado para adaptarse más rápido
   
-  // ELIMINADO: Parámetros para forzar detecciones artificiales
-  // YA NO SE REALIZA SIMULACIÓN O MANIPULACIÓN FORZADA DE DATOS
-
   // Variables internas
   private recentPeakAmplitudes: number[] = [];
   private recentPeakConfidences: number[] = [];
@@ -80,13 +77,13 @@ export class HeartBeatProcessor {
   
   // Variables para mejorar la detección
   private peakValidationBuffer: number[] = [];
-  private readonly PEAK_VALIDATION_THRESHOLD = 0.5; // Restaurado para validación rigurosa
+  private readonly PEAK_VALIDATION_THRESHOLD = 0.4; // Reducido para validación más permisiva
   private lastSignalStrength: number = 0;
   private recentSignalStrengths: number[] = [];
   private readonly SIGNAL_STRENGTH_HISTORY = 30;
   
-  // ELIMINADO: Variables para seguimiento de picos potenciales
-  // YA NO SE UTILIZAN PARA SIMULACIÓN O MANIPULACIÓN FORZADA DE DATOS
+  // Nueva variable para retroalimentación de calidad de señal
+  private currentSignalQuality: number = 0;
 
   constructor() {
     // Inicializar parámetros adaptativos con valores médicamente apropiados
@@ -224,6 +221,7 @@ export class HeartBeatProcessor {
     isPeak: boolean;
     filteredValue: number;
     arrhythmiaCount: number;
+    signalQuality?: number;  // Añadido campo para retroalimentación
   } {
     // Aplicar amplificación razonable
     value = this.boostSignal(value);
@@ -231,6 +229,9 @@ export class HeartBeatProcessor {
     const medVal = this.medianFilter(value);
     const movAvgVal = this.calculateMovingAverage(medVal);
     const smoothed = this.calculateEMA(movAvgVal);
+    
+    // Variable filteredValue definida explícitamente
+    const filteredValue = smoothed;
 
     this.signalBuffer.push(smoothed);
     if (this.signalBuffer.length > this.DEFAULT_WINDOW_SIZE) { 
@@ -242,8 +243,9 @@ export class HeartBeatProcessor {
         bpm: 0,
         confidence: 0,
         isPeak: false,
-        filteredValue: smoothed,
+        filteredValue: filteredValue, // Usando la variable correctamente definida
         arrhythmiaCount: 0,
+        signalQuality: 0
       };
     }
 
@@ -275,6 +277,9 @@ export class HeartBeatProcessor {
     const rawDerivative = peakDetectionResult.rawDerivative;
     
     const isConfirmedPeak = this.confirmPeak(isPeak, normalizedValue, confidence);
+
+    // Calcular calidad de señal actual basada en varios factores (0-100)
+    this.currentSignalQuality = this.calculateSignalQuality(normalizedValue, confidence);
 
     if (isConfirmedPeak && !this.isInWarmup()) {
       const now = Date.now();
@@ -321,13 +326,14 @@ export class HeartBeatProcessor {
       }
     }
     
-    // Retornar resultado sin manipulación de datos
+    // Retornar resultado con nuevos parámetros
     return {
       bpm: Math.round(this.getSmoothBPM()),
       confidence: isPeak ? 0.95 : this.adjustConfidenceForSignalStrength(0.6),
       isPeak: isPeak,
-      filteredValue: filteredValue,
-      arrhythmiaCount: 0
+      filteredValue: filteredValue, // Usando la variable correctamente definida
+      arrhythmiaCount: 0,
+      signalQuality: this.currentSignalQuality // Retroalimentación de calidad
     };
   }
   
@@ -349,10 +355,10 @@ export class HeartBeatProcessor {
     
     if (range < 1.0) {
       // Señal débil - amplificar moderadamente
-      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.5;
+      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.8; // Más amplificación para señales débiles
     } else if (range < 3.0) {
       // Señal moderada - amplificar ligeramente
-      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.2;
+      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.4;
     } else if (range > 10.0) {
       // Señal fuerte - no amplificar
       boostFactor = 1.0;
@@ -469,24 +475,24 @@ export class HeartBeatProcessor {
       return { isPeak: false, confidence: 0 };
     }
     
-    // Detección basada en criterios médicos
+    // Detección basada en criterios médicos - más sensible
     const isOverThreshold =
-      derivative < this.adaptiveDerivativeThreshold &&
-      normalizedValue > this.adaptiveSignalThreshold &&
+      derivative < this.adaptiveDerivativeThreshold * 0.9 && // Más sensible
+      normalizedValue > this.adaptiveSignalThreshold * 0.9 && // Más sensible
       this.lastValue > this.baseline;
 
-    // Cálculo de confianza basado en criterios médicos
+    // Cálculo de confianza basado en criterios médicos - equilibrado
     const amplitudeConfidence = Math.min(
-      Math.max(normalizedValue / this.adaptiveSignalThreshold, 0),
+      Math.max(normalizedValue / (this.adaptiveSignalThreshold * 0.9), 0),
       1
     );
     
     const derivativeConfidence = derivative < 0 ? 
-      Math.min(Math.abs(derivative) / Math.abs(this.adaptiveDerivativeThreshold), 1) : 
+      Math.min(Math.abs(derivative) / Math.abs(this.adaptiveDerivativeThreshold * 0.9), 1) : 
       0;
 
     // Balance entre amplitud y derivada
-    const confidence = (amplitudeConfidence * 0.6 + derivativeConfidence * 0.4);
+    const confidence = (amplitudeConfidence * 0.7 + derivativeConfidence * 0.3); // Enfatizar amplitud
 
     return { isPeak: isOverThreshold, confidence, rawDerivative: derivative };
   }
@@ -517,13 +523,13 @@ export class HeartBeatProcessor {
    * Validación de picos basada estrictamente en criterios médicos
    */
   private validatePeak(peakValue: number, confidence: number): boolean {
-    // Validación basada en umbrales de confianza médicamente apropiados
+    // Validación más permisiva basada en umbrales de confianza médicamente apropiados
     if (confidence > this.PEAK_VALIDATION_THRESHOLD) {
       return true;
     }
     
     // Verificación adicional basada en contexto para picos marginales
-    if (confidence > this.adaptiveMinConfidence * 0.9 && 
+    if (confidence > this.adaptiveMinConfidence * 0.85 && // Reducido para ser más permisivo 
         this.bpmHistory.length > 2 && 
         this.lastPeakTime) {
       
@@ -532,9 +538,9 @@ export class HeartBeatProcessor {
       const timeSinceLastPeak = now - this.lastPeakTime;
       
       // Si ocurre cerca del intervalo esperado y tiene confianza razonable
-      if (timeSinceLastPeak > expectedInterval * 0.8 && 
-          timeSinceLastPeak < expectedInterval * 1.2 &&
-          peakValue > this.adaptiveSignalThreshold * 0.9) {
+      if (timeSinceLastPeak > expectedInterval * 0.7 && // Más permisivo
+          timeSinceLastPeak < expectedInterval * 1.3 &&
+          peakValue > this.adaptiveSignalThreshold * 0.8) {
         console.log("HeartBeatProcessor: Pico validado por contexto temporal");
         return true;
       }
@@ -641,7 +647,7 @@ export class HeartBeatProcessor {
    * Sintonización adaptativa médicamente apropiada
    */
   private performAdaptiveTuning(): void {
-    if (this.isInWarmup() || this.recentPeakAmplitudes.length < 5) {
+    if (this.isInWarmup() || this.recentPeakAmplitudes.length < 4) { // Reducido para adaptación más rápida
       return;
     }
 
@@ -649,10 +655,10 @@ export class HeartBeatProcessor {
       // Calcular estadísticas sobre picos recientes
       const avgAmplitude = this.recentPeakAmplitudes.reduce((s, v) => s + v, 0) / this.recentPeakAmplitudes.length;
       
-      // Umbral adaptativo basado en amplitud promedio
-      let targetSignalThreshold = avgAmplitude * 0.5;
+      // Umbral adaptativo basado en amplitud promedio - más sensible
+      let targetSignalThreshold = avgAmplitude * 0.45; // Reducido para mayor sensibilidad
 
-      // Tasa de aprendizaje moderada
+      // Tasa de aprendizaje aumentada
       const learningRate = this.ADAPTIVE_TUNING_LEARNING_RATE;
       
       // Actualización gradual
@@ -669,14 +675,14 @@ export class HeartBeatProcessor {
       const avgConfidence = this.recentPeakConfidences.reduce((s, v) => s + v, 0) / this.recentPeakConfidences.length;
       let targetMinConfidence = this.adaptiveMinConfidence; 
 
-      // Para señales débiles, reducir agresivamente el umbral de confianza
+      // Reducción más agresiva para señales débiles
       if (avgConfidence < 0.5) { // Señal débil
-        targetMinConfidence = this.adaptiveMinConfidence - 0.05; // Reducción agresiva
+        targetMinConfidence = this.adaptiveMinConfidence - 0.08; // Reducción más agresiva
       }
       // Sólo incrementar el umbral si la confianza es consistentemente alta
-      else if (avgConfidence > 0.85 && this.recentSignalStrengths.length > 5) {
+      else if (avgConfidence > 0.80 && this.recentSignalStrengths.length > 5) {
         const avgStrength = this.recentSignalStrengths.reduce((s, v) => s + v, 0) / this.recentSignalStrengths.length;
-        if (avgStrength > 0.3) { // Solo aumentar si la señal es fuerte
+        if (avgStrength > 0.25) { // Más permisivo para señales
           targetMinConfidence = this.adaptiveMinConfidence + 0.01;
         }
       }
@@ -693,7 +699,7 @@ export class HeartBeatProcessor {
         const avgDerivative = this.recentPeakDerivatives.reduce((s,v) => s+v, 0) / this.recentPeakDerivatives.length;
         
         // Umbral de derivada ultra-sensible
-        let targetDerivativeThreshold = avgDerivative * 0.3; // Ultra-sensible (antes 0.4)
+        let targetDerivativeThreshold = avgDerivative * 0.25; // Más sensible (antes 0.3)
 
         this.adaptiveDerivativeThreshold = 
             this.adaptiveDerivativeThreshold * (1 - this.ADAPTIVE_TUNING_LEARNING_RATE) +
@@ -709,7 +715,13 @@ export class HeartBeatProcessor {
       derivativeThreshold: this.adaptiveDerivativeThreshold.toFixed(3),
       avgSignalStrength: this.recentSignalStrengths.length > 0 ? 
                         (this.recentSignalStrengths.reduce((s,v) => s+v, 0) / 
-                         this.recentSignalStrengths.length).toFixed(3) : "N/A"
+                         this.recentSignalStrengths.length).toFixed(3) : "N/A",
+      currentSignalQuality: this.currentSignalQuality
     });
+  }
+  
+  // Método público para obtener la calidad de señal actual
+  public getSignalQuality(): number {
+    return this.currentSignalQuality;
   }
 }
