@@ -36,6 +36,7 @@ const Index = () => {
     rmssd: number;
     rrVariation: number;
   } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { 
@@ -53,11 +54,94 @@ const Index = () => {
 
   const enterFullScreen = async () => {
     try {
-      await document.documentElement.requestFullscreen();
+      if (!isFullscreen) {
+        const docEl = document.documentElement;
+        
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen();
+        } else if ((docEl as any).webkitRequestFullscreen) {
+          await (docEl as any).webkitRequestFullscreen();
+        } else if ((docEl as any).msRequestFullscreen) {
+          await (docEl as any).msRequestFullscreen();
+        } else if ((docEl as any).mozRequestFullScreen) {
+          await (docEl as any).mozRequestFullScreen();
+        }
+        
+        // Bloquear orientación si es dispositivo móvil
+        if (screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock('portrait');
+            console.log('Orientación portrait bloqueada');
+          } catch (err) {
+            console.log('Error al bloquear la orientación:', err);
+          }
+        }
+        
+        setIsFullscreen(true);
+        console.log("Pantalla completa activada");
+      }
     } catch (err) {
       console.log('Error al entrar en pantalla completa:', err);
     }
   };
+  
+  const exitFullScreen = () => {
+    try {
+      if (isFullscreen) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          (document as any).msExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          (document as any).mozCancelFullScreen();
+        }
+        
+        // Desbloquear orientación si es necesario
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+          console.log('Orientación desbloqueada');
+        }
+        
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.log('Error al salir de pantalla completa:', err);
+    }
+  };
+  
+  // Activar pantalla completa automáticamente al cargar la página
+  useEffect(() => {
+    setTimeout(() => {
+      enterFullScreen();
+    }, 1000); // Pequeño retraso para asegurar que todo está cargado
+    
+    // Detectar cambios en el estado de pantalla completa
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement || 
+        (document as any).msFullscreenElement || 
+        (document as any).mozFullScreenElement
+      ));
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      
+      // Asegurarse de salir del modo pantalla completa al desmontar
+      exitFullScreen();
+    };
+  }, []);
 
   useEffect(() => {
     const preventScroll = (e: Event) => e.preventDefault();
@@ -460,14 +544,29 @@ const Index = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
-      height: '100vh',
+      height: '100svh',
       width: '100vw',
       maxWidth: '100vw',
-      maxHeight: '100vh',
+      maxHeight: '100svh',
       overflow: 'hidden',
       paddingTop: 'env(safe-area-inset-top)',
       paddingBottom: 'env(safe-area-inset-bottom)'
     }}>
+      {/* Overlay button for re-entering fullscreen if user exits */}
+      {!isFullscreen && (
+        <button 
+          onClick={enterFullScreen}
+          className="fixed inset-0 z-50 w-full h-full flex items-center justify-center bg-black/90 text-white"
+        >
+          <div className="text-center p-4 bg-primary/20 rounded-lg backdrop-blur-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
+            <p className="text-lg font-semibold">Toca para modo pantalla completa</p>
+          </div>
+        </button>
+      )}
+
       <div className="flex-1 relative">
         <div className="absolute inset-0">
           <CameraView 
