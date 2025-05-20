@@ -28,8 +28,8 @@ export class SignalAnalyzer {
   private lastDetectionTime: number = 0;
   private qualityHistory: number[] = [];
   private motionArtifactScore: number = 0;
-  private readonly DETECTION_TIMEOUT = 10000; // Reduced timeout for faster response to finger removal
-  private readonly MOTION_ARTIFACT_THRESHOLD = 0.7;
+  private readonly DETECTION_TIMEOUT = 5000; // Reduced timeout for faster response to finger removal
+  private readonly MOTION_ARTIFACT_THRESHOLD = 0.65;
   private valueHistory: number[] = []; // Track signal history for artifact detection
   
   constructor(config: { 
@@ -76,7 +76,7 @@ export class SignalAnalyzer {
       
       // Apply artifact penalty to stability
       if (this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD) {
-        this.detectorScores.stability *= 0.5;
+        this.detectorScores.stability *= 0.4; // Stronger penalty for motion artifacts
       }
     }
     
@@ -98,7 +98,7 @@ export class SignalAnalyzer {
     // Implement real finger detection logic with appropriate medical thresholds
     const currentTime = Date.now();
     
-    // Apply trend analysis results
+    // Apply trend analysis results - stronger penalties for unstable trends
     let trendMultiplier = 1.0;
     switch(trendResult) {
       case 'highly_stable':
@@ -111,33 +111,33 @@ export class SignalAnalyzer {
         trendMultiplier = 1.0;
         break;
       case 'unstable':
-        trendMultiplier = 0.8;
+        trendMultiplier = 0.7; // Stronger penalty
         break;
       case 'highly_unstable':
-        trendMultiplier = 0.6;
+        trendMultiplier = 0.5; // Stronger penalty
         break;
       case 'non_physiological':
-        trendMultiplier = 0.3; // Strong penalty for non-physiological signals
+        trendMultiplier = 0.2; // Stronger penalty for non-physiological signals
         break;
     }
     
     // Calculate weighted score from detector scores - using medical research-based weights
-    const redScore = this.detectorScores.redChannel * 0.25;
-    const stabilityScore = this.detectorScores.stability * 0.20;
-    const pulsatilityScore = this.detectorScores.pulsatility * 0.25; // Increased importance
-    const biophysicalScore = this.detectorScores.biophysical * 0.20; // Increased importance
+    const redScore = this.detectorScores.redChannel * 0.20;
+    const stabilityScore = this.detectorScores.stability * 0.25; // Increased importance of stability
+    const pulsatilityScore = this.detectorScores.pulsatility * 0.25; 
+    const biophysicalScore = this.detectorScores.biophysical * 0.20; 
     const periodicityScore = this.detectorScores.periodicity * 0.10;
     
     // Apply trend multiplier from signal analysis
     const normalizedScore = (redScore + stabilityScore + pulsatilityScore + 
                            biophysicalScore + periodicityScore) * trendMultiplier;
     
-    // Apply motion artifact penalty
+    // Apply motion artifact penalty - stronger penalty for clear artifacts
     const finalScore = this.motionArtifactScore > this.MOTION_ARTIFACT_THRESHOLD ? 
-                      normalizedScore * 0.7 : normalizedScore;
+                      normalizedScore * 0.5 : normalizedScore;
     
-    // Use appropriate detection threshold based on medical research
-    const detectionThreshold = 0.6; // Higher threshold for reliable detection
+    // Higher threshold for reliable detection - increased for more stringent detection
+    const detectionThreshold = 0.65; // Higher threshold for reliable detection
     const isFingerDetected = finalScore >= detectionThreshold;
     
     // Update consecutive detection counters
@@ -150,7 +150,7 @@ export class SignalAnalyzer {
       this.consecutiveNoDetections++;
     }
     
-    // Apply hysteresis to prevent detection flickering
+    // Apply stronger hysteresis to prevent detection flickering
     if (!this.isCurrentlyDetected && this.consecutiveDetections >= this.CONFIG.MIN_CONSECUTIVE_DETECTIONS) {
       this.isCurrentlyDetected = true;
       console.log("SignalAnalyzer: Finger DETECTED after consistent readings");
@@ -162,8 +162,8 @@ export class SignalAnalyzer {
     }
     
     // Auto-reset on extreme signal changes that indicate finger removal
-    if (this.isCurrentlyDetected && this.motionArtifactScore > 0.9) {
-      this.consecutiveNoDetections += 3; // Accelerate detection loss for clear artifacts
+    if (this.isCurrentlyDetected && this.motionArtifactScore > 0.8) {
+      this.consecutiveNoDetections += 2; // Accelerate detection loss for clear artifacts
     }
     
     // Calculate quality based on weighted scores with physiological validation
@@ -174,14 +174,16 @@ export class SignalAnalyzer {
       qualityValue = 0;
     }
     
-    // Apply quality smoothing with history
-    this.qualityHistory.push(qualityValue);
-    if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
-      this.qualityHistory.shift();
+    // Apply quality smoothing with history - no smoothing for low quality to react faster
+    if (qualityValue > 0) {
+      this.qualityHistory.push(qualityValue);
+      if (this.qualityHistory.length > this.CONFIG.QUALITY_HISTORY_SIZE) {
+        this.qualityHistory.shift();
+      }
     }
     
     const finalQuality = this.isCurrentlyDetected ? 
-      Math.round(this.qualityHistory.reduce((a, b) => a + b, 0) / this.qualityHistory.length) : 0;
+      Math.round(this.qualityHistory.reduce((a, b) => a + b, 0) / Math.max(1, this.qualityHistory.length)) : 0;
     
     // Convert to percentage
     const quality = Math.max(0, Math.min(100, (finalQuality / this.CONFIG.QUALITY_LEVELS) * 100));

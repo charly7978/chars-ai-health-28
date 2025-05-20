@@ -27,16 +27,16 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   public isCalibrating: boolean = false;
   public frameProcessedCount = 0;
   
-  // Configuration with medically appropriate thresholds
+  // Configuration with stricter medically appropriate thresholds
   public readonly CONFIG: SignalProcessorConfig = {
     BUFFER_SIZE: 15,
-    MIN_RED_THRESHOLD: 25,    // Increased to prevent false detections
+    MIN_RED_THRESHOLD: 30,    // Increased to prevent false detections
     MAX_RED_THRESHOLD: 240,
-    STABILITY_WINDOW: 8,      // Increased for more stability assessment
-    MIN_STABILITY_COUNT: 4,   // Requires more stability for detection
-    HYSTERESIS: 2.0,          // Increased hysteresis for stable detection
-    MIN_CONSECUTIVE_DETECTIONS: 5,  // Requires more frames to confirm detection
-    MAX_CONSECUTIVE_NO_DETECTIONS: 5,  // Quicker to lose detection when finger is removed
+    STABILITY_WINDOW: 10,      // Increased for more stability assessment
+    MIN_STABILITY_COUNT: 5,   // Requires more stability for detection
+    HYSTERESIS: 2.5,          // Increased hysteresis for stable detection
+    MIN_CONSECUTIVE_DETECTIONS: 6,  // Requires more frames to confirm detection
+    MAX_CONSECUTIVE_NO_DETECTIONS: 4,  // Quicker to lose detection when finger is removed
     QUALITY_LEVELS: 20,
     QUALITY_HISTORY_SIZE: 10,
     CALIBRATION_SAMPLES: 10,
@@ -162,8 +162,8 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
       
-      // Early rejection of invalid frames
-      if (redValue < this.CONFIG.MIN_RED_THRESHOLD * 0.8) {
+      // Early rejection of invalid frames - stricter thresholds
+      if (redValue < this.CONFIG.MIN_RED_THRESHOLD * 0.9) {
         // Create minimal processed signal with no detection
         if (shouldLog) {
           console.log("PPGSignalProcessor: Signal too weak, skipping processing:", redValue);
@@ -206,6 +206,29 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       if (trendResult === 'non_physiological' && !this.isCalibrating) {
         if (shouldLog) {
           console.log("PPGSignalProcessor: Non-physiological signal rejected");
+        }
+        
+        const rejectSignal: ProcessedSignal = {
+          timestamp: Date.now(),
+          rawValue: redValue,
+          filteredValue: filteredValue,
+          quality: 0, 
+          fingerDetected: false,
+          roi: roi,
+          perfusionIndex: 0
+        };
+        
+        this.onSignalReady(rejectSignal);
+        return;
+      }
+      
+      // Additional validation for color channel ratios
+      if ((rToGRatio < 0.9 || rToGRatio > 4.0) && !this.isCalibrating) {
+        if (shouldLog) {
+          console.log("PPGSignalProcessor: Non-physiological color ratio detected:", {
+            rToGRatio,
+            rToBRatio
+          });
         }
         
         const rejectSignal: ProcessedSignal = {

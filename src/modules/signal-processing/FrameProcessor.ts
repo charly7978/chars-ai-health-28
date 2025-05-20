@@ -9,10 +9,10 @@ import { ProcessedSignal } from '../../types/signal';
 export class FrameProcessor {
   private readonly CONFIG: { TEXTURE_GRID_SIZE: number, ROI_SIZE_FACTOR: number };
   // Medically calibrated parameters for accurate signal extraction
-  private readonly RED_GAIN = 1.4; // Reduced from excessive amplification
-  private readonly GREEN_SUPPRESSION = 0.8; // Less aggressive suppression
-  private readonly SIGNAL_GAIN = 1.2; // Reduced global gain
-  private readonly EDGE_ENHANCEMENT = 0.15; // Reduced edge enhancement
+  private readonly RED_GAIN = 1.2; // Reduced from excessive amplification
+  private readonly GREEN_SUPPRESSION = 0.85; // Less aggressive suppression
+  private readonly SIGNAL_GAIN = 1.1; // Reduced global gain
+  private readonly EDGE_ENHANCEMENT = 0.12; // Reduced edge enhancement
   
   // History tracking for adaptive calibration
   private lastFrames: Array<{red: number, green: number, blue: number}> = [];
@@ -193,8 +193,7 @@ export class FrameProcessor {
         rToBRatio: 1.0,
         avgRed: 0,
         avgGreen: 0,
-        avgBlue: 0,
-        lightLevel: this.lastLightLevel
+        avgBlue: 0
       };
     }
     
@@ -246,8 +245,7 @@ export class FrameProcessor {
       avgBlue,
       textureScore,
       rToGRatio,
-      rToBRatio,
-      lightLevel: this.lastLightLevel
+      rToBRatio
     };
   }
   

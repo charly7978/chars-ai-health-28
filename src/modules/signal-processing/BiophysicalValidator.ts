@@ -7,17 +7,17 @@
 export class BiophysicalValidator {
   private lastPulsatilityValues: number[] = [];
   private readonly MAX_PULSATILITY_HISTORY = 30;
-  private readonly MIN_PULSATILITY = 0.1; // Increased threshold for more accurate detection
+  private readonly MIN_PULSATILITY = 0.15; // Increased threshold for more accurate detection
   private readonly MAX_PULSATILITY = 8.0;
   private lastRawValues: number[] = []; // Raw values for trend analysis
   private lastTimeStamps: number[] = []; // Timestamps for temporal analysis
   private readonly MEASUREMENTS_PER_SECOND = 30; // Assumed frame rate
 
-  // Biophysical normal ranges for PPG signals
+  // Biophysical normal ranges for PPG signals - stricter ranges
   private readonly PHYSIOLOGICAL_RANGES = {
-    redToGreen: { min: 1.0, max: 3.5, weight: 0.4 }, // More restrictive
-    redToBlue: { min: 1.0, max: 4.0, weight: 0.3 }, // More restrictive
-    redValue: { min: 25, max: 230, weight: 0.3 } // Higher minimum threshold
+    redToGreen: { min: 1.2, max: 3.2, weight: 0.4 }, // More restrictive
+    redToBlue: { min: 1.1, max: 3.8, weight: 0.3 }, // More restrictive
+    redValue: { min: 30, max: 220, weight: 0.3 } // Higher minimum threshold
   };
 
   constructor() {
@@ -46,8 +46,8 @@ export class BiophysicalValidator {
     }
     
     // If not enough values, return conservative pulsatility
-    if (this.lastPulsatilityValues.length < 12) {
-      return 0.2; // More conservative initial value
+    if (this.lastPulsatilityValues.length < 15) {
+      return 0.1; // More conservative initial value
     }
     
     // Calculate variability (difference between recent max and min)
@@ -61,26 +61,29 @@ export class BiophysicalValidator {
       return 0.0; // No signal
     }
     
-    // IMPROVEMENT 1: Calculate pulsatility index based on variations, more stringent
+    // Calculate pulsatility index based on variations, more stringent
     const rawPulsatility = (max - min) / Math.abs(mean);
     
-    // IMPROVEMENT 2: Enhanced frequency analysis specifically for cardiac rhythms
+    // Enhanced frequency analysis specifically for cardiac rhythms
     const freqScore = this.analyzeCardiacFrequency();
     
-    // IMPROVEMENT 3: Normalize to range 0-1 with more stringent criteria
+    // Zero-crossing analysis to detect wave patterns
+    const crossingScore = this.analyzeZeroCrossings();
+    
+    // Normalize to range 0-1 with more stringent criteria
     let normalizedPulsatility = Math.max(0, Math.min(1, 
       (rawPulsatility - this.MIN_PULSATILITY) / 
       (this.MAX_PULSATILITY - this.MIN_PULSATILITY)
     ));
     
-    // IMPROVEMENT 4: Apply cross-validation between pulsatility and frequency
-    // Only consider high pulsatility valid if frequency analysis confirms cardiac rhythm
-    if (normalizedPulsatility > 0.7 && freqScore < 0.3) {
-      normalizedPulsatility *= 0.5; // Penalize high variability not matching cardiac patterns
+    // Apply cross-validation between pulsatility, frequency and zero crossings
+    // Only consider high pulsatility valid if other analyses confirm cardiac rhythm
+    if (normalizedPulsatility > 0.7 && (freqScore < 0.3 || crossingScore < 0.3)) {
+      normalizedPulsatility *= 0.4; // Stronger penalty for unconfirmed patterns
     }
     
-    // Apply frequency confidence
-    normalizedPulsatility = normalizedPulsatility * 0.6 + freqScore * 0.4;
+    // Apply three-way weighted average
+    normalizedPulsatility = normalizedPulsatility * 0.5 + freqScore * 0.3 + crossingScore * 0.2;
     
     return normalizedPulsatility;
   }
@@ -91,7 +94,7 @@ export class BiophysicalValidator {
    * @returns Score 0-1 based on compatibility with cardiac rhythm
    */
   private analyzeCardiacFrequency(): number {
-    if (this.lastTimeStamps.length < 15 || this.lastRawValues.length < 15) {
+    if (this.lastTimeStamps.length < 20 || this.lastRawValues.length < 20) {
       return 0.0; // Not enough data to analyze
     }
     
@@ -100,15 +103,17 @@ export class BiophysicalValidator {
     const peakTimes: number[] = [];
     const valleyTimes: number[] = [];
     
-    // First, identify potential peaks
-    for (let i = 3; i < this.lastRawValues.length - 3; i++) {
+    // First, identify potential peaks with stricter criteria
+    for (let i = 4; i < this.lastRawValues.length - 4; i++) {
       const current = this.lastRawValues[i];
       
       // Check if this point is higher than surrounding points
       if (current > this.lastRawValues[i-1] && 
           current > this.lastRawValues[i-2] && 
+          current > this.lastRawValues[i-3] && 
           current > this.lastRawValues[i+1] && 
-          current > this.lastRawValues[i+2]) {
+          current > this.lastRawValues[i+2] &&
+          current > this.lastRawValues[i+3]) {
         
         peaks.push(i);
         peakTimes.push(this.lastTimeStamps[i]);
@@ -117,8 +122,10 @@ export class BiophysicalValidator {
       // Also identify valleys for rhythm analysis
       if (current < this.lastRawValues[i-1] && 
           current < this.lastRawValues[i-2] && 
+          current < this.lastRawValues[i-3] && 
           current < this.lastRawValues[i+1] && 
-          current < this.lastRawValues[i+2]) {
+          current < this.lastRawValues[i+2] &&
+          current < this.lastRawValues[i+3]) {
         
         valleyTimes.push(this.lastTimeStamps[i]);
       }
@@ -131,7 +138,7 @@ export class BiophysicalValidator {
     }
     
     // No intervals detected
-    if (intervals.length === 0) return 0.0;
+    if (intervals.length < 2) return 0.0;
     
     // Calculate average interval and convert to BPM
     const avgInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
@@ -153,11 +160,11 @@ export class BiophysicalValidator {
         bpmScore = 1.0;
       } else {
         // Reduced confidence for extreme but still physiological ranges
-        bpmScore = 0.7;
+        bpmScore = 0.6;
       }
     } else if (estimatedBPM > 30 && estimatedBPM < 200) {
       // Very low confidence in borderline physiological ranges
-      bpmScore = 0.2;
+      bpmScore = 0.1;
     } else {
       // Non-physiological ranges get zero score
       bpmScore = 0;
@@ -165,7 +172,7 @@ export class BiophysicalValidator {
     
     // Calculate regularity score (lower intervalVariation is better)
     const regularityScore = intervalVariation < 0.2 ? 
-                           1.0 : Math.max(0, 1 - (intervalVariation - 0.2) * 2);
+                           1.0 : Math.max(0, 1 - (intervalVariation - 0.2) * 2.5);
     
     // Calculate peak-valley alternation score (proper cardiac signal alternates)
     let alternationScore = 0;
@@ -195,6 +202,82 @@ export class BiophysicalValidator {
     
     // Return final score with strong penalties for non-cardiac patterns
     return Math.pow(frequencyScore, 1.5); // Exponential weighting favors clear cardiac signals
+  }
+  
+  /**
+   * Analyzes signal zero-crossings to detect waveform patterns compatible with PPG
+   * PPG signals typically have asymmetrical waves with specific crossing patterns
+   */
+  private analyzeZeroCrossings(): number {
+    if (this.lastRawValues.length < 20) {
+      return 0.0;
+    }
+    
+    // Normalize signal around zero for crossing detection
+    const mean = this.lastRawValues.reduce((sum, val) => sum + val, 0) / this.lastRawValues.length;
+    const normalizedValues = this.lastRawValues.map(v => v - mean);
+    
+    // Find zero crossings
+    const crossings: number[] = [];
+    const crossingDirections: ('up'|'down')[] = [];
+    
+    for (let i = 1; i < normalizedValues.length; i++) {
+      // Detect a crossing
+      if ((normalizedValues[i-1] < 0 && normalizedValues[i] >= 0) || 
+          (normalizedValues[i-1] >= 0 && normalizedValues[i] < 0)) {
+        
+        crossings.push(i);
+        crossingDirections.push(normalizedValues[i-1] < 0 ? 'up' : 'down');
+      }
+    }
+    
+    // Too few crossings indicates poor signal
+    if (crossings.length < 4) {
+      return 0.0;
+    }
+    
+    // Calculate intervals between crossings
+    const intervals: number[] = [];
+    for (let i = 1; i < crossings.length; i++) {
+      intervals.push(this.lastTimeStamps[crossings[i]] - this.lastTimeStamps[crossings[i-1]]);
+    }
+    
+    // Check for pattern of alternating short and long intervals
+    // (cardiac PPG has asymmetric up/down slopes)
+    let patternScore = 0;
+    if (intervals.length >= 4) {
+      let alternatingCount = 0;
+      
+      for (let i = 0; i < intervals.length - 1; i++) {
+        const ratio = intervals[i] / intervals[i+1];
+        
+        // Cardiac PPG typically has interval ratios that alternate between high and low
+        if ((i % 2 === 0 && (ratio > 1.3 || ratio < 0.7)) || 
+            (i % 2 === 1 && (ratio < 0.7 || ratio > 1.3))) {
+          alternatingCount++;
+        }
+      }
+      
+      patternScore = alternatingCount / (intervals.length - 1);
+    }
+    
+    // Check for appropriate number of crossings for heart rate
+    // (normal heart rate produces ~2-4 crossings per second)
+    const durationSeconds = (this.lastTimeStamps[this.lastTimeStamps.length-1] - 
+                             this.lastTimeStamps[0]) / 1000;
+    
+    const crossingsPerSecond = crossings.length / Math.max(0.5, durationSeconds);
+    let crossingRateScore = 0;
+    
+    if (crossingsPerSecond >= 2 && crossingsPerSecond <= 8) {
+      crossingRateScore = 1.0; // Optimal cardiac rate
+    } else if (crossingsPerSecond > 0 && crossingsPerSecond < 10) {
+      // Linear falloff for suboptimal rates
+      crossingRateScore = Math.max(0, 1 - Math.abs(4 - crossingsPerSecond) / 4);
+    }
+    
+    // Final score combines pattern recognition and crossing rate
+    return patternScore * 0.6 + crossingRateScore * 0.4;
   }
 
   /**
@@ -226,19 +309,19 @@ export class BiophysicalValidator {
       this.PHYSIOLOGICAL_RANGES.redToBlue.max
     );
     
-    // IMPROVEMENT: Add cross-validation between color ratios
+    // Add cross-validation between color ratios
     // Both ratios should be consistent with each other
     let crossValidationScore = 1.0;
     const ratioCorrelation = Math.abs(rToGRatio - rToBRatio) / Math.max(rToGRatio, rToBRatio);
     
     // Strong penalty for inconsistent ratios - indicates non-blood signal sources
     if (ratioCorrelation > 0.4) {
-      crossValidationScore = 0.5;
+      crossValidationScore = 0.4;
     }
     
     // More severe penalty for extremely divergent ratios
     if (ratioCorrelation > 0.7) {
-      crossValidationScore = 0.2;
+      crossValidationScore = 0.1;
     }
     
     // Strict red threshold enforcement - below minimum is definitive rejection
@@ -269,14 +352,14 @@ export class BiophysicalValidator {
     // If below minimum, calculate score with gradient
     if (value < min) {
       const distance = min - value;
-      const range = min * 0.5; // Allow deviation up to 50% below (more strict)
+      const range = min * 0.4; // Allow deviation up to 40% below (more strict)
       
       return Math.max(0, 1 - (distance / range));
     }
     
     // If above maximum, calculate score with gradient
     const distance = value - max;
-    const range = max * 0.5; // Allow deviation up to 50% above (more strict)
+    const range = max * 0.4; // Allow deviation up to 40% above (more strict)
     
     return Math.max(0, 1 - (distance / range));
   }
