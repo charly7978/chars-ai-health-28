@@ -619,7 +619,7 @@ const Index = () => {
 
           <div className="flex-1">
             <PPGSignalMeter 
-              value={heartbeatSignal * 30}
+              value={beatMarker}
               quality={lastSignal?.quality || 0}
               isFingerDetected={lastSignal?.fingerDetected || false}
               onStartMeasurement={startMonitoring}
