@@ -298,7 +298,7 @@ export class PPGSignalProcessor implements SignalProcessor {
   private analyzeSignalAdvanced(filtered: number, rawValue: number): { isFingerDetected: boolean, quality: number } {
     const currentTime = Date.now();
     
-    // Si el valor de entrada es 0, definitivamente no hay dedo
+    // If the value of input is 0, definitely no finger
     if (rawValue <= 0) {
       this.consecutiveNoDetections++;
       this.consecutiveDetections = 0;
@@ -322,7 +322,7 @@ export class PPGSignalProcessor implements SignalProcessor {
     // Analizar tendencia para mayor robustez
     const trendAnalysis = this.analyzeSignalTrend();
     
-    // Fix the type comparison by changing strict equality to includes check
+    // Fix: use correct type comparison by checking if the string equals the literal
     if (!inRange || trendAnalysis === 'highly_unstable') {
       this.consecutiveDetections = Math.max(0, this.consecutiveDetections - 1);
       this.consecutiveNoDetections++;
@@ -448,20 +448,20 @@ export class PPGSignalProcessor implements SignalProcessor {
     return Math.max(0, Math.min(1, 1 - (avgVariation / 40))) * (hasOutliers ? 0.7 : 1);
   }
 
-  // Nuevo método para analizar tendencias en la señal
+  // Ensure this method returns the correct type
   private analyzeSignalTrend(): 'stable' | 'moderately_stable' | 'unstable' | 'highly_unstable' {
     if (this.signalHistory.length < 10) return 'moderately_stable';
     
-    // Obtener los últimos valores para análisis de tendencia
+    // Obtain the last values for trend analysis
     const recentValues = this.signalHistory.slice(-10);
     
-    // Calcular las diferencias entre valores consecutivos
+    // Calculate the differences between consecutive values
     const differences = [];
     for (let i = 1; i < recentValues.length; i++) {
       differences.push(recentValues[i] - recentValues[i-1]);
     }
     
-    // Calcular el cambio de dirección (signo) entre diferencias consecutivas
+    // Calculate direction changes (sign) between consecutive differences
     let directionChanges = 0;
     for (let i = 1; i < differences.length; i++) {
       if (Math.sign(differences[i]) !== Math.sign(differences[i-1])) {
@@ -469,12 +469,12 @@ export class PPGSignalProcessor implements SignalProcessor {
       }
     }
     
-    // Calcular la variación total (desviación estándar)
+    // Calculate total variation (standard deviation)
     const mean = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
     const variance = recentValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentValues.length;
     const stdDev = Math.sqrt(variance);
     
-    // Evaluar estabilidad basada en múltiples factores
+    // Evaluate stability based on multiple factors
     if (stdDev > 50) return 'highly_unstable';
     if (directionChanges > 6) return 'unstable';
     if (stdDev > 25 || directionChanges > 4) return 'moderately_stable';
