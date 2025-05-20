@@ -231,7 +231,7 @@ class BiophysicalValidator {
     perfusionIdx?: number,
     textureScore?: number 
   }): { isValidTissue: boolean; confidence: number; metrics: Record<string, number> } {
-    const { r, g, b, perfusionIdx = 0, textureScore = 0 } = pixelData;
+    const { r, g, b, perfusionIdx = 0, textureScore: inputTextureScore = 0 } = pixelData;
     
     // 1. Validar dominancia de canal rojo (característica de hemoglobina)
     const rToGRatio = r / Math.max(1, g);
@@ -272,18 +272,18 @@ class BiophysicalValidator {
     }
     
     // 5. Evaluar textura (si está disponible)
-    const textureScore = textureScore > this.MIN_TEXTURE_SCORE ? 
-                       textureScore : 0;
+    const processedTextureScore = inputTextureScore > this.MIN_TEXTURE_SCORE ? 
+                       inputTextureScore : 0;
     
     // 6. Combinar puntuaciones
     const availableMetrics = [
       normalizedColorScore > 0 ? 1 : 0,
       perfusionScore > 0 ? 1 : 0,
-      textureScore > 0 ? 1 : 0
+      processedTextureScore > 0 ? 1 : 0
     ].filter(Boolean).length;
     
     // Calcular confianza basada en métricas disponibles
-    const totalScore = (normalizedColorScore + perfusionScore + textureScore) / 
+    const totalScore = (normalizedColorScore + perfusionScore + processedTextureScore) / 
                       Math.max(1, availableMetrics);
     
     // Umbral para considerar tejido vivo
@@ -295,7 +295,7 @@ class BiophysicalValidator {
       metrics: {
         colorRatio: normalizedColorScore,
         perfusion: perfusionScore,
-        texture: textureScore
+        texture: processedTextureScore
       }
     };
   }
