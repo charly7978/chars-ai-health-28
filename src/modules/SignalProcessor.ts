@@ -1,4 +1,3 @@
-
 import { ProcessedSignal, ProcessingError, SignalProcessor as SignalProcessorInterface } from '../types/signal';
 
 /**
@@ -527,7 +526,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         timestamp: Date.now(),
         rawValue: redValue,
         filteredValue: sgFiltered,
-        quality: quality,
+        quality: quality, // This is now ensured to be a number
         fingerDetected: isFingerDetected,
         roi: roi,
         perfusionIndex: perfusionIndex
@@ -864,7 +863,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(finalQuality),
+      quality: Math.round(finalQuality), // Ensure this is a number, not a string
       detectorDetails: {
         ...this.detectorScores,
         normalizedScore,
