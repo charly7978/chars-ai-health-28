@@ -27,9 +27,6 @@ const Index = () => {
   const [heartRate, setHeartRate] = useState(0);
   const [heartbeatSignal, setHeartbeatSignal] = useState(0);
   const [beatMarker, setBeatMarker] = useState(0);
-  const beatDetectedRef = useRef(false);
-  const [beatDetected, setBeatDetected] = useState(false);
-  const beatTimeoutRef = useRef<number | null>(null);
   const [arrhythmiaCount, setArrhythmiaCount] = useState<string | number>("--");
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -368,7 +365,6 @@ const Index = () => {
     setHeartRate(0);
     setHeartbeatSignal(0);
     setBeatMarker(0);
-    setRRIntervals([]);
     setVitalSigns({ 
       spo2: 0,
       pressure: "--/--",
@@ -512,53 +508,48 @@ const Index = () => {
   }, [lastSignal]);
 
   useEffect(() => {
-    if (!lastSignal) return;
-    setSignalQuality(lastSignal.quality);
-    if (!isMonitoring) return;
-    // Procesar latido y actualizar estado de detección
-    const hb = processHeartBeat(lastSignal.filteredValue);
-    if (hb.isPeak) {
-      beatDetectedRef.current = true;
-      setBeatDetected(true);
-      if (beatTimeoutRef.current) clearTimeout(beatTimeoutRef.current);
-      beatTimeoutRef.current = window.setTimeout(() => {
-        beatDetectedRef.current = false;
-        setBeatDetected(false);
-      }, 2000);
-    }
-    // Umbral mínimo de calidad y detección basada en picos
-    const MIN_SIGNAL_QUALITY_TO_MEASURE = 30;
-    if (lastSignal.quality < MIN_SIGNAL_QUALITY_TO_MEASURE || !beatDetectedRef.current) {
-      setHeartRate(0);
-      setHeartbeatSignal(0);
-      setBeatMarker(0);
-      setRRIntervals([]);
-      return;
-    }
-    // Señal válida, actualizar latidos
-    setHeartRate(hb.bpm);
-    setHeartbeatSignal(hb.filteredValue);
-    setBeatMarker(hb.isPeak ? 1 : 0);
-    if (hb.rrData?.intervals) {
-      setRRIntervals(hb.rrData.intervals.slice(-5));
-    }
-    // Procesar signos vitales
-    const vitals = processVitalSigns(lastSignal.filteredValue, hb.rrData);
-    if (vitals) {
-      setVitalSigns(vitals);
-      if (vitals.lastArrhythmiaData) {
-        setLastArrhythmiaData(vitals.lastArrhythmiaData);
-        const [status, count] = vitals.arrhythmiaStatus.split('|');
-        setArrhythmiaCount(count || "0");
-        const isArrhythmia = status === "ARRITMIA DETECTADA";
-        if (isArrhythmia !== arrhythmiaDetectedRef.current) {
-          arrhythmiaDetectedRef.current = isArrhythmia;
-          setArrhythmiaState(isArrhythmia);
-          if (isArrhythmia) {
-            toast({ title: "¡Arritmia detectada!", description: "Se activará un sonido distintivo con los latidos.", variant: "destructive", duration: 3000 });
+    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
+      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+      setHeartRate(heartBeatResult.bpm);
+      setHeartbeatSignal(heartBeatResult.filteredValue);
+      setBeatMarker(heartBeatResult.isPeak ? 1 : 0);
+      // Actualizar últimos intervalos RR para debug
+      if (heartBeatResult.rrData && heartBeatResult.rrData.intervals) {
+        setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
+      }
+      
+      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+      if (vitals) {
+        setVitalSigns(vitals);
+        
+        if (vitals.lastArrhythmiaData) {
+          setLastArrhythmiaData(vitals.lastArrhythmiaData);
+          const [status, count] = vitals.arrhythmiaStatus.split('|');
+          setArrhythmiaCount(count || "0");
+          
+          // Aquí detectamos si hay arritmia y enviamos la señal al HeartBeatProcessor
+          const isArrhythmiaDetected = status === "ARRITMIA DETECTADA";
+          
+          // Solo actualizamos cuando cambia el estado para no sobrecargar
+          if (isArrhythmiaDetected !== arrhythmiaDetectedRef.current) {
+            arrhythmiaDetectedRef.current = isArrhythmiaDetected;
+            setArrhythmiaState(isArrhythmiaDetected);
+            
+            // Mostrar un toast cuando se detecta arritmia por primera vez
+            if (isArrhythmiaDetected) {
+              console.log("Arritmia detectada - Activando sonido distintivo");
+              toast({
+                title: "¡Arritmia detectada!",
+                description: "Se activará un sonido distintivo con los latidos.",
+                variant: "destructive",
+                duration: 3000,
+              });
+            }
           }
         }
       }
+      
+      setSignalQuality(lastSignal.quality);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, setArrhythmiaState]);
 
@@ -610,7 +601,7 @@ const Index = () => {
           <CameraView 
             onStreamReady={handleStreamReady}
             isMonitoring={isCameraOn}
-            isFingerDetected={beatDetected}
+            isFingerDetected={lastSignal?.fingerDetected}
             signalQuality={signalQuality}
           />
         </div>
@@ -622,7 +613,7 @@ const Index = () => {
               Calidad: {signalQuality}
             </div>
             <div className="text-white text-lg">
-              {beatDetected ? "Huella Detectada" : "Huella No Detectada"}
+              {lastSignal?.fingerDetected ? "Huella Detectada" : "Huella No Detectada"}
             </div>
           </div>
 
@@ -630,7 +621,7 @@ const Index = () => {
             <PPGSignalMeter 
               value={beatMarker}
               quality={lastSignal?.quality || 0}
-              isFingerDetected={beatDetected}
+              isFingerDetected={lastSignal?.fingerDetected || false}
               onStartMeasurement={startMonitoring}
               onReset={handleReset}
               arrhythmiaStatus={vitalSigns.arrhythmiaStatus}
