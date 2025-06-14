@@ -1,59 +1,59 @@
+import { useState, useEffect, useRef } from "react";
+import { PPGProcessor } from "../modules/signal-processing/PPGProcessor";
+import type { VitalSigns, SignalQuality } from "../modules/signal-processing/types";
 
-import { useState, useEffect } from 'react';
+export function useVitalMeasurement() {
+	const [measurements, setMeasurements] = useState<VitalSigns[]>([]);
+	const [isProcessing, setIsProcessing] = useState(false);
+	const [quality, setQuality] = useState<SignalQuality | null>(null);
+	const videoRef = useRef<HTMLVideoElement>(null);
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const processorRef = useRef<PPGProcessor | null>(null);
 
-interface VitalMeasurements {
-  heartRate: number;
-  spo2: number;
-  pressure: string;
-  arrhythmiaCount: string | number;
+	useEffect(() => {
+		processorRef.current = new PPGProcessor();
+	}, []);
+
+	const initializeCamera = async () => {
+		// ...código para inicializar la cámara y asignar el stream a videoRef.current...
+	};
+
+	const processFrame = () => {
+		if (!isProcessing || !videoRef.current || !canvasRef.current) return;
+		const context = canvasRef.current.getContext("2d");
+		if (!context) return;
+		context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+		const frame = context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+		const result = processorRef.current!.processFrame(frame);
+		setQuality(result.quality);
+		// ...actualizar measurements según corresponda...
+		requestAnimationFrame(processFrame);
+	};
+
+	const startMeasurement = async () => {
+		setIsProcessing(true);
+		await initializeCamera();
+		requestAnimationFrame(processFrame);
+	};
+
+	const stopMeasurement = () => {
+		setIsProcessing(false);
+	};
+
+	return {
+		measurements,
+		isProcessing,
+		quality,
+		videoRef,
+		canvasRef,
+		startMeasurement,
+		stopMeasurement
+	};
 }
-
-export const useVitalMeasurement = (isMeasuring: boolean) => {
-  const [measurements, setMeasurements] = useState<VitalMeasurements>({
-    heartRate: 0,
-    spo2: 0,
-    pressure: "--/--",
-    arrhythmiaCount: 0
-  });
-  const [elapsedTime, setElapsedTime] = useState(0);
-
-  useEffect(() => {
-    console.log('useVitalMeasurement - Estado detallado:', {
-      isMeasuring,
-      currentMeasurements: measurements,
-      elapsedTime,
-      timestamp: new Date().toISOString(),
-      session: Math.random().toString(36).substring(2, 9) // Identificador único para esta sesión
-    });
-
-    if (!isMeasuring) {
-      console.log('useVitalMeasurement - Reiniciando mediciones por detención', {
-        prevValues: {...measurements},
-        timestamp: new Date().toISOString()
-      });
-      
-      setMeasurements(prev => {
-        const newValues = {
-          ...prev,
-          heartRate: 0,
-          spo2: 0,
-          pressure: "--/--",
-          arrhythmiaCount: "--"
-        };
-        
-        console.log('useVitalMeasurement - Nuevos valores tras reinicio', newValues);
-        return newValues;
-      });
-      
-      setElapsedTime(0);
-      return;
-    }
-
-    const startTime = Date.now();
-    console.log('useVitalMeasurement - Iniciando medición', {
-      startTime: new Date(startTime).toISOString(),
-      prevValues: {...measurements}
-    });
+    startMeasurement,
+    stopMeasurement: () => setIsProcessing(false)
+  };
+}
     
     const MEASUREMENT_DURATION = 30000;
 

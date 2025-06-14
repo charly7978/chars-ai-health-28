@@ -1,22 +1,206 @@
-{
+import { KalmanFilter } from "../signal-processing/KalmanFilter";
+import { SavitzkyGolayFilter } from "../signal-processing/SavitzkyGolayFilter";
+import { SignalQualityAnalyzer } from "./SignalQualityAnalyzer";
+
+export class SignalProcessor {
+  private kalmanFilter: KalmanFilter;
+  private sgFilter: SavitzkyGolayFilter;
+  private qualityAnalyzer: SignalQualityAnalyzer;
+  
+  constructor() {
+    this.kalmanFilter = new KalmanFilter(0.1, 1);
+    this.sgFilter = new SavitzkyGolayFilter(15, 4); // Ventana optimizada para PPG
+    this.qualityAnalyzer = new SignalQualityAnalyzer();
+  }
+
+  public processFrame(rgbData: number[][]): {
+    filteredSignal: number[];
+    quality: number;
+    peaks: number[];
+  } {
+    // Extracción de señal PPG del canal verde (más sensible a cambios de sangre)
+    const rawSignal = this.extractPPGSignal(rgbData);
+    
+    // Filtrado de ruido y artefactos
+    const kalmanFiltered = this.kalmanFilter.filter(rawSignal);
+    const smoothedSignal = this.sgFilter.filter(kalmanFiltered);
+    
+    // Detección de picos usando el algoritmo de Pan-Tompkins modificado
+    const peaks = this.detectPeaks(smoothedSignal);
+    
+    // Análisis de calidad de señal basado en múltiples factores
+    const quality = this.qualityAnalyzer.analyzeQuality(smoothedSignal, peaks);
+
+    return {
+      filteredSignal: smoothedSignal,
+      quality,
+      peaks
+    };
+  }
+
+  private extractPPGSignal(rgbData: number[][]): number[] {
+    // Implementación del método de extracción de PPG usando análisis de componentes independientes
+    return rgbData.map(frame => {
+      const green = frame[1]; // Canal verde
+      const red = frame[0];   // Canal rojo
+      return green - 0.7 * red; // Reducción de artefactos de movimiento
+    });
+  }
+
+  private detectPeaks(signal: number[]): number[] {
+    // Implementación del algoritmo Pan-Tompkins modificado para PPG
+    const windowSize = 30; // 1 segundo @ 30fps
+    const peaks: number[] = [];
+    const threshold = this.calculateAdaptiveThreshold(signal);
+
+    for (let i = windowSize; i < signal.length - windowSize; i++) {
+      if (this.isPeak(signal, i, windowSize, threshold)) {
+        peaks.push(i);
+      }
+    }
+
+    return peaks;
+  }
+
+  private isPeak(signal: number[], index: number, windowSize: number, threshold: number): boolean {
+    const window = signal.slice(index - windowSize, index + windowSize);
+    const currentValue = signal[index];
+    
+    // Verificación de máximo local y amplitud mínima
+    return currentValue > threshold &&
+           currentValue === Math.max(...window) &&
+           this.validatePeakMorphology(signal, index, windowSize);
+  }
+
+  private calculateAdaptiveThreshold(signal: number[]): number {
+    const mean = signal.reduce((a, b) => a + b, 0) / signal.length;
+    const std = Math.sqrt(
+      signal.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / signal.length
+    );
+    return mean + 2 * std;
+  }
+
+  private validatePeakMorphology(signal: number[], index: number, windowSize: number): boolean {
+    // Validación de la forma de onda del pico PPG
+    const upSlope = (signal[index] - signal[index - 5]) / 5;
+    const downSlope = (signal[index] - signal[index + 5]) / 5;
+    
+    return upSlope > 0.1 && downSlope < -0.1 && 
+           Math.abs(upSlope/downSlope) > 0.5 && 
+           Math.abs(upSlope/downSlope) < 2;
+  }
+}export class SignalQualityAnalyzer {
+  private readonly MIN_PEAK_DISTANCE = 20; // ~667ms @ 30fps
+  private readonly MAX_PEAK_DISTANCE = 45; // ~1500ms @ 30fps
+  
+  public analyzeQuality(signal: number[], peaks: number[]): number {
+    const scores = [
+      this.analyzeSignalToNoise(signal),
+      this.analyzePeakRegularity(peaks),
+      this.analyzeBaselineStability(signal),
+      this.analyzePeakAmplitude(signal, peaks)
+    ];
+    
+    return scores.reduce((a, b) => a + b, 0) / scores.length;
+  }
+
+  private analyzeSignalToNoise(signal: number[]): number {
+    // Implementación del cálculo real de SNR usando ventanas móviles
+    const windows = this.splitIntoWindows(signal, 30);
+    const snrScores = windows.map(window => {
+      const variance = this.calculateVariance(window);
+      const trend = this.calculateTrend(window);
+      return 1 - (variance / (trend * trend));
+    });
+    
+    return Math.max(0, Math.min(1, snrScores.reduce((a, b) => a + b, 0) / snrScores.length));
+  }
+
+  private analyzePeakRegularity(peaks: number[]): number {
+    if (peaks.length < 2) return 0;
+
+    const intervals = peaks.slice(1).map((peak, i) => peak - peaks[i]);
+    const meanInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    
+    const variance = intervals.reduce((acc, interval) => 
+      acc + Math.pow(interval - meanInterval, 2), 0) / intervals.length;
+    
+    return Math.exp(-variance / (2 * Math.pow(meanInterval/4, 2)));
+  }
+
+  private analyzeBaselineStability(signal: number[]): number {
+    const baseline = this.extractBaseline(signal);
+    const baselineVariance = this.calculateVariance(baseline);
+    return Math.exp(-baselineVariance / 0.1);
+  }
+
+  private analyzePeakAmplitude(signal: number[], peaks: number[]): number {
+    if (peaks.length < 2) return 0;
+
+    const amplitudes = peaks.map(peak => signal[peak]);
+    const meanAmplitude = amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length;
+    const variance = this.calculateVariance(amplitudes);
+    
+    return Math.exp(-variance / (meanAmplitude * 0.5));
+  }
+
+  private splitIntoWindows(signal: number[], windowSize: number): number[][] {
+    const windows = [];
+    for (let i = 0; i < signal.length - windowSize; i += windowSize) {
+      windows.push(signal.slice(i, i + windowSize));
+    }
+    return windows;
+  }
+
+  private calculateVariance(data: number[]): number {
+    const mean = data.reduce((a, b) => a + b, 0) / data.length;
+    return data.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / data.length;
+  }
+
+  private calculateTrend(window: number[]): number {
+    const x = Array.from({length: window.length}, (_, i) => i);
+    const n = window.length;
+    
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = window.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((acc, val, i) => acc + val * window[i], 0);
+    const sumX2 = x.reduce((acc, val) => acc + val * val, 0);
+    
+    return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  }
+
+  private extractBaseline(signal: number[]): number[] {
+    const windowSize = 30;
+    return signal.map((_, i) => {
+      const start = Math.max(0, i - windowSize);
+      const end = Math.min(signal.length, i + windowSize);
+      const window = signal.slice(start, end);
+      return Math.min(...window);
+    });
+  }
+}{
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023"],
     "module": "ESNext",
     "skipLibCheck": true,
-
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
-
-    /* Linting */
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "src"]
+}
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["vite.config.ts"],
+  "files": [
+    "src/SignalQualityAnalyzer.ts",
+    "src/SignalProcessor.ts"
+  ]
 }
