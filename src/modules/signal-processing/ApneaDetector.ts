@@ -1,7 +1,6 @@
 /**
  * Detector avanzado de apnea del sueño.
- * Utiliza una ventana deslizante de energía de audio para detectar periodos con muy baja actividad acústica,
- * lo cual puede indicar eventos de apnea.
+ * Procesa bloques de muestras de audio para detectar eventos de apnea (baja energía sostenida).
  */
 export class ApneaDetector {
   private audioHistory: number[] = [];
@@ -15,21 +14,16 @@ export class ApneaDetector {
     this.apneaEventCount = 0;
   }
 
-  // Procesa un bloque de muestras de audio y actualiza el conteo de eventos de apnea
+  // Procesa un bloque de audio y retorna true si se detecta apnea
   public processAudioBlock(audioSamples: number[]): { energy: number; apneaDetected: boolean } {
-    // Calcular la energía promedio del bloque
     const energy = audioSamples.reduce((sum, sample) => sum + sample * sample, 0) / audioSamples.length;
-
-    // Actualizar historial (ventana deslizante)
     this.audioHistory.push(energy);
     if (this.audioHistory.length > this.windowSize) {
       this.audioHistory.shift();
     }
-
-    // Detectar apnea: si en la ventana más del 60% de las muestras tienen energía inferior a energyThreshold
     const lowEnergyCount = this.audioHistory.filter(val => val < this.energyThreshold).length;
     const ratio = lowEnergyCount / this.audioHistory.length;
-    const apneaDetected = ratio > 0.6;
+    const apneaDetected = ratio > 0.6; // Se detecta apnea si el 60% de la ventana tiene baja energía
     if (apneaDetected) {
       this.apneaEventCount++;
     }

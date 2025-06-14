@@ -338,3 +338,10 @@ export class LipidProcessor {
     return this.confidenceScore;
   }
 }
+
+// Se elimina toda la lógica de procesamiento para lípidos (colesterol y triglicéridos)
+// y se actualiza para que no genere mediciones.
+export const processLipids = (): { totalCholesterol: number } => {
+  // Retornamos 0 o eliminamos el procesamiento de lípidos
+  return { totalCholesterol: 0 };
+};

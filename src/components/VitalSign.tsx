@@ -32,13 +32,12 @@ const VitalSign = ({
           if (value > 126) return 'Hiperglucemia';
           if (value < 70) return 'Hipoglucemia';
           return '';
-        // Caso real para Apnea del sueño: suponemos "value" es el contador de eventos de apnea
+        // Casos nuevos para Apnea y Conmoción cerebral
         case 'APNEA DEL SUEÑO':
-          if (typeof value === 'number' && value >= 2) return 'Apnea del sueño detectada';
+          if (value >= 2) return 'Apnea del sueño detectada';
           return 'Normal';
-        // Caso real para Conmoción cerebral: suponemos "value" es un puntaje (0-100)
         case 'CONMOCIÓN CEREBRAL':
-          if (typeof value === 'number' && value >= 30) return 'Posible conmoción cerebral';
+          if (value >= 30) return 'Posible conmoción cerebral';
           return 'Normal';
         default:
           return '';
@@ -73,7 +72,7 @@ const VitalSign = ({
             }
           }
           return '';
-        // Se eliminan los casos 'HEMOGLOBINA' y 'COLESTEROL/TRIGL.'
+        // Se eliminan los casos relacionados con HEMOGLOBINA y COLESTEROL/TRIGL.
         default:
           return '';
       }
@@ -87,14 +86,12 @@ const VitalSign = ({
       case 'Taquicardia':
       case 'Hipoxemia':
       case 'Hiperglucemia':
-      case 'Hipertensión':
-      case 'Hipercolesterolemia':
-      case 'Hipertrigliceridemia':
         return 'text-[#ea384c]';
       case 'Bradicardia':
       case 'Hipoglucemia':
       case 'Hipotensión':
         return 'text-[#F97316]';
+      // Se eliminan referencias a "Hipercolesterolemia" y "Hipertrigliceridemia"
       case 'Anemia':
         return 'text-[#FEF7CD]';
       case 'Policitemia':
@@ -267,6 +264,9 @@ const VitalSign = ({
       )}
     </div>
   );
+};
+
+export default VitalSign;
 };
 
 export default VitalSign;
