@@ -2,8 +2,6 @@ import { SpO2Processor } from './spo2-processor';
 import { BloodPressureProcessor } from './blood-pressure-processor';
 import { ArrhythmiaProcessor } from './arrhythmia-processor';
 import { SignalProcessor } from './signal-processor';
-import { GlucoseProcessor } from './glucose-processor';
-import { LipidProcessor } from './lipid-processor';
 
 export interface VitalSignsResult {
   spo2: number;
@@ -42,8 +40,6 @@ export class VitalSignsProcessor {
   private bpProcessor: BloodPressureProcessor;
   private arrhythmiaProcessor: ArrhythmiaProcessor;
   private signalProcessor: SignalProcessor;
-  private glucoseProcessor: GlucoseProcessor;
-  private lipidProcessor: LipidProcessor;
   private apneaDetector: any;
   private concussionDetector: any;
   
@@ -57,8 +53,6 @@ export class VitalSignsProcessor {
   private spo2Samples: number[] = [];
   private pressureSamples: number[] = [];
   private heartRateSamples: number[] = [];
-  private apneaSamples: number[] = [];
-  private concussionSamples: number[] = [];
   
   private calibrationProgress = {
     heartRate: 0,
@@ -77,8 +71,6 @@ export class VitalSignsProcessor {
     this.bpProcessor = new BloodPressureProcessor();
     this.arrhythmiaProcessor = new ArrhythmiaProcessor();
     this.signalProcessor = new SignalProcessor();
-    this.glucoseProcessor = new GlucoseProcessor();
-    this.lipidProcessor = new LipidProcessor();
     
     // Inicializar detectores de apnea y conmoción cerebral
     const { ApneaDetector } = require('../signal-processing/ApneaDetector');
@@ -139,56 +131,6 @@ export class VitalSignsProcessor {
       duraciónMs: Date.now() - this.calibrationStartTime,
       forzado: this.forceCompleteCalibration
     });
-    
-    // Analizar las muestras para determinar umbrales óptimos
-    if (this.heartRateSamples.length > 5) {
-      const filteredHeartRates = this.heartRateSamples.filter(v => v > 40 && v < 200);
-      if (filteredHeartRates.length > 0) {
-        // Determinar umbral para detección de arritmias basado en variabilidad basal
-        const avgHeartRate = filteredHeartRates.reduce((a, b) => a + b, 0) / filteredHeartRates.length;
-        const heartRateVariability = Math.sqrt(
-          filteredHeartRates.reduce((acc, val) => acc + Math.pow(val - avgHeartRate, 2), 0) / 
-          filteredHeartRates.length
-        );
-        
-        console.log("VitalSignsProcessor: Calibración de ritmo cardíaco", {
-          muestras: filteredHeartRates.length,
-          promedio: avgHeartRate.toFixed(1),
-          variabilidad: heartRateVariability.toFixed(2)
-        });
-      }
-    }
-    
-    // Calibrar el procesador de SpO2 con las muestras
-    if (this.spo2Samples.length > 5) {
-      const validSpo2 = this.spo2Samples.filter(v => v > 85 && v < 100);
-      if (validSpo2.length > 0) {
-        const baselineSpo2 = validSpo2.reduce((a, b) => a + b, 0) / validSpo2.length;
-        
-        console.log("VitalSignsProcessor: Calibración de SpO2", {
-          muestras: validSpo2.length,
-          nivelBase: baselineSpo2.toFixed(1)
-        });
-      }
-    }
-    
-    // Calibrar el procesador de presión arterial con las muestras
-    if (this.pressureSamples.length > 5) {
-      const validPressure = this.pressureSamples.filter(v => v > 30);
-      if (validPressure.length > 0) {
-        const baselinePressure = validPressure.reduce((a, b) => a + b, 0) / validPressure.length;
-        const pressureVariability = Math.sqrt(
-          validPressure.reduce((acc, val) => acc + Math.pow(val - baselinePressure, 2), 0) / 
-          validPressure.length
-        );
-        
-        console.log("VitalSignsProcessor: Calibración de presión arterial", {
-          muestras: validPressure.length,
-          nivelBase: baselinePressure.toFixed(1),
-          variabilidad: pressureVariability.toFixed(2)
-        });
-      }
-    }
     
     // Limpiar el temporizador de seguridad
     if (this.calibrationTimer) {
@@ -281,24 +223,6 @@ export class VitalSignsProcessor {
     return result;
   }
 
-  private calculateHemoglobin(ppgValues: number[]): number {
-    if (ppgValues.length < 50) return 0;
-    
-    // Calculate using real PPG data based on absorption characteristics
-    const peak = Math.max(...ppgValues);
-    const valley = Math.min(...ppgValues);
-    const ac = peak - valley;
-    const dc = ppgValues.reduce((a, b) => a + b, 0) / ppgValues.length;
-    
-    // Beer-Lambert law application for hemoglobin estimation
-    const ratio = ac / dc;
-    const baseHemoglobin = 12.5;
-    const hemoglobin = baseHemoglobin + (ratio - 1) * 2.5;
-    
-    // Clamp to physiologically relevant range
-    return Math.max(8, Math.min(18, Number(hemoglobin.toFixed(1))));
-  }
-
   public isCurrentlyCalibrating(): boolean {
     return this.isCalibrating;
   }
@@ -320,35 +244,29 @@ export class VitalSignsProcessor {
   }
 
   public reset(): VitalSignsResult | null {
-    this.spo2Processor.reset();
-    this.bpProcessor.reset();
-    this.arrhythmiaProcessor.reset();
-    this.signalProcessor.reset();
-    this.glucoseProcessor.reset();
-    this.lipidProcessor.reset();
-    this.isCalibrating = false;
-    
-    if (this.calibrationTimer) {
-      clearTimeout(this.calibrationTimer);
-      this.calibrationTimer = null;
-    }
-    
-    return this.lastValidResults;
-  }
-  
-  public getLastValidResults(): VitalSignsResult | null {
-    return this.lastValidResults;
+    const last = this.lastValidResults;
+    this.lastValidResults = null;
+    return last;
   }
   
   public fullReset(): void {
     this.lastValidResults = null;
+    this.spo2Samples = [];
+    this.pressureSamples = [];
+    this.heartRateSamples = [];
     this.isCalibrating = false;
-    
+    this.calibrationSamples = 0;
+    this.calibrationProgress = {
+      heartRate: 0,
+      spo2: 0,
+      pressure: 0,
+      arrhythmia: 0,
+      apnea: 0,
+      concussion: 0
+    };
     if (this.calibrationTimer) {
       clearTimeout(this.calibrationTimer);
       this.calibrationTimer = null;
     }
-    
-    this.reset();
   }
 }
