@@ -50,8 +50,15 @@ export class PPGProcessor {
   }
 
   private filterSignal(signal: number[]): number[] {
+    // Aplica el filtro de Kalman punto a punto y luego el filtro Savitzky-Golay de forma acumulativa
     const kalmanFiltered = signal.map(val => this.kalmanFilter.filter(val));
-    return this.sgFilter.filter(kalmanFiltered);
+    // El filtro SavitzkyGolayFilter espera un valor individual, así que aplicamos sobre cada punto
+    const sgFiltered: number[] = [];
+    this.sgFilter.reset();
+    for (const val of kalmanFiltered) {
+      sgFiltered.push(this.sgFilter.filter(val));
+    }
+    return sgFiltered;
   }
 
   private detectPeaks(signal: number[]): number[] {
@@ -78,7 +85,15 @@ export class PPGProcessor {
   }
 
   private assessSignalQuality(signal: number[], peaks: number[]): SignalQuality {
-    return this.validator.validateSignal(signal, peaks, this.samplingRate);
+    // El validador retorna un número, pero SignalQuality es un objeto.
+    // Aquí creamos un objeto SignalQuality usando el valor global como 'overall' y el resto como 0.
+    const overall = this.validator.validateSignal(signal, peaks, this.samplingRate);
+    return {
+      snr: 0,
+      stability: 0,
+      amplitude: 0,
+      regularity: 0,
+      overall
+    };
   }
-}
 }

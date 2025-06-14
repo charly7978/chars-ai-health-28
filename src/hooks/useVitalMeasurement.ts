@@ -3,146 +3,117 @@ import { PPGProcessor } from "../modules/signal-processing/PPGProcessor";
 import type { VitalSigns, SignalQuality } from "../modules/signal-processing/types";
 
 export function useVitalMeasurement() {
-	const [measurements, setMeasurements] = useState<VitalSigns[]>([]);
+	const [measurements, setMeasurements] = useState<VitalSigns>({
+		heartRate: 0,
+		confidence: 0,
+		quality: { snr: 0, stability: 0, amplitude: 0, regularity: 0, overall: 0 },
+		timestamp: Date.now(),
+	});
 	const [isProcessing, setIsProcessing] = useState(false);
 	const [quality, setQuality] = useState<SignalQuality | null>(null);
+	const [elapsedTime, setElapsedTime] = useState(0);
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const processorRef = useRef<PPGProcessor | null>(null);
+	const animationFrameId = useRef<number | null>(null);
+	const startTimeRef = useRef<number | null>(null);
+	const intervalRef = useRef<number | null>(null);
+
+	const MEASUREMENT_DURATION = 30000; // 30 segundos
 
 	useEffect(() => {
 		processorRef.current = new PPGProcessor();
+		return () => {
+			stopMeasurement();
+		};
 	}, []);
 
 	const initializeCamera = async () => {
-		// ...código para inicializar la cámara y asignar el stream a videoRef.current...
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: {
+					facingMode: "user",
+					width: { ideal: 640 },
+					height: { ideal: 480 },
+					frameRate: { ideal: 30 },
+				},
+			});
+			if (videoRef.current) {
+				videoRef.current.srcObject = stream;
+				await videoRef.current.play();
+			}
+		} catch (err) {
+			console.error("Error al acceder a la cámara:", err);
+			setIsProcessing(false);
+		}
 	};
 
 	const processFrame = () => {
-		if (!isProcessing || !videoRef.current || !canvasRef.current) return;
+		if (!isProcessing || !videoRef.current || !canvasRef.current || !processorRef.current) {
+			animationFrameId.current = null;
+			return;
+		}
+
 		const context = canvasRef.current.getContext("2d");
-		if (!context) return;
-		context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-		const frame = context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
-		const result = processorRef.current!.processFrame(frame);
-		setQuality(result.quality);
-		// ...actualizar measurements según corresponda...
-		requestAnimationFrame(processFrame);
+		if (context) {
+			canvasRef.current.width = videoRef.current.videoWidth;
+			canvasRef.current.height = videoRef.current.videoHeight;
+			context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+			const frame = context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+			const result = processorRef.current.processFrame(frame);
+
+			setQuality(result.quality);
+			setMeasurements((prev) => ({
+				...prev,
+				heartRate: result.bpm, // Asumiendo que PPGProcessor devuelve bpm
+				quality: result.quality,
+				timestamp: Date.now(),
+			}));
+		}
+		animationFrameId.current = requestAnimationFrame(processFrame);
 	};
 
 	const startMeasurement = async () => {
 		setIsProcessing(true);
+		setElapsedTime(0);
+		startTimeRef.current = Date.now();
 		await initializeCamera();
-		requestAnimationFrame(processFrame);
+		animationFrameId.current = requestAnimationFrame(processFrame);
+
+		intervalRef.current = window.setInterval(() => {
+			if (startTimeRef.current) {
+				const elapsed = Date.now() - startTimeRef.current;
+				setElapsedTime(elapsed);
+				if (elapsed >= MEASUREMENT_DURATION) {
+					stopMeasurement();
+				}
+			}
+		}, 1000); // Actualizar cada segundo
 	};
 
 	const stopMeasurement = () => {
 		setIsProcessing(false);
+		if (animationFrameId.current) {
+			cancelAnimationFrame(animationFrameId.current);
+		}
+		if (intervalRef.current) {
+			clearInterval(intervalRef.current);
+		}
+		if (videoRef.current && videoRef.current.srcObject) {
+			(videoRef.current.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+			videoRef.current.srcObject = null;
+		}
 	};
 
 	return {
 		measurements,
 		isProcessing,
 		quality,
+		elapsedTime,
 		videoRef,
 		canvasRef,
 		startMeasurement,
-		stopMeasurement
+		stopMeasurement,
+		isComplete: elapsedTime >= MEASUREMENT_DURATION,
 	};
 }
-    startMeasurement,
-    stopMeasurement: () => setIsProcessing(false)
-  };
-}
-    
-    const MEASUREMENT_DURATION = 30000;
-
-    const updateMeasurements = () => {
-      const processor = (window as any).heartBeatProcessor;
-      if (!processor) {
-        console.warn('VitalMeasurement: No se encontró el procesador', {
-          windowObject: Object.keys(window),
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
-
-      const bpm = processor.getFinalBPM() || 0;
-      console.log('useVitalMeasurement - Actualización detallada:', {
-        processor: !!processor,
-        processorType: processor ? typeof processor : 'undefined',
-        processorMethods: processor ? Object.getOwnPropertyNames(processor.__proto__) : [],
-        bpm,
-        rawBPM: processor.getFinalBPM(),
-        confidence: processor.getConfidence ? processor.getConfidence() : 'N/A',
-        timestamp: new Date().toISOString()
-      });
-
-      setMeasurements(prev => {
-        if (prev.heartRate === bpm) {
-          console.log('useVitalMeasurement - BPM sin cambios, no se actualiza', {
-            currentBPM: prev.heartRate,
-            timestamp: new Date().toISOString()
-          });
-          return prev;
-        }
-        
-        const newValues = {
-          ...prev,
-          heartRate: bpm
-        };
-        
-        console.log('useVitalMeasurement - Actualizando BPM', {
-          prevBPM: prev.heartRate,
-          newBPM: bpm,
-          timestamp: new Date().toISOString()
-        });
-        
-        return newValues;
-      });
-    };
-
-    updateMeasurements();
-
-    const interval = setInterval(() => {
-      const currentTime = Date.now();
-      const elapsed = currentTime - startTime;
-      
-      console.log('useVitalMeasurement - Progreso de medición', {
-        elapsed: elapsed / 1000,
-        porcentaje: (elapsed / MEASUREMENT_DURATION) * 100,
-        timestamp: new Date().toISOString()
-      });
-      
-      setElapsedTime(elapsed / 1000);
-
-      updateMeasurements();
-
-      if (elapsed >= MEASUREMENT_DURATION) {
-        console.log('useVitalMeasurement - Medición completada', {
-          duracionTotal: MEASUREMENT_DURATION / 1000,
-          resultadosFinal: {...measurements},
-          timestamp: new Date().toISOString()
-        });
-        
-        clearInterval(interval);
-        const event = new CustomEvent('measurementComplete');
-        window.dispatchEvent(event);
-      }
-    }, 200);
-
-    return () => {
-      console.log('useVitalMeasurement - Limpiando intervalo', {
-        currentElapsed: elapsedTime,
-        timestamp: new Date().toISOString()
-      });
-      clearInterval(interval);
-    };
-  }, [isMeasuring, measurements]);
-
-  return {
-    ...measurements,
-    elapsedTime: Math.min(elapsedTime, 30),
-    isComplete: elapsedTime >= 30
-  };
-};
