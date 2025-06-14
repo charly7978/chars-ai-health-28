@@ -14,9 +14,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"],
-  "files": [
-    "src/SignalQualityAnalyzer.ts",
-    "src/SignalProcessor.ts"
-  ]
+  "include": ["vite.config.ts"]
 }

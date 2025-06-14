@@ -65,7 +65,7 @@ export function useVitalMeasurement() {
 			setQuality(result.quality);
 			setMeasurements((prev) => ({
 				...prev,
-				heartRate: result.bpm, // Asumiendo que PPGProcessor devuelve bpm
+				heartRate: 0, // PPGProcessor no devuelve bpm directamente. Este valor debe ser calculado por VitalSignsProcessor o HeartBeatProcessor.
 				quality: result.quality,
 				timestamp: Date.now(),
 			}));
