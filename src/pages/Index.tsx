@@ -13,16 +13,20 @@ const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [signalQuality, setSignalQuality] = useState(0);
-  const [vitalSigns, setVitalSigns] = useState<VitalSignsResult>({
+  const [vitalSigns, setVitalSigns] = useState({
     spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
-    glucose: 0,
-    lipids: {
-      totalCholesterol: 0,
-      triglycerides: 0
+    apneaDetection: {
+      isDetected: false,
+      severity: 'none',
+      count: 0
     },
-    hemoglobin: 0
+    concussionAssessment: {
+      score: 0,
+      pupilResponseTime: 0,
+      pupilSize: 0
+    }
   });
   const [heartRate, setHeartRate] = useState(0);
   const [heartbeatSignal, setHeartbeatSignal] = useState(0);
@@ -225,9 +229,8 @@ const Index = () => {
         spo2: 0,
         pressure: 0,
         arrhythmia: 0,
-        glucose: 0,
-        lipids: 0,
-        hemoglobin: 0
+        apnea: 0,
+        concussion: 0
       }
     });
     
@@ -254,9 +257,8 @@ const Index = () => {
             spo2: Math.max(0, progressPercent - 10),
             pressure: Math.max(0, progressPercent - 20),
             arrhythmia: Math.max(0, progressPercent - 15),
-            glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 25),
-            hemoglobin: Math.max(0, progressPercent - 30)
+            apnea: Math.max(0, progressPercent - 5),
+            concussion: Math.max(0, progressPercent - 10)
           }
         });
       } else {
@@ -279,9 +281,8 @@ const Index = () => {
               spo2: 100,
               pressure: 100,
               arrhythmia: 100,
-              glucose: 100,
-              lipids: 100,
-              hemoglobin: 100
+              apnea: 100,
+              concussion: 100
             }
           });
           
@@ -309,9 +310,8 @@ const Index = () => {
             spo2: 100,
             pressure: 100,
             arrhythmia: 100,
-            glucose: 100,
-            lipids: 100,
-            hemoglobin: 100
+            apnea: 100,
+            concussion: 100
           }
         });
       }
@@ -369,12 +369,8 @@ const Index = () => {
       spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "--",
-      glucose: 0,
-      lipids: {
-        totalCholesterol: 0,
-        triglycerides: 0
-      },
-      hemoglobin: 0
+      apneaDetection: { isDetected: false, severity: 'none', count: 0 },
+      concussionAssessment: { score: 0, pupilResponseTime: 0, pupilSize: 0 }
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
@@ -652,21 +648,15 @@ const Index = () => {
                 highlighted={showResults}
               />
               <VitalSign 
-                label="HEMOGLOBINA"
-                value={vitalSigns.hemoglobin || "--"}
-                unit="g/dL"
+                label="APNEA"
+                value={vitalSigns.apneaDetection.isDetected ? "Sí" : "No"}
+                unit={vitalSigns.apneaDetection.severity}
                 highlighted={showResults}
               />
               <VitalSign 
-                label="GLUCOSA"
-                value={vitalSigns.glucose || "--"}
-                unit="mg/dL"
-                highlighted={showResults}
-              />
-              <VitalSign 
-                label="COLESTEROL/TRIGL."
-                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
-                unit="mg/dL"
+                label="CONMOCIÓN CEREBRAL"
+                value={vitalSigns.concussionAssessment.score || "--"}
+                unit="puntos"
                 highlighted={showResults}
               />
             </div>

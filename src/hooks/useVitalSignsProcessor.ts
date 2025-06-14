@@ -3,16 +3,15 @@ import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/Vi
 
 /**
  * Custom hook for processing vital signs with advanced algorithms
+ * Uses improved signal processing and detection based on medical research
+ */
+
+/**
+ * Custom hook for processing vital signs with advanced algorithms
  * Uses improved signal processing and arrhythmia detection based on medical research
  */
 export const useVitalSignsProcessor = () => {
-  // State and refs
-  const [processor] = useState(() => {
-    console.log("useVitalSignsProcessor: Creando nueva instancia", {
-      timestamp: new Date().toISOString()
-    });
-    return new VitalSignsProcessor();
-  });
+  const [processor] = useState(() => new VitalSignsProcessor());
   const [arrhythmiaCounter, setArrhythmiaCounter] = useState(0);
   const [lastValidResults, setLastValidResults] = useState<VitalSignsResult | null>(null);
   const lastArrhythmiaTime = useRef<number>(0);
@@ -111,13 +110,16 @@ export const useVitalSignsProcessor = () => {
       });
     }
     
-    // Si tenemos un resultado válido, guárdalo
-    if (result.spo2 > 0 && result.glucose > 0 && result.lipids.totalCholesterol > 0) {
+    // Validar si tenemos un resultado con todas las mediciones necesarias
+    if (result.spo2 > 0 && 
+        result.pressure && 
+        result.apneaDetection && 
+        result.concussionAssessment) {
       console.log("useVitalSignsProcessor: Resultado válido detectado", {
         spo2: result.spo2,
         presión: result.pressure,
-        glucosa: result.glucose,
-        lípidos: result.lipids,
+        apnea: result.apneaDetection,
+        conmoción: result.concussionAssessment,
         timestamp: new Date().toISOString()
       });
       
@@ -240,7 +242,9 @@ export const useVitalSignsProcessor = () => {
         arritmias: arrhythmiaCounter,
         últimosResultados: lastValidResults ? {
           spo2: lastValidResults.spo2,
-          presión: lastValidResults.pressure
+          presión: lastValidResults.pressure,
+          apnea: lastValidResults.apneaDetection,
+          conmoción: lastValidResults.concussionAssessment
         } : null
       },
       timestamp: new Date().toISOString()
@@ -252,6 +256,8 @@ export const useVitalSignsProcessor = () => {
         resultadosGuardados: {
           spo2: savedResults.spo2,
           presión: savedResults.pressure,
+          apnea: savedResults.apneaDetection,
+          conmoción: savedResults.concussionAssessment,
           estadoArritmia: savedResults.arrhythmiaStatus
         },
         timestamp: new Date().toISOString()
@@ -278,7 +284,9 @@ export const useVitalSignsProcessor = () => {
         arritmias: arrhythmiaCounter,
         últimosResultados: lastValidResults ? {
           spo2: lastValidResults.spo2,
-          presión: lastValidResults.pressure
+          presión: lastValidResults.pressure,
+          apnea: lastValidResults.apneaDetection,
+          conmoción: lastValidResults.concussionAssessment
         } : null,
         señalesProcesadas: processedSignals.current
       },

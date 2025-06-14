@@ -13,6 +13,16 @@ export interface ProcessedSignal {
     height: number;
   };
   perfusionIndex?: number;
+  apneaStatus?: {
+    isDetected: boolean;
+    severity: 'none' | 'mild' | 'moderate' | 'severe';
+    count: number;
+  };
+  concussionStatus?: {
+    score: number;
+    pupilResponseTime: number;
+    pupilSize: number;
+  };
 }
 
 export interface ProcessingError {
@@ -34,4 +44,20 @@ declare global {
   interface Window {
     heartBeatProcessor: HeartBeatProcessor;
   }
+}
+
+// Nuevas interfaces para las características específicas
+export interface ApneaDetectionResult {
+  isDetected: boolean;
+  severity: 'none' | 'mild' | 'moderate' | 'severe';
+  count: number;
+  breathingPattern: number[];
+}
+
+export interface ConcussionDetectionResult {
+  score: number;
+  pupilResponseTime: number;
+  pupilSize: number;
+  lightResponse: number;
+  symmetry: number;
 }

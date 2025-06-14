@@ -14,12 +14,16 @@ export interface VitalSignsResult {
     rmssd: number; 
     rrVariation: number; 
   } | null;
-  glucose: number;
-  lipids: {
-    totalCholesterol: number;
-    triglycerides: number;
+  apneaDetection: {
+    isDetected: boolean;
+    severity: 'none' | 'mild' | 'moderate' | 'severe';
+    count: number;
   };
-  hemoglobin: number;
+  concussionAssessment: {
+    score: number;
+    pupilResponseTime: number;
+    pupilSize: number;
+  };
   calibration?: {
     isCalibrating: boolean;
     progress: {
@@ -27,9 +31,8 @@ export interface VitalSignsResult {
       spo2: number;
       pressure: number;
       arrhythmia: number;
-      glucose: number;
-      lipids: number;
-      hemoglobin: number;
+      apnea: number;
+      concussion: number;
     };
   };
 }
@@ -41,6 +44,8 @@ export class VitalSignsProcessor {
   private signalProcessor: SignalProcessor;
   private glucoseProcessor: GlucoseProcessor;
   private lipidProcessor: LipidProcessor;
+  private apneaDetector: any;
+  private concussionDetector: any;
   
   private lastValidResults: VitalSignsResult | null = null;
   private isCalibrating: boolean = false;
@@ -52,19 +57,18 @@ export class VitalSignsProcessor {
   private spo2Samples: number[] = [];
   private pressureSamples: number[] = [];
   private heartRateSamples: number[] = [];
-  private glucoseSamples: number[] = [];
-  private lipidSamples: number[] = [];
+  private apneaSamples: number[] = [];
+  private concussionSamples: number[] = [];
   
   private calibrationProgress = {
     heartRate: 0,
     spo2: 0,
     pressure: 0,
     arrhythmia: 0,
-    glucose: 0,
-    lipids: 0,
-    hemoglobin: 0
+    apnea: 0,
+    concussion: 0
   };
-  
+
   private forceCompleteCalibration: boolean = false;
   private calibrationTimer: any = null;
 
@@ -75,6 +79,12 @@ export class VitalSignsProcessor {
     this.signalProcessor = new SignalProcessor();
     this.glucoseProcessor = new GlucoseProcessor();
     this.lipidProcessor = new LipidProcessor();
+    
+    // Inicializar detectores de apnea y conmoción cerebral
+    const { ApneaDetector } = require('../signal-processing/ApneaDetector');
+    const { ConcussionDetector } = require('../signal-processing/ConcussionDetector');
+    this.apneaDetector = new ApneaDetector();
+    this.concussionDetector = new ConcussionDetector();
   }
 
   /**
@@ -92,8 +102,6 @@ export class VitalSignsProcessor {
     this.spo2Samples = [];
     this.pressureSamples = [];
     this.heartRateSamples = [];
-    this.glucoseSamples = [];
-    this.lipidSamples = [];
     
     // Resetear progreso de calibración
     for (const key in this.calibrationProgress) {
@@ -207,12 +215,16 @@ export class VitalSignsProcessor {
         spo2: 0,
         pressure: "--/--",
         arrhythmiaStatus: "--",
-        glucose: 0,
-        lipids: {
-          totalCholesterol: 0,
-          triglycerides: 0
+        apneaDetection: {
+          isDetected: false,
+          severity: 'none',
+          count: 0
         },
-        hemoglobin: 0
+        concussionAssessment: {
+          score: 0,
+          pupilResponseTime: 0,
+          pupilSize: 0
+        }
       };
     }
 
@@ -234,23 +246,25 @@ export class VitalSignsProcessor {
     const bp = this.bpProcessor.calculateBloodPressure(ppgValues.slice(-60));
     const pressure = `${bp.systolic}/${bp.diastolic}`;
     
-    // Calcular niveles reales de glucosa a partir de las características del PPG
-    const glucose = this.glucoseProcessor.calculateGlucose(ppgValues);
-    
-    // El perfil lipídico (incluyendo colesterol y triglicéridos) se calcula usando el módulo lipid-processor
-    const lipids = this.lipidProcessor.calculateLipids(ppgValues);
-    
-    // Calcular hemoglobina real usando algoritmo optimizado
-    const hemoglobin = this.calculateHemoglobin(ppgValues);
+    // Procesar apnea y conmoción cerebral
+    const apneaResult = this.apneaDetector ? this.apneaDetector.processAudioBlock(ppgValues) : {
+      isDetected: false,
+      severity: 'none',
+      count: 0
+    };
+    const concussionResult = this.concussionDetector ? this.concussionDetector.processFrame(ppgValues) : {
+      score: 0,
+      pupilResponseTime: 0,
+      pupilSize: 0
+    };
 
     const result: VitalSignsResult = {
       spo2,
       pressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
       lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
-      glucose,
-      lipids,
-      hemoglobin
+      apneaDetection: apneaResult,
+      concussionAssessment: concussionResult
     };
     
     if (this.isCalibrating) {
@@ -260,7 +274,7 @@ export class VitalSignsProcessor {
       };
     }
     
-    if (spo2 > 0 && bp.systolic > 0 && bp.diastolic > 0 && glucose > 0 && lipids.totalCholesterol > 0) {
+    if (spo2 > 0 && bp.systolic > 0 && bp.diastolic > 0 && apneaResult && concussionResult) {
       this.lastValidResults = { ...result };
     }
 
