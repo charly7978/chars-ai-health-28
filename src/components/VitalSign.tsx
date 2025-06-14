@@ -28,14 +28,18 @@ const VitalSign = ({
         case 'SPO2':
           if (value < 95) return 'Hipoxemia';
           return '';
-        case 'HEMOGLOBINA':
-          if (value < 12) return 'Anemia';
-          if (value > 16) return 'Policitemia';
-          return '';
         case 'GLUCOSA':
           if (value > 126) return 'Hiperglucemia';
           if (value < 70) return 'Hipoglucemia';
           return '';
+        // Caso real para Apnea del sueño: suponemos "value" es el contador de eventos de apnea
+        case 'APNEA DEL SUEÑO':
+          if (typeof value === 'number' && value >= 2) return 'Apnea del sueño detectada';
+          return 'Normal';
+        // Caso real para Conmoción cerebral: suponemos "value" es un puntaje (0-100)
+        case 'CONMOCIÓN CEREBRAL':
+          if (typeof value === 'number' && value >= 30) return 'Posible conmoción cerebral';
+          return 'Normal';
         default:
           return '';
       }
@@ -54,19 +58,6 @@ const VitalSign = ({
             }
           }
           return '';
-        case 'COLESTEROL/TRIGL.':
-          const lipidParts = value.split('/');
-          if (lipidParts.length === 2) {
-            const cholesterol = parseInt(lipidParts[0], 10);
-            const triglycerides = parseInt(lipidParts[1], 10);
-            if (!isNaN(cholesterol)) {
-              if (cholesterol > 200) return 'Hipercolesterolemia';
-            }
-            if (!isNaN(triglycerides)) {
-              if (triglycerides > 150) return 'Hipertrigliceridemia';
-            }
-          }
-          return '';
         case 'ARRITMIAS':
           const arrhythmiaParts = value.split('|');
           if (arrhythmiaParts.length === 2) {
@@ -82,6 +73,7 @@ const VitalSign = ({
             }
           }
           return '';
+        // Se eliminan los casos 'HEMOGLOBINA' y 'COLESTEROL/TRIGL.'
         default:
           return '';
       }
@@ -145,10 +137,11 @@ const VitalSign = ({
   };
 
   const getMedianAndAverageInfo = (label: string, value: string | number) => {
+    // Para las nuevas mediciones no se muestra info de mediana/promedio
+    if (label === 'APNEA DEL SUEÑO' || label === 'CONMOCIÓN CEREBRAL') return null;
     if (label === 'SPO2' || label === 'GLUCOSA') return null;
-
+    
     let median, average, interpretation;
-
     if (typeof value === 'number') {
       switch(label) {
         case 'FRECUENCIA CARDÍACA':
@@ -159,15 +152,6 @@ const VitalSign = ({
             : value < 60 
               ? "Su frecuencia está por debajo del rango normal (60-100 BPM)."
               : "Su frecuencia está dentro del rango normal (60-100 BPM).";
-          break;
-        case 'HEMOGLOBINA':
-          median = 14;
-          average = 14.5;
-          interpretation = value < 12 
-            ? "Su nivel está por debajo del rango normal (12-16 g/dL)."
-            : value > 16 
-              ? "Su nivel está por encima del rango normal (12-16 g/dL)."
-              : "Su nivel está dentro del rango normal (12-16 g/dL).";
           break;
         default:
           return null;
@@ -186,25 +170,6 @@ const VitalSign = ({
               : (systolic < 90 || diastolic < 60)
                 ? "Su presión está por debajo del rango normal (>90/60 mmHg)."
                 : "Su presión está dentro del rango normal (90/60 - 140/90 mmHg).";
-          }
-          break;
-        case 'COLESTEROL/TRIGL.':
-          median = "180/130";
-          average = "175/120";
-          const lipidParts = value.split('/');
-          if (lipidParts.length === 2) {
-            const cholesterol = parseInt(lipidParts[0], 10);
-            const triglycerides = parseInt(lipidParts[1], 10);
-            interpretation = 
-              cholesterol > 200 
-                ? "Su nivel de colesterol está elevado (>200 mg/dL)." 
-                : "Su nivel de colesterol está dentro del rango normal (<200 mg/dL).";
-            
-            if (triglycerides > 150) {
-              interpretation += " Sus triglicéridos están elevados (>150 mg/dL).";
-            } else {
-              interpretation += " Sus triglicéridos están dentro del rango normal (<150 mg/dL).";
-            }
           }
           break;
         case 'ARRITMIAS':
@@ -270,6 +235,41 @@ const VitalSign = ({
       
       {isArrhytmia && getArrhythmiaDisplay(value)}
       
+      {calibrationProgress !== undefined && (
+        <div className="absolute inset-0 bg-transparent overflow-hidden pointer-events-none border-0">
+          <div 
+            className="h-full bg-blue-500/5 transition-all duration-300 ease-out"
+            style={{ width: `${calibrationProgress}%` }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-xs text-white/80">
+              {calibrationProgress < 100 ? `${Math.round(calibrationProgress)}%` : '✓'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {showDetails && medianAndAverage && (
+        <div className="absolute inset-x-0 top-full z-50 mt-2 p-4 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg text-left">
+          <div className="text-sm font-medium text-gray-900 mb-2">Información adicional:</div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="text-xs">
+              <span className="font-medium">Mediana:</span> {medianAndAverage.median} {unit}
+            </div>
+            <div className="text-xs">
+              <span className="font-medium">Promedio ponderado:</span> {medianAndAverage.average} {unit}
+            </div>
+          </div>
+          <div className="text-xs mt-1 text-gray-800">
+            {medianAndAverage.interpretation}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default VitalSign;
       {calibrationProgress !== undefined && (
         <div className="absolute inset-0 bg-transparent overflow-hidden pointer-events-none border-0">
           <div 
