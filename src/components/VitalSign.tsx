@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { parseArrhythmiaStatus, getArrhythmiaText, getArrhythmiaColor } from '@/utils/arrhythmiaUtils';
 
 interface VitalSignProps {
   label: string;
@@ -105,33 +106,12 @@ const VitalSign = ({
   const getArrhythmiaDisplay = (value: string | number) => {
     if (typeof value !== 'string') return null;
     
-    const arrhythmiaData = value.split('|');
-    if (arrhythmiaData.length !== 2) return null;
-    
-    const status = arrhythmiaData[0];
-    const count = arrhythmiaData[1];
-    
-    if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
-      return (
-        <div className="text-xl font-medium mt-2 text-[#ea384c]">
-          Arritmias: {count}
-        </div>
-      );
-    } else if (status === "SIN ARRITMIAS") {
-      return (
-        <div className="text-sm font-medium mt-2 text-green-500">
-          Normal
-        </div>
-      );
-    } else if (status === "CALIBRANDO...") {
-      return (
-        <div className="text-sm font-medium mt-2 text-blue-400">
-          Calibrando...
-        </div>
-      );
-    }
-    
-    return null;
+    const status = parseArrhythmiaStatus(value);
+    return (
+      <div className="text-sm font-medium mt-2" style={{ color: getArrhythmiaColor(status) }}>
+        {getArrhythmiaText(status)}
+      </div>
+    );
   };
 
   const getDetailedInfo = (label: string, value: string | number) => {

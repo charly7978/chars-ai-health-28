@@ -10,13 +10,9 @@ export const getQualityColor = (quality: number, isFingerDetected = true): strin
   return '#ff0000';
 };
 
-export const getQualityText = (quality: number, isFingerDetected = true): string => {
-  if (!isFingerDetected) return 'Sin señal';
-  if (quality >= 90) return 'Excelente';
-  if (quality >= 75) return 'Muy buena';
-  if (quality >= 60) return 'Buena';
-  if (quality >= 45) return 'Aceptable';
-  if (quality >= 30) return 'Regular';
-  if (quality >= 15) return 'Débil';
-  return 'Muy débil';
+export const getQualityText = (quality: number, isFingerDetected = true, context = 'default'): string => {
+  if (!isFingerDetected) return context === 'meter' ? 'Sin detección' : 'Sin señal';
+  if (quality > 75) return context === 'meter' ? 'Señal óptima' : 'Excelente';
+  if (quality > 50) return context === 'meter' ? 'Señal aceptable' : 'Buena';
+  return context === 'meter' ? 'Señal débil' : 'Regular';
 };
