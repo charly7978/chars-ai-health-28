@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Fingerprint, AlertCircle } from 'lucide-react';
 import { CircularBuffer, PPGDataPoint } from '../utils/CircularBuffer';
+import { getQualityColor } from '@/utils/qualityUtils';
 
 interface PPGSignalMeterProps {
   value: number;
@@ -68,13 +69,6 @@ const PPGSignalMeter = ({
       lastValueRef.current = null;
     }
   }, [preserveResults, isFingerDetected]);
-
-  const getQualityColor = useCallback((q: number) => {
-    if (!isFingerDetected) return 'from-gray-400 to-gray-500';
-    if (q > 75) return 'from-green-500 to-emerald-500';
-    if (q > 50) return 'from-yellow-500 to-orange-500';
-    return 'from-red-500 to-rose-500';
-  }, [isFingerDetected]);
 
   const getQualityText = useCallback((q: number) => {
     if (!isFingerDetected) return 'Sin detección';
