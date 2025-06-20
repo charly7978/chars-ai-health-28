@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
 
@@ -36,28 +35,9 @@ export const useHeartBeatProcessor = () => {
     
     processorRef.current = new HeartBeatProcessor();
     
-    if (typeof window !== 'undefined') {
-      (window as any).heartBeatProcessor = processorRef.current;
-      console.log('useHeartBeatProcessor: Processor registrado en window', {
-        processorRegistrado: !!(window as any).heartBeatProcessor,
-        timestamp: new Date().toISOString()
-      });
-
-      // Añadir evento para asegurar que el audio se inicialice correctamente
-      const initializeAudio = () => {
-        console.log('useHeartBeatProcessor: Inicializando audio por interacción del usuario');
-        if (processorRef.current) {
-          // Esto forzará la creación del contexto de audio
-          const dummyContext = new AudioContext();
-          dummyContext.resume().then(() => {
-            console.log('Audio context activated by user interaction');
-            dummyContext.close();
-          });
-        }
-      };
-      
-      document.body.addEventListener('click', initializeAudio, { once: true });
-      document.body.addEventListener('touchstart', initializeAudio, { once: true });
+    if (processorRef.current) {
+      // El contexto de audio se inicializa automáticamente al procesar señales
+      console.log('Audio listo para procesamiento');
     }
 
     return () => {
@@ -68,14 +48,6 @@ export const useHeartBeatProcessor = () => {
       
       if (processorRef.current) {
         processorRef.current = null;
-      }
-      
-      if (typeof window !== 'undefined') {
-        (window as any).heartBeatProcessor = undefined;
-        console.log('useHeartBeatProcessor: Processor eliminado de window', {
-          processorExiste: !!(window as any).heartBeatProcessor,
-          timestamp: new Date().toISOString()
-        });
       }
     };
   }, []);
