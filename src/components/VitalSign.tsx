@@ -28,19 +28,14 @@ const VitalSign = ({
         case 'SPO2':
           if (value < 95) return 'Hipoxemia';
           return '';
-        case 'APNEA DEL SUEÑO':
-          if (typeof value === 'boolean') {
-            return value ? 'Detectada' : 'Normal';
-          }
-          if (typeof value === 'number' && value > 0) {
-            return 'Detectada';
-          }
-          return 'Normal';
-        case 'CONMOCIÓN CEREBRAL':
-          if (value >= 30) return 'Riesgo Alto';
-          if (value >= 20) return 'Riesgo Moderado';
-          if (value > 10) return 'Riesgo Bajo';
-          return 'Normal';
+        case 'HEMOGLOBINA':
+          if (value < 12) return 'Anemia';
+          if (value > 16) return 'Policitemia';
+          return '';
+        case 'GLUCOSA':
+          if (value > 126) return 'Hiperglucemia';
+          if (value < 70) return 'Hipoglucemia';
+          return '';
         default:
           return '';
       }
@@ -49,21 +44,34 @@ const VitalSign = ({
     if (typeof value === 'string') {
       switch(label) {
         case 'PRESIÓN ARTERIAL':
-          const pressureData = value.split('/');
-          if (pressureData.length === 2) {
-            const systolic = parseInt(pressureData[0], 10);
-            const diastolic = parseInt(pressureData[1], 10);
+          const pressureParts = value.split('/');
+          if (pressureParts.length === 2) {
+            const systolic = parseInt(pressureParts[0], 10);
+            const diastolic = parseInt(pressureParts[1], 10);
             if (!isNaN(systolic) && !isNaN(diastolic)) {
               if (systolic >= 140 || diastolic >= 90) return 'Hipertensión';
               if (systolic < 90 || diastolic < 60) return 'Hipotensión';
             }
           }
           return '';
+        case 'COLESTEROL/TRIGL.':
+          const lipidParts = value.split('/');
+          if (lipidParts.length === 2) {
+            const cholesterol = parseInt(lipidParts[0], 10);
+            const triglycerides = parseInt(lipidParts[1], 10);
+            if (!isNaN(cholesterol)) {
+              if (cholesterol > 200) return 'Hipercolesterolemia';
+            }
+            if (!isNaN(triglycerides)) {
+              if (triglycerides > 150) return 'Hipertrigliceridemia';
+            }
+          }
+          return '';
         case 'ARRITMIAS':
-          const arrhythmiaData = value.split('|');
-          if (arrhythmiaData.length === 2) {
-            const status = arrhythmiaData[0];
-            const count = arrhythmiaData[1];
+          const arrhythmiaParts = value.split('|');
+          if (arrhythmiaParts.length === 2) {
+            const status = arrhythmiaParts[0];
+            const count = arrhythmiaParts[1];
             
             if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
               return `Arritmias: ${count}`;
@@ -84,21 +92,21 @@ const VitalSign = ({
 
   const getRiskColor = (riskLabel: string) => {
     switch(riskLabel) {
-      case 'Detectada':
-      case 'Riesgo Alto':
-        return 'text-[#ea384c]';
-      case 'Riesgo Moderado':
-        return 'text-[#F97316]';
-      case 'Riesgo Bajo':
-        return 'text-[#FCD34D]';
       case 'Taquicardia':
       case 'Hipoxemia':
+      case 'Hiperglucemia':
+      case 'Hipertensión':
+      case 'Hipercolesterolemia':
+      case 'Hipertrigliceridemia':
         return 'text-[#ea384c]';
       case 'Bradicardia':
+      case 'Hipoglucemia':
       case 'Hipotensión':
         return 'text-[#F97316]';
-      case 'Normal':
-        return 'text-green-500';
+      case 'Anemia':
+        return 'text-[#FEF7CD]';
+      case 'Policitemia':
+        return 'text-[#F2FCE2]';
       default:
         return '';
     }
@@ -110,7 +118,8 @@ const VitalSign = ({
     const arrhythmiaData = value.split('|');
     if (arrhythmiaData.length !== 2) return null;
     
-    const [status, count] = arrhythmiaData;
+    const status = arrhythmiaData[0];
+    const count = arrhythmiaData[1];
     
     if (status === "ARRITMIA DETECTADA" && parseInt(count) > 1) {
       return (
@@ -136,43 +145,93 @@ const VitalSign = ({
   };
 
   const getMedianAndAverageInfo = (label: string, value: string | number) => {
+    if (label === 'SPO2' || label === 'GLUCOSA') return null;
+
+    let median, average, interpretation;
+
     if (typeof value === 'number') {
       switch(label) {
         case 'FRECUENCIA CARDÍACA':
-          return {
-            median: "75",
-            average: "72",
-            interpretation: value > 100 
-              ? "Su frecuencia está por encima del rango normal (60-100 BPM)."
-              : value < 60 
-                ? "Su frecuencia está por debajo del rango normal (60-100 BPM)."
-                : "Su frecuencia está dentro del rango normal (60-100 BPM)."
-          };
-        case 'APNEA DEL SUEÑO':
-          return {
-            median: "0-5",
-            average: "2-3",
-            interpretation: value > 5 
-              ? "Número elevado de eventos de apnea detectados. Se recomienda consulta médica."
-              : value > 0
-                ? "Se detectaron algunos eventos de apnea. Monitoree su condición."
-                : "No se detectaron eventos significativos de apnea."
-          };
-        case 'CONMOCIÓN CEREBRAL':
-          return {
-            median: "5-15",
-            average: "10",
-            interpretation: value >= 30 
-              ? "Respuesta pupilar severamente alterada. Busque atención médica inmediata."
-              : value >= 20
-                ? "Respuesta pupilar moderadamente alterada. Se recomienda evaluación médica."
-                : "Respuesta pupilar dentro de rangos normales."
-          };
+          median = 75;
+          average = 72;
+          interpretation = value > 100 
+            ? "Su frecuencia está por encima del rango normal (60-100 BPM)."
+            : value < 60 
+              ? "Su frecuencia está por debajo del rango normal (60-100 BPM)."
+              : "Su frecuencia está dentro del rango normal (60-100 BPM).";
+          break;
+        case 'HEMOGLOBINA':
+          median = 14;
+          average = 14.5;
+          interpretation = value < 12 
+            ? "Su nivel está por debajo del rango normal (12-16 g/dL)."
+            : value > 16 
+              ? "Su nivel está por encima del rango normal (12-16 g/dL)."
+              : "Su nivel está dentro del rango normal (12-16 g/dL).";
+          break;
+        default:
+          return null;
+      }
+    } else if (typeof value === 'string') {
+      switch(label) {
+        case 'PRESIÓN ARTERIAL':
+          median = "120/80";
+          average = "118/78";
+          const pressureData = value.split('/');
+          if (pressureData.length === 2) {
+            const systolic = parseInt(pressureData[0], 10);
+            const diastolic = parseInt(pressureData[1], 10);
+            interpretation = (systolic >= 140 || diastolic >= 90)
+              ? "Su presión está por encima del rango normal (<140/90 mmHg)."
+              : (systolic < 90 || diastolic < 60)
+                ? "Su presión está por debajo del rango normal (>90/60 mmHg)."
+                : "Su presión está dentro del rango normal (90/60 - 140/90 mmHg).";
+          }
+          break;
+        case 'COLESTEROL/TRIGL.':
+          median = "180/130";
+          average = "175/120";
+          const lipidParts = value.split('/');
+          if (lipidParts.length === 2) {
+            const cholesterol = parseInt(lipidParts[0], 10);
+            const triglycerides = parseInt(lipidParts[1], 10);
+            interpretation = 
+              cholesterol > 200 
+                ? "Su nivel de colesterol está elevado (>200 mg/dL)." 
+                : "Su nivel de colesterol está dentro del rango normal (<200 mg/dL).";
+            
+            if (triglycerides > 150) {
+              interpretation += " Sus triglicéridos están elevados (>150 mg/dL).";
+            } else {
+              interpretation += " Sus triglicéridos están dentro del rango normal (<150 mg/dL).";
+            }
+          }
+          break;
+        case 'ARRITMIAS':
+          const arrhythmiaInfo = value.split('|');
+          if (arrhythmiaInfo.length === 2) {
+            const status = arrhythmiaInfo[0];
+            const count = arrhythmiaInfo[1];
+            
+            if (status === "ARRITMIA DETECTADA") {
+              median = "0";
+              average = "0-1";
+              interpretation = parseInt(count) > 3 
+                ? "Ha tenido varias arritmias. Considere consultar a un especialista."
+                : "Ha tenido algunas arritmias detectadas. Monitoree su condición.";
+            } else {
+              median = "0";
+              average = "0";
+              interpretation = "No se detectaron arritmias, lo cual es normal.";
+            }
+          }
+          break;
         default:
           return null;
       }
     }
-    return null;
+
+    return { median, average, interpretation };
   };
 
   const riskLabel = getRiskLabel(label, value);
@@ -188,7 +247,6 @@ const VitalSign = ({
     <div 
       className={cn(
         "relative flex flex-col justify-center items-center p-2 bg-transparent transition-all duration-500 text-center cursor-pointer",
-        highlighted && "animate-pulse",
         showDetails && "bg-gray-800/20 backdrop-blur-sm rounded-lg"
       )}
       onClick={handleClick}
@@ -231,10 +289,10 @@ const VitalSign = ({
           <div className="text-sm font-medium text-gray-900 mb-2">Información adicional:</div>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <div className="text-xs">
-              <span className="font-medium">Rango normal:</span> {medianAndAverage.median} {unit}
+              <span className="font-medium">Mediana:</span> {medianAndAverage.median} {unit}
             </div>
             <div className="text-xs">
-              <span className="font-medium">Promedio típico:</span> {medianAndAverage.average} {unit}
+              <span className="font-medium">Promedio ponderado:</span> {medianAndAverage.average} {unit}
             </div>
           </div>
           <div className="text-xs mt-1 text-gray-800">
