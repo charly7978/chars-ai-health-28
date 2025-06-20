@@ -11,7 +11,9 @@ export class FrameProcessor {
   private readonly RED_GAIN = 1.4; // Aumentado para mejor amplificación de señal roja (antes 1.2)
   private readonly GREEN_SUPPRESSION = 0.8; // Menos supresión para mantener información (antes 0.85)
   private readonly SIGNAL_GAIN = 1.3; // Aumentado para mejor detección (antes 1.1)
-  private readonly EDGE_ENHANCEMENT = 0.15; // Ajustado para mejor detección de bordes (antes 0.12)
+  private readonly EDGE_ENHANCEMENT = 0.18;  // Ajustado para mejor detección de bordes (antes 0.12)
+  private readonly MIN_RED_THRESHOLD = 0.25;  // Aumentado para reducir falsos positivos
+  private readonly RG_RATIO_RANGE = [0.9, 3.2];  // Rango más estricto para piel humana
   
   // Historia para calibración adaptativa
   private lastFrames: Array<{red: number, green: number, blue: number}> = [];
@@ -108,7 +110,7 @@ export class FrameProcessor {
         // Ganancia adaptativa basada en ratio r/g fisiológico - más permisiva
         const rgRatio = r / (g + 1); // Use raw r and g for this ratio
         // Ganancia reducida para ratios no fisiológicos pero más permisiva
-        const adaptiveGain = (rgRatio > 0.8 && rgRatio < 3.5) ? // Rango ampliado (antes 0.9-3.0)
+        const adaptiveGain = (rgRatio > this.RG_RATIO_RANGE[0] && rgRatio < this.RG_RATIO_RANGE[1]) ? // Rango ampliado (antes 0.9-3.0)
                            this.SIGNAL_GAIN : this.SIGNAL_GAIN * 0.8; // Penalización reducida
         
         redSum += enhancedR * adaptiveGain;
@@ -210,9 +212,9 @@ export class FrameProcessor {
       const avgHistRed = this.lastFrames.reduce((sum, frame) => sum + frame.red, 0) / this.lastFrames.length;
       
       // Ganancia moderada incluso para señales muy débiles
-      if (avgHistRed < 40 && avgHistRed > 10) { // Umbral reducido (antes 15)
+      if (avgHistRed < 40 && avgHistRed > this.MIN_RED_THRESHOLD) { // Umbral reducido (antes 15)
         dynamicGain = 1.3; // Ganancia aumentada (antes 1.2)
-      } else if (avgHistRed <= 10) { // Umbral reducido
+      } else if (avgHistRed <= this.MIN_RED_THRESHOLD) { // Umbral reducido
         // Very weak signal - likely no finger present
         dynamicGain = 1.1; // Algo de amplificación incluso con señal muy débil (antes 1.0)
       }
