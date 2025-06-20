@@ -175,26 +175,22 @@ export class SignalAnalyzer {
       + this.detectorScores.periodicity * 0.2;
     // Ajustar calidad penalizando artefactos de movimiento
     const compositeQualityAdj = compositeQualityRaw * (1 - this.motionArtifactScore);
-    // Normalizar calidad compuesta 0-1
-    const compositeQuality = Math.max(0, Math.min(1, compositeQualityAdj));
-    // Umbral mínimo para detección basado en calidad compuesta
-    const compositeThreshold = Math.max(this.adaptiveThreshold, 0.2);
+    const quality = Math.round(Math.max(0, Math.min(1, compositeQualityAdj)) * 100);
     // Umbrales de calidad para detección inicial
+    const qualityOn = this.adaptiveThreshold;
     const qualityOff = this.adaptiveThreshold * 0.5;
     // Umbrales adicionales para robustez en adquisición
     const stabilityOn = 0.4;
     const pulseOn = 0.3;
-    const biophysicalOn = 0.5;
     // Nuevo umbral de periodicidad para evitar detecciones sin pulso real
     const periodicityOn = 0.5;
     // Lógica de histeresis: adquisición vs mantenimiento
     if (!this.isCurrentlyDetected) {
-      // Detección inicial: calidad compuesta, tendencia estable, estabilidad, pulsatilidad, periodicidad y biophysical
-      if (compositeQuality > compositeThreshold && trendResult === 'stable' &&
+      // Detección inicial: calidad, tendencia válida, estabilidad, pulsatilidad y periodicidad
+      if (avgQuality > qualityOn && trendResult !== 'non_physiological' &&
           this.detectorScores.stability > stabilityOn &&
           this.detectorScores.pulsatility > pulseOn &&
-          this.detectorScores.periodicity > periodicityOn &&
-          this.detectorScores.biophysical > biophysicalOn) {
+          this.detectorScores.periodicity > periodicityOn) {
         this.consecutiveDetections++;
       } else {
         this.consecutiveDetections = 0;
@@ -222,7 +218,7 @@ export class SignalAnalyzer {
     }
     return {
       isFingerDetected: this.isCurrentlyDetected,
-      quality: Math.round(compositeQuality * 100),
+      quality,
       detectorDetails: {
         ...this.detectorScores,
         avgQuality,
