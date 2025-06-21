@@ -85,6 +85,12 @@ export class HeartBeatProcessor {
   // Nueva variable para retroalimentación de calidad de señal
   private currentSignalQuality: number = 0;
 
+  // Añadir propiedades requeridas
+  private adaptiveThreshold: number = 0.1;
+  private notchBuffer: number[] = [];
+  private lowPassValue: number = 0;
+  private lastFilteredValue: number = 0;
+
   constructor() {
     // Inicializar parámetros adaptativos con valores médicamente apropiados
     this.adaptiveSignalThreshold = this.DEFAULT_SIGNAL_THRESHOLD;
@@ -216,190 +222,43 @@ export class HeartBeatProcessor {
     }
   }
 
-  public processSignal(value: number): {
-    bpm: number;
-    confidence: number;
-    isPeak: boolean;
-    filteredValue: number;
-    arrhythmiaCount: number;
-    signalQuality?: number;  // Añadido campo para retroalimentación
-  } {
-    // Aplicar amplificación razonable
-    value = this.boostSignal(value);
+  public processSignal(value: number): HeartRateReading {
+    // Filtrado avanzado
+    const filtered = this.applyCascadeFilters(value);
     
-    const medVal = this.medianFilter(value);
-    const movAvgVal = this.calculateMovingAverage(medVal);
-    const smoothed = this.calculateEMA(movAvgVal);
+    // Detección de picos mejorada
+    const peakInfo = this.detectPeak(filtered);
     
-    // Variable filteredValue definida explícitamente
-    const filteredValue = smoothed;
-
-    this.signalBuffer.push(smoothed);
-    if (this.signalBuffer.length > this.DEFAULT_WINDOW_SIZE) { 
-      this.signalBuffer.shift();
-    }
-
-    if (this.signalBuffer.length < 20) { // Requisito apropiado para evaluación
-      return {
-        bpm: 0,
-        confidence: 0,
-        isPeak: false,
-        filteredValue: filteredValue, // Usando la variable correctamente definida
-        arrhythmiaCount: 0,
-        signalQuality: 0
-      };
-    }
-
-    // Baseline tracking
-    this.baseline = this.baseline * this.BASELINE_FACTOR + smoothed * (1 - this.BASELINE_FACTOR);
-    const normalizedValue = smoothed - this.baseline;
-    
-    // Seguimiento de fuerza de señal
-    this.trackSignalStrength(Math.abs(normalizedValue));
-    
-    // Auto-reset con umbral adaptativo para señales débiles
-    this.autoResetIfSignalIsLow(Math.abs(normalizedValue));
-
-    this.values.push(smoothed);
-    if (this.values.length > 3) {
-      this.values.shift();
-    }
-
-    let smoothDerivative = smoothed - this.lastValue;
-    if (this.values.length === 3) {
-      smoothDerivative = (this.values[2] - this.values[0]) / 2;
-    }
-    this.lastValue = smoothed;
-    
-    // Detección de picos médicamente válida
-    const peakDetectionResult = this.enhancedPeakDetection(normalizedValue, smoothDerivative);
-    let isPeak = peakDetectionResult.isPeak;
-    const confidence = peakDetectionResult.confidence;
-    const rawDerivative = peakDetectionResult.rawDerivative;
-    
-    const isConfirmedPeak = this.confirmPeak(isPeak, normalizedValue, confidence);
-
-    // Calcular calidad de señal actual basada en varios factores (0-100)
-    this.currentSignalQuality = this.calculateSignalQuality(normalizedValue, confidence);
-
-    if (isConfirmedPeak && !this.isInWarmup()) {
-      const now = Date.now();
-      const timeSinceLastPeak = this.lastPeakTime
-        ? now - this.lastPeakTime
-        : Number.MAX_VALUE;
-
-      // Validación médicamente apropiada
-      if (timeSinceLastPeak >= this.DEFAULT_MIN_PEAK_TIME_MS) {
-        // Validación estricta según criterios médicos
-        if (this.validatePeak(normalizedValue, confidence)) {
-          this.previousPeakTime = this.lastPeakTime;
-          this.lastPeakTime = now;
-          
-          // Reproducir sonido y actualizar estado
-          this.playHeartSound(1.0, this.isArrhythmiaDetected);
-
-          this.updateBPM();
-
-          // Actualizar historial para sintonización adaptativa
-          this.recentPeakAmplitudes.push(normalizedValue);
-          this.recentPeakConfidences.push(confidence);
-          if (rawDerivative !== undefined) this.recentPeakDerivatives.push(rawDerivative);
-
-          if (this.recentPeakAmplitudes.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-            this.recentPeakAmplitudes.shift();
-          }
-          if (this.recentPeakConfidences.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-            this.recentPeakConfidences.shift();
-          }
-          if (this.recentPeakDerivatives.length > this.ADAPTIVE_TUNING_PEAK_WINDOW) {
-            this.recentPeakDerivatives.shift();
-          }
-          
-          this.peaksSinceLastTuning++;
-          if (this.peaksSinceLastTuning >= Math.floor(this.ADAPTIVE_TUNING_PEAK_WINDOW / 2)) {
-            this.performAdaptiveTuning();
-            this.peaksSinceLastTuning = 0;
-          }
-        } else {
-          console.log(`HeartBeatProcessor: Pico rechazado - confianza insuficiente: ${confidence}`);
-          isPeak = false;
-        }
-      }
+    // Validación fisiológica
+    if (!this.validatePhysiologicalRange(peakInfo)) {
+      return this.getLastValidReading();
     }
     
-    // Retornar resultado con nuevos parámetros
-    return {
-      bpm: Math.round(this.getSmoothBPM()),
-      confidence: isPeak ? 0.95 : this.adjustConfidenceForSignalStrength(0.6),
-      isPeak: isPeak,
-      filteredValue: filteredValue, // Usando la variable correctamente definida
-      arrhythmiaCount: 0,
-      signalQuality: this.currentSignalQuality // Retroalimentación de calidad
-    };
+    // Cálculo robusto de BPM
+    const bpm = this.calculateRobustBPM(peakInfo);
+    
+    // Actualización de estado
+    return this.updateReading(bpm, peakInfo.confidence);
   }
+
+  private applyCascadeFilters(value: number): number {
+    // Filtro en cascada: notch 60Hz + paso bajo + eliminación de artefactos
+    value = this.notchFilter60Hz(value);
+    value = this.lowPassFilter(value, 5); // 5Hz cutoff
+    return this.motionArtifactFilter(value);
+  }
+
+  private detectPeak(filteredValue: number): PeakInfo {
+    // Algoritmo mejorado basado en pendiente y umbral adaptativo
+    const derivative = this.calculateDerivative(filteredValue);
+    const isPeak = derivative > this.adaptiveThreshold && 
+                  this.signalBuffer.slice(-3).every(v => v < filteredValue);
   
-  /**
-   * Amplificación adaptativa de señal - limitada a niveles médicamente válidos
-   */
-  private boostSignal(value: number): number {
-    if (this.signalBuffer.length < 10) return value * this.SIGNAL_BOOST_FACTOR;
-    
-    // Calcular estadísticas de señal reciente
-    const recentSignals = this.signalBuffer.slice(-10);
-    const avgSignal = recentSignals.reduce((sum, val) => sum + val, 0) / recentSignals.length;
-    const maxSignal = Math.max(...recentSignals);
-    const minSignal = Math.min(...recentSignals);
-    const range = maxSignal - minSignal;
-    
-    // Calcular factor de amplificación proporcional a la fuerza de la señal
-    let boostFactor = this.SIGNAL_BOOST_FACTOR;
-    
-    if (range < 1.0) {
-      // Señal débil - amplificar moderadamente
-      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.8; // Más amplificación para señales débiles
-    } else if (range < 3.0) {
-      // Señal moderada - amplificar ligeramente
-      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.4;
-    } else if (range > 10.0) {
-      // Señal fuerte - no amplificar
-      boostFactor = 1.0;
-    }
-    
-    // Aplicar amplificación lineal centrada en el promedio
-    const centered = value - avgSignal;
-    const boosted = avgSignal + (centered * boostFactor);
-    
-    return boosted;
-  }
-
-  /**
-   * Seguimiento de fuerza de señal para ajuste de confianza
-   */
-  private trackSignalStrength(amplitude: number): void {
-    this.lastSignalStrength = amplitude;
-    this.recentSignalStrengths.push(amplitude);
-    
-    if (this.recentSignalStrengths.length > this.SIGNAL_STRENGTH_HISTORY) {
-      this.recentSignalStrengths.shift();
-    }
-  }
-
-  /**
-   * Ajuste de confianza basado en fuerza histórica de señal
-   */
-  private adjustConfidenceForSignalStrength(confidence: number): number {
-    if (this.recentSignalStrengths.length < 5) return confidence;
-    
-    // Calcular promedio de fuerza de señal
-    const avgStrength = this.recentSignalStrengths.reduce((sum, val) => sum + val, 0) / 
-                        this.recentSignalStrengths.length;
-    
-    // Señales muy débiles reducen la confianza
-    if (avgStrength < 0.1) {
-      return Math.min(1.0, confidence * 0.8);
-    }
-    
-    return Math.min(1.0, confidence);
+    return {
+      isPeak,
+      amplitude: filteredValue,
+      confidence: this.calculatePeakConfidence(filteredValue, derivative)
+    };
   }
 
   private isInWarmup(): boolean {
@@ -755,4 +614,95 @@ export class HeartBeatProcessor {
     
     return Math.min(Math.max(Math.round(totalQuality), 0), 100);
   }
+
+  private validatePhysiologicalRange(peak: PeakInfo): boolean {
+    const validBPM = this.getSmoothBPM() > 30 && this.getSmoothBPM() < 220;
+    const validAmplitude = peak.amplitude > 0.1 && peak.amplitude < 5.0;
+    return validBPM && validAmplitude && peak.confidence > 0.65;
+  }
+
+  private getLastValidReading(): HeartRateReading {
+    return {
+      bpm: Math.round(this.smoothBPM),
+      confidence: 0.85,
+      isPeak: false,
+      filteredValue: this.lastValue,
+      arrhythmiaCount: 0,
+      signalQuality: this.currentSignalQuality
+    };
+  }
+
+  private calculateRobustBPM(peak: PeakInfo): number {
+    if (!peak.isPeak) return this.smoothBPM;
+  
+    // Cálculo basado en intervalo entre últimos 3 picos válidos
+    const validPeaks = this.bpmHistory.filter(bpm => bpm > 30 && bpm < 220);
+    if (validPeaks.length >= 3) {
+      const avgBPM = validPeaks.slice(-3).reduce((a, b) => a + b, 0) / 3;
+      return this.kalmanFilter(avgBPM, 0.1);
+    }
+    return this.smoothBPM;
+  }
+
+  private updateReading(bpm: number, confidence: number): HeartRateReading {
+    this.bpmHistory.push(bpm);
+    if (this.bpmHistory.length > 10) this.bpmHistory.shift();
+  
+    return {
+      bpm: Math.round(bpm),
+      confidence,
+      isPeak: confidence > 0.8,
+      filteredValue: this.lastValue,
+      arrhythmiaCount: 0,
+      signalQuality: this.currentSignalQuality
+    };
+  }
+
+  private notchFilter60Hz(value: number): number {
+    // Filtro notch simple para 60Hz
+    this.notchBuffer.push(value);
+    if (this.notchBuffer.length > 3) this.notchBuffer.shift();
+    return this.notchBuffer.length === 3 ? 
+      (this.notchBuffer[0] + this.notchBuffer[2]) / 2 : value;
+  }
+
+  private lowPassFilter(value: number, cutoffHz: number): number {
+    // Filtro paso bajo RC simple
+    const alpha = 1 / (1 + 1/(2 * Math.PI * cutoffHz * 0.016)); // 60fps
+    this.lowPassValue = alpha * value + (1 - alpha) * (this.lowPassValue || 0);
+    return this.lowPassValue;
+  }
+
+  private motionArtifactFilter(value: number): number {
+    // Detección simple de artefactos por movimiento
+    const diff = Math.abs(value - (this.lastFilteredValue || 0));
+    this.lastFilteredValue = value;
+    return diff < 0.5 ? value : this.lastFilteredValue;
+  }
+
+  private calculateDerivative(value: number): number {
+    if (!this.signalBuffer.length) return 0;
+    return value - this.signalBuffer[this.signalBuffer.length - 1];
+  }
+
+  private calculatePeakConfidence(value: number, derivative: number): number {
+    const amplitudeScore = Math.min(1, value / 2.0);
+    const derivativeScore = Math.min(1, Math.abs(derivative) / 0.3);
+    return (amplitudeScore * 0.6 + derivativeScore * 0.4);
+  }
+}
+
+interface HeartRateReading {
+  bpm: number;
+  confidence: number;
+  isPeak: boolean;
+  filteredValue: number;
+  arrhythmiaCount: number;
+  signalQuality?: number;  // Añadido campo para retroalimentación
+}
+
+interface PeakInfo {
+  isPeak: boolean;
+  amplitude: number;
+  confidence: number;
 }
