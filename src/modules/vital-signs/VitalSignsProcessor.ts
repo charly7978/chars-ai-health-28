@@ -357,98 +357,144 @@ export interface BiometricReading {
 }
 
 export class AdvancedVitalSignsProcessor {
-  private readonly WINDOW_SIZE = 256; // Muestras
-  private readonly FS = 60; // Frecuencia de muestreo (Hz)
-  private readonly pressureCalibration = 0.5; // Factor de calibración
+  private FS = 60; // Frecuencia de muestreo (Hz)
+  private WINDOW_SIZE = 256; // Muestras por ventana
+  private sampleRate = 1000 / this.FS;
   
+  // Buffers circulares para procesamiento continuo
   private redBuffer: number[] = [];
   private irBuffer: number[] = [];
   private greenBuffer: number[] = [];
   
+  // Método principal unificado
   processSignal(signal: PPGSignal): BiometricReading | null {
-    // Validación básica de señal
-    if (signal.red.length === 0 || signal.ir.length === 0) {
-      return null;
+    // 1. Validación y preprocesamiento
+    if (!signal || signal.red.length === 0) return null;
+    
+    // 2. Actualizar buffers con solapamiento del 50%
+    this.updateBuffers(signal);
+    
+    // 3. Procesar solo cuando tengamos ventana completa
+    if (this.redBuffer.length >= this.WINDOW_SIZE) {
+      const windowRed = this.redBuffer.slice(0, this.WINDOW_SIZE);
+      const windowIR = this.irBuffer.slice(0, this.WINDOW_SIZE);
+      const windowGreen = this.greenBuffer.slice(0, this.WINDOW_SIZE);
+      
+      // 4. Cálculos biométricos paralelizados
+      const [hr, hrv] = this.calculateCardiacMetrics(windowRed);
+      const spo2 = this.calculateSpO2(windowRed, windowIR);
+      const {sbp, dbp} = this.calculateBloodPressure(windowRed, windowGreen);
+      const glucose = this.estimateGlucose(windowRed, windowIR, windowGreen);
+      
+      // 5. Validación médica de resultados
+      if (!this.validateResults(hr, spo2, sbp, dbp, glucose)) {
+        return null;
+      }
+      
+      // 6. Calcular confianza de medición
+      const confidence = this.calculateConfidence(windowRed, windowIR);
+      
+      return { hr, hrv, spo2, sbp, dbp, glucose, confidence };
     }
     
-    // 1. Filtrado y preprocesamiento
-    const filteredRed = this.applyBandpassFilter(signal.red);
-    const filteredIR = this.applyBandpassFilter(signal.ir);
-    const filteredGreen = this.applyBandpassFilter(signal.green);
+    return null;
+  }
+  
+  private updateBuffers(signal: PPGSignal): void {
+    // Implementación de buffer circular con solapamiento
+    this.redBuffer = [...this.redBuffer, ...signal.red];
+    this.irBuffer = [...this.irBuffer, ...signal.ir];
+    this.greenBuffer = [...this.greenBuffer, ...signal.green];
     
-    // 2. Análisis espectral avanzado
-    const { dominantFreq, spectralPower } = this.spectralAnalysis(filteredRed);
+    // Mantener solo el 150% del tamaño de ventana
+    const maxBuffer = Math.floor(this.WINDOW_SIZE * 1.5);
+    if (this.redBuffer.length > maxBuffer) {
+      const removeCount = this.redBuffer.length - this.WINDOW_SIZE/2;
+      this.redBuffer = this.redBuffer.slice(removeCount);
+      this.irBuffer = this.irBuffer.slice(removeCount);
+      this.greenBuffer = this.greenBuffer.slice(removeCount);
+    }
+  }
+  
+  private calculateCardiacMetrics(signal: number[]): [number, number] {
+    const peaks = this.findPeaks(signal);
     
-    // 3. Cálculos biométricos
-    const hr = this.calculateHRFromPeaks(filteredRed);
-    const spo2 = this.calculateSpO2(filteredRed, filteredIR);
-    const {sbp, dbp} = this.calculateBloodPressure(filteredRed, filteredGreen);
-    const glucose = this.estimateGlucoseLevel(filteredRed, filteredIR, filteredGreen);
-    const hrv = this.calculateHRV(filteredRed);
+    // Cálculo de frecuencia cardíaca
+    const hr = peaks.length >= 2 
+      ? 60 / ((peaks[1] - peaks[0]) / this.FS)
+      : 0;
     
-    // 4. Validación fisiológica
-    if (!this.validatePhysiologicalRanges(hr, spo2, sbp, dbp, glucose)) {
-      return null;
+    // Cálculo de HRV (RMSSD)
+    let hrv = 0;
+    if (peaks.length >= 3) {
+      const intervals = [];
+      for (let i = 1; i < peaks.length; i++) {
+        intervals.push((peaks[i] - peaks[i-1]) / this.FS * 1000);
+      }
+      
+      let sumSquaredDiffs = 0;
+      for (let i = 1; i < intervals.length; i++) {
+        sumSquaredDiffs += Math.pow(intervals[i] - intervals[i-1], 2);
+      }
+      hrv = Math.sqrt(sumSquaredDiffs / (intervals.length - 1));
     }
     
+    return [Math.round(hr), hrv];
+  }
+
+  private calculateSpO2(red: number[], ir: number[]): number {
+    const redACDC = this.calculateACDC(red);
+    const irACDC = this.calculateACDC(ir);
+    
+    const R = (redACDC.ac/redACDC.dc) / (irACDC.ac/irACDC.dc);
+    return Math.max(70, Math.min(100, 110 - 25 * R));
+  }
+
+  private calculateBloodPressure(red: number[], green: number[]): { sbp: number, dbp: number } {
+    const redPeaks = this.findPeaks(red);
+    const greenPeaks = this.findPeaks(green);
+    
+    if (redPeaks.length < 2 || greenPeaks.length < 2) {
+      return { sbp: 0, dbp: 0 };
+    }
+    
+    const pat = (greenPeaks[1] - redPeaks[1]) / this.FS * 1000;
     return {
-      spo2,
-      hr,
-      hrv,
-      sbp,
-      dbp,
-      glucose,
-      confidence: this.calculateConfidence(spectralPower, signal)
+      sbp: Math.max(80, Math.min(180, 125 - (0.45 * pat))),
+      dbp: Math.max(50, Math.min(120, 80 - (0.30 * pat)))
     };
   }
 
-  private applyBandpassFilter(signal: number[]): number[] {
-    // Filtro Butterworth pasa-banda (0.5Hz - 5Hz)
-    const fs = this.FS;
-    const lowCut = 0.5; // Hz
-    const highCut = 5.0; // Hz
-    
-    // Coeficientes precalculados para filtro de 4to orden
-    const filtered = signal.map((_, i) => {
-      if (i < 4) return signal[i];
-      
-      // Implementación del filtro IIR
-      return 0.2066 * signal[i] + 
-             0.4132 * signal[i-1] + 
-             0.2066 * signal[i-2] -
-             0.3695 * signal[i-3] +
-             0.1958 * signal[i-4];
-    });
-    
-    return filtered;
+  private estimateGlucose(red: number[], ir: number[], green: number[]): number {
+    const ratio1 = this.calculateACDC(red).ac / this.calculateACDC(ir).ac;
+    const ratio2 = this.calculateACDC(green).dc / this.calculateACDC(red).dc;
+    return Math.max(50, Math.min(300, 90 + (ratio1 * 15) - (ratio2 * 8)));
   }
 
-  private spectralAnalysis(signal: number[]): { dominantFreq: number, spectralPower: number } {
-    // FFT con ventana de Blackman-Harris
-    const N = signal.length;
-    const windowed = signal.map((x, i) => 
-      x * (0.35875 - 0.48829*Math.cos(2*Math.PI*i/N) + 
-           0.14128*Math.cos(4*Math.PI*i/N) - 0.01168*Math.cos(6*Math.PI*i/N))
+  private validateResults(hr: number, spo2: number, sbp: number, dbp: number, glucose: number): boolean {
+    return (
+      hr >= 40 && hr <= 180 &&
+      spo2 >= 70 && spo2 <= 100 &&
+      sbp >= 80 && sbp <= 180 &&
+      dbp >= 50 && dbp <= 120 &&
+      glucose >= 50 && glucose <= 300 &&
+      sbp > dbp && (sbp - dbp) >= 20 &&
+      (hr > 60 || spo2 > 90)
     );
-    
-    // Encontrar frecuencia dominante
-    let maxPower = 0;
-    let dominantFreq = 0;
-    
-    for (let k = 1; k < N/2; k++) {
-      const power = Math.sqrt(windowed[k] ** 2 + windowed[N-k] ** 2);
-      if (power > maxPower) {
-        maxPower = power;
-        dominantFreq = k * (this.FS / N);
-      }
-    }
-    
-    return { dominantFreq, spectralPower: maxPower };
   }
 
-  private calculateHRFromPeaks(signal: number[]): number {
-    // Detección de picos con umbral adaptativo
-    const threshold = 0.6 * Math.max(...signal);
+  private calculateConfidence(red: number[], ir: number[]): number {
+    const redACDC = this.calculateACDC(red);
+    const irACDC = this.calculateACDC(ir);
+    
+    const perfusionIndex = (redACDC.ac / redACDC.dc) * 100;
+    const snr = 20 * Math.log10(redACDC.ac / (redACDC.dc * 0.1));
+    
+    return (Math.min(1, perfusionIndex/5) * 0.6 + Math.min(1, Math.max(0, (snr+10)/30)) * 0.4);
+  }
+
+  private findPeaks(signal: number[]): number[] {
+    const threshold = 0.5 * Math.max(...signal);
     const peaks: number[] = [];
     
     for (let i = 2; i < signal.length - 2; i++) {
@@ -461,114 +507,7 @@ export class AdvancedVitalSignsProcessor {
       }
     }
     
-    if (peaks.length < 2) return 0;
-    
-    // Cálculo de BPM basado en intervalos
-    const intervals = [];
-    for (let i = 1; i < peaks.length; i++) {
-      intervals.push((peaks[i] - peaks[i-1]) / this.FS * 60);
-    }
-    
-    // Mediana de los últimos 5 intervalos
-    const sorted = [...intervals].sort((a,b) => a - b);
-    const median = sorted[Math.floor(sorted.length/2)];
-    
-    return median;
-  }
-
-  private calculateSpO2(red: number[], ir: number[]): number {
-    // Cálculo basado en Beer-Lambert (protocolo médico)
-    const redACDC = this.calculateACDC(red);
-    const irACDC = this.calculateACDC(ir);
-    
-    const R = (redACDC.ac/redACDC.dc) / (irACDC.ac/irACDC.dc);
-    const spo2 = 110 - 25 * R; // Fórmula empírica
-    
-    return Math.max(70, Math.min(100, spo2)); // Rango válido
-  }
-
-  private calculateBloodPressure(red: number[], green: number[]): { sbp: number, dbp: number } {
-    // Modelo Pulse Transit Time (PTT)
-    const redPeaks = this.findPeaks(red);
-    const greenPeaks = this.findPeaks(green);
-    
-    if (redPeaks.length < 2 || greenPeaks.length < 2) return { sbp: 0, dbp: 0 };
-    
-    // Calcular PAT (Pulse Arrival Time)
-    const pat = (greenPeaks[1] - redPeaks[1]) / this.FS * 1000; // ms
-    
-    // Fórmulas empíricas basadas en estudios clínicos
-    const sbp = 125 - (0.45 * pat);
-    const dbp = 80 - (0.30 * pat);
-    
-    return {
-      sbp: Math.max(80, Math.min(180, sbp)),
-      dbp: Math.max(50, Math.min(120, dbp))
-    };
-  }
-
-  private estimateGlucoseLevel(red: number[], ir: number[], green: number[]): number {
-    // Modelo óptico no invasivo (NIR spectroscopy)
-    const ratio1 = this.calculateACDC(red).ac / this.calculateACDC(ir).ac;
-    const ratio2 = this.calculateACDC(green).dc / this.calculateACDC(red).dc;
-    
-    // Fórmula empírica basada en calibración
-    const glucose = 90 + (ratio1 * 15) - (ratio2 * 8);
-    
-    return Math.max(50, Math.min(300, glucose)); // Rango válido
-  }
-
-  private calculateHRV(signal: number[]): number {
-    // RMSSD (Root Mean Square of Successive Differences)
-    const peaks = this.findPeaks(signal);
-    if (peaks.length < 3) return 0;
-    
-    const intervals = [];
-    for (let i = 1; i < peaks.length; i++) {
-      intervals.push((peaks[i] - peaks[i-1]) / this.FS * 1000); // ms
-    }
-    
-    let sumSquaredDiffs = 0;
-    for (let i = 1; i < intervals.length; i++) {
-      sumSquaredDiffs += Math.pow(intervals[i] - intervals[i-1], 2);
-    }
-    
-    return Math.sqrt(sumSquaredDiffs / (intervals.length - 1));
-  }
-
-  private validatePhysiologicalRanges(
-    hr: number, 
-    spo2: number, 
-    sbp: number, 
-    dbp: number, 
-    glucose: number
-  ): boolean {
-    // Rangos fisiológicos plausibles
-    const validHR = hr >= 40 && hr <= 180;
-    const validSpO2 = spo2 >= 70 && spo2 <= 100;
-    const validBP = sbp >= 80 && sbp <= 180 && dbp >= 50 && dbp <= 120;
-    const validGlucose = glucose >= 50 && glucose <= 300;
-    
-    // Coherencia entre mediciones
-    const coherentBP = sbp > dbp && (sbp - dbp) >= 20;
-    const coherentHR = hr > 60 || spo2 > 90; // Bradicardia requiere buena oxigenación
-    
-    return validHR && validSpO2 && validBP && validGlucose && coherentBP && coherentHR;
-  }
-
-  private calculateConfidence(spectralPower: number, signal: PPGSignal): number {
-    // Índice de perfusión y relación señal-ruido
-    const redACDC = this.calculateACDC(signal.red);
-    const irACDC = this.calculateACDC(signal.ir);
-    
-    const perfusionIndex = (redACDC.ac / redACDC.dc) * 100;
-    const snr = 20 * Math.log10(spectralPower / (redACDC.dc * 0.1));
-    
-    // Factores de calidad
-    const piScore = Math.min(1, perfusionIndex / 5); // 5% es buen PI
-    const snrScore = Math.min(1, Math.max(0, (snr + 10) / 30)); // SNR > 20dB es bueno
-    
-    return (piScore * 0.6 + snrScore * 0.4); // Ponderación
+    return peaks;
   }
 
   private calculateACDC(signal: number[]): { ac: number, dc: number } {
@@ -577,20 +516,5 @@ export class AdvancedVitalSignsProcessor {
       signal.reduce((sum, val) => sum + Math.pow(val - dc, 2), 0) / signal.length
     );
     return { ac, dc };
-  }
-
-  private findPeaks(signal: number[]): number[] {
-    const threshold = 0.5 * Math.max(...signal);
-    const peaks: number[] = [];
-    
-    for (let i = 2; i < signal.length - 2; i++) {
-      if (signal[i] > threshold &&
-          signal[i] > signal[i-1] &&
-          signal[i] > signal[i+1]) {
-        peaks.push(i);
-      }
-    }
-    
-    return peaks;
   }
 }
