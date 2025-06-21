@@ -1,33 +1,66 @@
 // ppgProcessor.worker.ts
 export default {} as typeof Worker & { new (): Worker };
 
-const ctx: Worker = self as any;
-
-const cache = new Map<string, {red: number[], green: number[], blue: number[]}>();
-
-ctx.onmessage = (e) => {
-  const { frameData, width, height } = e.data;
-  
-  // Implementar aquí processRealFrame optimizado
-  const result = processFrame(frameData, width, height);
-  
-  ctx.postMessage(result);
+// Tipos para comunicación con el worker
+type WorkerMessage = {
+  frameData: Uint8ClampedArray;
+  width: number;
+  height: number;
 };
 
-function processFrame(frameData: Uint8ClampedArray, width: number, height: number) {
-  const cacheKey = `${width}x${height}`;
+type ProcessedResult = {
+  red: number[];
+  green: number[];
+  ir: number[];
+  timestamp: number;
+};
+
+const ctx: Worker = self as any;
+
+// Cache para frames
+const frameCache: {
+  red: number[];
+  green: number[];
+  ir: number[];
+  timestamp: number;
+} = {
+  red: [],
+  green: [],
+  ir: [],
+  timestamp: 0
+};
+
+// Procesamiento optimizado de frames
+const processFrame = (frameData: Uint8ClampedArray, width: number): ProcessedResult => {
+  const now = Date.now();
+  const pixelsPerChannel = width * 10; // Muestra cada 10px para optimizar
   
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey)!;
+  for (let i = 0; i < frameData.length; i += 4 * pixelsPerChannel) {
+    frameCache.red.push(frameData[i]);     // Canal R
+    frameCache.green.push(frameData[i+1]); // Canal G
+    frameCache.ir.push(frameData[i+2]);    // Canal IR (si está disponible)
   }
   
-  // Procesamiento normal
-  const result = {
-    red: [],
-    green: [],
-    blue: []
-  };
+  frameCache.timestamp = now;
   
-  cache.set(cacheKey, result);
-  return result;
-}
+  // Enviar datos cada 10 frames para reducir carga
+  if (frameCache.red.length >= 10 * width) {
+    const result = { ...frameCache };
+    frameCache.red = [];
+    frameCache.green = [];
+    frameCache.ir = [];
+    return result;
+  }
+  
+  return null;
+};
+
+// Handler de mensajes
+ctx.onmessage = (e: MessageEvent<WorkerMessage>) => {
+  const { frameData, width } = e.data;
+  const result = processFrame(frameData, width);
+  
+  if (result) {
+    ctx.postMessage(result);
+  }
+};
