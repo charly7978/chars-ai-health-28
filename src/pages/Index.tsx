@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import VitalSign from "@/components/VitalSign";
 import CameraView from "@/components/CameraView";
 import { useSignalProcessor } from "@/hooks/useSignalProcessor";
-import { useHeartBeatProcessor } from "@/hooks/useHeartBeatProcessor";
 import { useVitalSignsProcessor } from "@/hooks/useVitalSignsProcessor";
 import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
@@ -44,12 +43,6 @@ const Index = () => {
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { 
-    processSignal: processHeartBeat,
-    setArrhythmiaState,
-    heartRate: heartRateFromHeartBeatProcessor,
-    arrhythmiaCount: arrhythmiaCountFromHeartBeatProcessor
-  } = useHeartBeatProcessor();
-  const { 
     processSignal: processVitalSigns, 
     reset: resetVitalSigns,
     fullReset: fullResetVitalSigns,
@@ -75,8 +68,8 @@ const Index = () => {
   } = useVitalMeasurement({
     isMeasuring: isMonitoring,
     currentVitalSigns: vitalSigns,
-    currentArrhythmiaCount: arrhythmiaCountFromHeartBeatProcessor,
-    currentHeartRate: heartRateFromHeartBeatProcessor,
+    currentArrhythmiaCount: vitalSigns.arrhythmiaStatus.split('|')[1] || "--",
+    currentHeartRate: vitalSigns.heartRate,
     isCalibrating: isCalibrating,
     calibrationProgress: realCalibrationProgress,
   });
@@ -201,7 +194,8 @@ const Index = () => {
         totalCholesterol: measuredTotalCholesterol,
         triglycerides: measuredTriglycerides
       },
-      hemoglobin: measuredHemoglobin
+      hemoglobin: measuredHemoglobin,
+      heartRate: measuredHeartRate
     });
     setHeartRate(measuredHeartRate);
     setArrhythmiaCount(measuredArrhythmiaCount);
@@ -483,15 +477,7 @@ const Index = () => {
       return;
     }
     // Señal válida, procesar latidos y signos vitales
-    const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-    setHeartRate(heartBeatResult.bpm);
-    setHeartbeatSignal(heartBeatResult.filteredValue);
-    setBeatMarker(heartBeatResult.isPeak ? 1 : 0);
-    // Actualizar últimos intervalos RR para debug
-    if (heartBeatResult.rrData?.intervals) {
-      setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
-    }
-    const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+    const vitals = processVitalSigns(lastSignal.filteredValue, vitalSigns.heartRate);
     if (vitals) {
       setVitalSigns(vitals);
       if (vitals.lastArrhythmiaData) {
@@ -501,14 +487,13 @@ const Index = () => {
         const isArrhythmiaDetected = status === "ARRITMIA DETECTADA";
         if (isArrhythmiaDetected !== arrhythmiaDetectedRef.current) {
           arrhythmiaDetectedRef.current = isArrhythmiaDetected;
-          setArrhythmiaState(isArrhythmiaDetected);
           if (isArrhythmiaDetected) {
             toast({ title: "¡Arritmia detectada!", description: "Se activará un sonido distintivo con los latidos.", variant: "destructive", duration: 3000 });
           }
         }
       }
     }
-  }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, setArrhythmiaState]);
+  }, [lastSignal, isMonitoring, processVitalSigns]);
 
   // Referencia para activar o desactivar el sonido de arritmia
   const arrhythmiaDetectedRef = useRef(false);
