@@ -251,8 +251,8 @@ export class HeartBeatProcessor {
   private detectPeak(filteredValue: number): PeakInfo {
     // Algoritmo mejorado basado en pendiente y umbral adaptativo
     const derivative = this.calculateDerivative(filteredValue);
-    const isPeak = derivative > this.adaptiveThreshold && 
-                  this.signalBuffer.slice(-3).every(v => v < filteredValue);
+    const isPeak = derivative > (this.adaptiveThreshold * 0.7) && 
+                  this.signalBuffer.slice(-3).some(v => v < filteredValue);
   
     return {
       isPeak,
@@ -617,8 +617,8 @@ export class HeartBeatProcessor {
 
   private validatePhysiologicalRange(peak: PeakInfo): boolean {
     const validBPM = this.getSmoothBPM() > 30 && this.getSmoothBPM() < 220;
-    const validAmplitude = peak.amplitude > 0.1 && peak.amplitude < 5.0;
-    return validBPM && validAmplitude && peak.confidence > 0.65;
+    const validAmplitude = peak.amplitude > 0.05 && peak.amplitude < 5.0;
+    return validBPM && validAmplitude && peak.confidence > 0.5;
   }
 
   private getLastValidReading(): HeartRateReading {
