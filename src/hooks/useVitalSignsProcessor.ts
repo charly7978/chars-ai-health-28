@@ -20,6 +20,7 @@ export const useVitalSignsProcessor = () => {
   const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
+  const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration'] | undefined>(undefined);
   
   // Advanced configuration based on clinical guidelines
   const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
@@ -88,6 +89,9 @@ export const useVitalSignsProcessor = () => {
       progresoCalibración: processor.getCalibrationProgress()
     });
     
+    // Actualizar el estado de progreso de calibración
+    setCalibrationProgress(processor.getCalibrationProgress());
+
     // Process signal through the vital signs processor
     const result = processor.processSignal(value, rrData);
     const currentTime = Date.now();
@@ -292,6 +296,7 @@ export const useVitalSignsProcessor = () => {
     hasDetectedArrhythmia.current = false;
     processedSignals.current = 0;
     signalLog.current = [];
+    setCalibrationProgress(undefined);
     console.log("Reseteo completo finalizado - borrando todos los resultados");
   }, [processor, arrhythmiaCounter, lastValidResults]);
 
@@ -303,6 +308,7 @@ export const useVitalSignsProcessor = () => {
     forceCalibrationCompletion,
     arrhythmiaCounter,
     lastValidResults,
+    calibrationProgress,
     debugInfo: {
       processedSignals: processedSignals.current,
       signalLog: signalLog.current.slice(-10)

@@ -16,16 +16,15 @@ interface HeartBeatResult {
 
 export const useHeartBeatProcessor = () => {
   const processorRef = useRef<HeartBeatProcessor | null>(null);
-  const [currentBPM, setCurrentBPM] = useState<number>(0);
+  const [heartRate, setHeartRate] = useState<number>(0);
   const [confidence, setConfidence] = useState<number>(0);
-  const [signalQuality, setSignalQuality] = useState<number>(0); // Estado para calidad de señal
+  const [signalQuality, setSignalQuality] = useState<number>(0);
+  const [arrhythmiaCount, setArrhythmiaCount] = useState<number>(0);
   const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
-  // Variables para seguimiento de detección
   const detectionAttempts = useRef<number>(0);
   const lastDetectionTime = useRef<number>(Date.now());
   
-  // Umbral de calidad mínima para procesar - muy reducido para mejorar detección inicial
-  const MIN_QUALITY_THRESHOLD = 10; // Valor muy bajo para permitir detección inicial
+  const MIN_QUALITY_THRESHOLD = 10;
 
   useEffect(() => {
     console.log('useHeartBeatProcessor: Creando nueva instancia de HeartBeatProcessor', {
@@ -36,7 +35,6 @@ export const useHeartBeatProcessor = () => {
     processorRef.current = new HeartBeatProcessor();
     
     if (processorRef.current) {
-      // El contexto de audio se inicializa automáticamente al procesar señales
       console.log('Audio listo para procesamiento');
     }
 
@@ -56,7 +54,6 @@ export const useHeartBeatProcessor = () => {
     const now = Date.now();
     detectionAttempts.current++;
     
-    // Inicialización de processor si no existe
     if (!processorRef.current) {
       console.warn('useHeartBeatProcessor: Processor no inicializado', {
         sessionId: sessionId.current,
@@ -76,8 +73,6 @@ export const useHeartBeatProcessor = () => {
       };
     }
 
-    // Procesar señal independientemente de estado de detección para entrenar algoritmos
-    // Esto ayuda a los algoritmos adaptativos a ajustarse más rápido
     console.log('useHeartBeatProcessor - processSignal:', {
       inputValue: value,
       normalizadoValue: value.toFixed(2),
@@ -92,7 +87,6 @@ export const useHeartBeatProcessor = () => {
     const rrData = processorRef.current.getRRIntervals();
     const currentQuality = result.signalQuality || 0;
     
-    // Actualizar el estado de calidad de señal
     setSignalQuality(currentQuality);
 
     console.log('useHeartBeatProcessor - resultado:', {
@@ -108,11 +102,8 @@ export const useHeartBeatProcessor = () => {
       timestamp: new Date().toISOString()
     });
     
-    // Si no hay dedo detectado pero tenemos una señal de calidad razonable
-    // consideramos que el dedo está presente (corrige falsos negativos)
     const effectiveFingerDetected = fingerDetected || (currentQuality > MIN_QUALITY_THRESHOLD && result.confidence > 0.3);
     
-    // Si no hay dedo detectado efectivamente, reducir los valores
     if (!effectiveFingerDetected) {
       console.log('useHeartBeatProcessor: Dedo no detectado efectivamente', {
         fingerDetected,
@@ -121,18 +112,16 @@ export const useHeartBeatProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      // Reducir gradualmente los valores actuales en vez de resetearlos inmediatamente
-      // Esto evita cambios bruscos en la UI
-      if (currentBPM > 0) {
-        const reducedBPM = Math.max(0, currentBPM - 5);
+      if (heartRate > 0) {
+        const reducedBPM = Math.max(0, heartRate - 5);
         const reducedConfidence = Math.max(0, confidence - 0.1);
-        setCurrentBPM(reducedBPM);
+        setHeartRate(reducedBPM);
         setConfidence(reducedConfidence);
       }
       
       return {
-        bpm: currentBPM, // Mantener último valor conocido brevemente
-        confidence: Math.max(0, confidence - 0.1), // Reducir gradualmente
+        bpm: heartRate,
+        confidence: Math.max(0, confidence - 0.1),
         isPeak: false,
         arrhythmiaCount: 0,
         signalQuality: currentQuality,
@@ -143,13 +132,11 @@ export const useHeartBeatProcessor = () => {
       };
     }
 
-    // Actualizar tiempo de última detección
     lastDetectionTime.current = now;
     
-    // Si la confianza es suficiente, actualizar valores
     if (result.confidence >= 0.5 && result.bpm > 0) {
       console.log('useHeartBeatProcessor - Actualizando BPM y confianza', {
-        prevBPM: currentBPM,
+        prevBPM: heartRate,
         newBPM: result.bpm,
         prevConfidence: confidence,
         newConfidence: result.confidence,
@@ -157,21 +144,23 @@ export const useHeartBeatProcessor = () => {
         timestamp: new Date().toISOString()
       });
       
-      setCurrentBPM(result.bpm);
+      setHeartRate(result.bpm);
       setConfidence(result.confidence);
     }
+
+    setArrhythmiaCount(result.arrhythmiaCount);
 
     return {
       ...result,
       signalQuality: currentQuality,
       rrData
     };
-  }, [currentBPM, confidence, signalQuality]);
+  }, [heartRate, confidence, signalQuality]);
 
   const reset = useCallback(() => {
     console.log('useHeartBeatProcessor: Reseteando processor', {
       sessionId: sessionId.current,
-      prevBPM: currentBPM,
+      prevBPM: heartRate,
       prevConfidence: confidence,
       timestamp: new Date().toISOString()
     });
@@ -187,14 +176,14 @@ export const useHeartBeatProcessor = () => {
       });
     }
     
-    setCurrentBPM(0);
+    setHeartRate(0);
     setConfidence(0);
     setSignalQuality(0);
+    setArrhythmiaCount(0);
     detectionAttempts.current = 0;
     lastDetectionTime.current = Date.now();
-  }, [currentBPM, confidence]);
+  }, [heartRate, confidence]);
 
-  // Aseguramos que setArrhythmiaState funcione correctamente
   const setArrhythmiaState = useCallback((isArrhythmiaDetected: boolean) => {
     console.log('useHeartBeatProcessor: Estableciendo estado de arritmia', {
       isArrhythmiaDetected,
@@ -209,9 +198,10 @@ export const useHeartBeatProcessor = () => {
   }, []);
 
   return {
-    currentBPM,
+    heartRate,
     confidence,
-    signalQuality, // Exponiendo la calidad de señal
+    signalQuality,
+    arrhythmiaCount,
     processSignal,
     reset,
     setArrhythmiaState

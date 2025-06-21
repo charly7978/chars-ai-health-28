@@ -1,21 +1,46 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface VitalMeasurements {
   heartRate: number;
   spo2: number;
   pressure: string;
   arrhythmiaCount: string | number;
+  glucose: number;
+  totalCholesterol: number;
+  triglycerides: number;
+  hemoglobin: number;
 }
 
-export const useVitalMeasurement = (isMeasuring: boolean) => {
+interface UseVitalMeasurementProps {
+  isMeasuring: boolean;
+  currentVitalSigns: VitalSignsResult;
+  currentArrhythmiaCount: string | number;
+  currentHeartRate: number;
+  isCalibrating: boolean;
+  calibrationProgress?: VitalSignsResult['calibration'];
+}
+
+export const useVitalMeasurement = ({
+  isMeasuring,
+  currentVitalSigns,
+  currentArrhythmiaCount,
+  currentHeartRate,
+  isCalibrating,
+  calibrationProgress,
+}: UseVitalMeasurementProps) => {
   const [measurements, setMeasurements] = useState<VitalMeasurements>({
     heartRate: 0,
     spo2: 0,
     pressure: "--/--",
-    arrhythmiaCount: 0
+    arrhythmiaCount: 0,
+    glucose: 0,
+    totalCholesterol: 0,
+    triglycerides: 0,
+    hemoglobin: 0
   });
   const [elapsedTime, setElapsedTime] = useState(0);
+  const measurementTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     console.log('useVitalMeasurement - Estado detallado:', {
@@ -23,7 +48,9 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
       currentMeasurements: measurements,
       elapsedTime,
       timestamp: new Date().toISOString(),
-      session: Math.random().toString(36).substring(2, 9) // Identificador único para esta sesión
+      session: Math.random().toString(36).substring(2, 9), // Identificador único para esta sesión
+      isCalibrating,
+      calibrationProgress
     });
 
     if (!isMeasuring) {
@@ -32,20 +59,23 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
         timestamp: new Date().toISOString()
       });
       
-      setMeasurements(prev => {
-        const newValues = {
-          ...prev,
-          heartRate: 0,
-          spo2: 0,
-          pressure: "--/--",
-          arrhythmiaCount: "--"
-        };
-        
-        console.log('useVitalMeasurement - Nuevos valores tras reinicio', newValues);
-        return newValues;
+      setMeasurements({
+        heartRate: 0,
+        spo2: 0,
+        pressure: "--/--",
+        arrhythmiaCount: "--",
+        glucose: 0,
+        totalCholesterol: 0,
+        triglycerides: 0,
+        hemoglobin: 0
       });
       
       setElapsedTime(0);
+
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+        measurementTimerRef.current = null;
+      }
       return;
     }
 
@@ -55,56 +85,25 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
       prevValues: {...measurements}
     });
     
-    const MEASUREMENT_DURATION = 30000;
+    const MEASUREMENT_DURATION = 30000; // Duración total de la medición en ms (30 segundos)
 
-    const updateMeasurements = () => {
-      const processor = (window as any).heartBeatProcessor;
-      if (!processor) {
-        console.warn('VitalMeasurement: No se encontró el procesador', {
-          windowObject: Object.keys(window),
-          timestamp: new Date().toISOString()
-        });
-        return;
-      }
+    // Actualizar las mediciones directamente desde las props
+    setMeasurements({
+      heartRate: currentHeartRate,
+      spo2: currentVitalSigns.spo2 || 0,
+      pressure: currentVitalSigns.pressure || "--/--",
+      arrhythmiaCount: currentArrhythmiaCount,
+      glucose: currentVitalSigns.glucose || 0,
+      totalCholesterol: currentVitalSigns.lipids?.totalCholesterol || 0,
+      triglycerides: currentVitalSigns.lipids?.triglycerides || 0,
+      hemoglobin: currentVitalSigns.hemoglobin || 0
+    });
 
-      const bpm = processor.getFinalBPM() || 0;
-      console.log('useVitalMeasurement - Actualización detallada:', {
-        processor: !!processor,
-        processorType: processor ? typeof processor : 'undefined',
-        processorMethods: processor ? Object.getOwnPropertyNames(processor.__proto__) : [],
-        bpm,
-        rawBPM: processor.getFinalBPM(),
-        confidence: processor.getConfidence ? processor.getConfidence() : 'N/A',
-        timestamp: new Date().toISOString()
-      });
-
-      setMeasurements(prev => {
-        if (prev.heartRate === bpm) {
-          console.log('useVitalMeasurement - BPM sin cambios, no se actualiza', {
-            currentBPM: prev.heartRate,
-            timestamp: new Date().toISOString()
-          });
-          return prev;
-        }
-        
-        const newValues = {
-          ...prev,
-          heartRate: bpm
-        };
-        
-        console.log('useVitalMeasurement - Actualizando BPM', {
-          prevBPM: prev.heartRate,
-          newBPM: bpm,
-          timestamp: new Date().toISOString()
-        });
-        
-        return newValues;
-      });
-    };
-
-    updateMeasurements();
-
-    const interval = setInterval(() => {
+    // Configurar temporizador para la duración de la medición
+    if (measurementTimerRef.current) {
+      clearInterval(measurementTimerRef.current);
+    }
+    measurementTimerRef.current = window.setInterval(() => {
       const currentTime = Date.now();
       const elapsed = currentTime - startTime;
       
@@ -116,8 +115,6 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
       
       setElapsedTime(elapsed / 1000);
 
-      updateMeasurements();
-
       if (elapsed >= MEASUREMENT_DURATION) {
         console.log('useVitalMeasurement - Medición completada', {
           duracionTotal: MEASUREMENT_DURATION / 1000,
@@ -125,9 +122,11 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
           timestamp: new Date().toISOString()
         });
         
-        clearInterval(interval);
-        const event = new CustomEvent('measurementComplete');
-        window.dispatchEvent(event);
+        clearInterval(measurementTimerRef.current);
+        measurementTimerRef.current = null;
+        // Disparar evento si es necesario, pero la finalización ahora es externa
+        // const event = new CustomEvent('measurementComplete');
+        // window.dispatchEvent(event);
       }
     }, 200);
 
@@ -136,13 +135,17 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
         currentElapsed: elapsedTime,
         timestamp: new Date().toISOString()
       });
-      clearInterval(interval);
+      if (measurementTimerRef.current) {
+        clearInterval(measurementTimerRef.current);
+      }
     };
-  }, [isMeasuring, measurements]);
+  }, [isMeasuring, currentVitalSigns, currentArrhythmiaCount, currentHeartRate, isCalibrating, calibrationProgress]); // Dependencias del useEffect
 
   return {
     ...measurements,
-    elapsedTime: Math.min(elapsedTime, 30),
-    isComplete: elapsedTime >= 30
+    elapsedTime: Math.min(elapsedTime, 30), // Asegurar que no exceda 30 segundos
+    isComplete: elapsedTime >= 30, // Indicar si la medición está completa
+    isCalibrating,
+    calibrationProgress,
   };
 };

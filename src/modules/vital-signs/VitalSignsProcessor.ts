@@ -9,6 +9,7 @@ export interface VitalSignsResult {
   spo2: number;
   pressure: string;
   arrhythmiaStatus: string;
+  heartRate: number;
   lastArrhythmiaData?: { 
     timestamp: number; 
     rmssd: number; 
@@ -207,6 +208,7 @@ export class VitalSignsProcessor {
         spo2: 0,
         pressure: "--/--",
         arrhythmiaStatus: "--",
+        heartRate: 0,
         glucose: 0,
         lipids: {
           totalCholesterol: 0,
@@ -247,6 +249,7 @@ export class VitalSignsProcessor {
       spo2,
       pressure,
       arrhythmiaStatus: arrhythmiaResult.arrhythmiaStatus,
+      heartRate: this.calculateHeartRate(ppgValues),
       lastArrhythmiaData: arrhythmiaResult.lastArrhythmiaData,
       glucose,
       lipids,
@@ -283,6 +286,44 @@ export class VitalSignsProcessor {
     
     // Clamp to physiologically relevant range
     return Math.max(8, Math.min(18, Number(hemoglobin.toFixed(1))));
+  }
+
+  private calculateHeartRate(ppgValues: number[]): number {
+    // Implementación real del algoritmo de cálculo de ritmo cardíaco basado en PPG
+    // Esto debería buscar picos en la señal PPG filtrada y calcular los intervalos RR
+    // para determinar el BPM (beats per minute).
+    // Esta es una versión simplificada y DEBE ser reemplazada por un algoritmo robusto.
+    if (ppgValues.length < 10) {
+      return 0;
+    }
+
+    const peaks = [];
+    // Un simple detector de picos: si un punto es mayor que sus vecinos
+    for (let i = 1; i < ppgValues.length - 1; i++) {
+      if (ppgValues[i] > ppgValues[i - 1] && ppgValues[i] > ppgValues[i + 1]) {
+        peaks.push(i);
+      }
+    }
+
+    if (peaks.length < 2) {
+      return 0; // No hay suficientes picos para calcular un BPM
+    }
+
+    let totalInterval = 0;
+    for (let i = 1; i < peaks.length; i++) {
+      totalInterval += (peaks[i] - peaks[i - 1]);
+    }
+
+    const avgInterval = totalInterval / (peaks.length - 1); // Promedio de frames entre picos
+    const sampleRate = 60; // Asumiendo 60 FPS o muestras por segundo
+    const bpm = (sampleRate * 60) / avgInterval; // Convertir a BPM
+
+    // Validar el BPM dentro de un rango fisiológico (ej. 40-200)
+    if (bpm > 40 && bpm < 200) {
+      return Math.round(bpm);
+    } else {
+      return 0;
+    }
   }
 
   public isCurrentlyCalibrating(): boolean {

@@ -8,6 +8,7 @@ import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 import { toast } from "@/components/ui/use-toast";
+import { useVitalMeasurement } from "@/hooks/useVitalMeasurement";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -43,8 +44,10 @@ const Index = () => {
   
   const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
   const { 
-    processSignal: processHeartBeat, 
-    setArrhythmiaState 
+    processSignal: processHeartBeat,
+    setArrhythmiaState,
+    heartRate: heartRateFromHeartBeatProcessor,
+    arrhythmiaCount: arrhythmiaCountFromHeartBeatProcessor
   } = useHeartBeatProcessor();
   const { 
     processSignal: processVitalSigns, 
@@ -52,8 +55,31 @@ const Index = () => {
     fullReset: fullResetVitalSigns,
     lastValidResults,
     startCalibration,
-    forceCalibrationCompletion
+    forceCalibrationCompletion,
+    calibrationProgress: realCalibrationProgress
   } = useVitalSignsProcessor();
+
+  const { 
+    elapsedTime: measurementElapsedTime,
+    isComplete: measurementIsComplete,
+    heartRate: measuredHeartRate,
+    spo2: measuredSpo2,
+    pressure: measuredPressure,
+    arrhythmiaCount: measuredArrhythmiaCount,
+    glucose: measuredGlucose,
+    totalCholesterol: measuredTotalCholesterol,
+    triglycerides: measuredTriglycerides,
+    hemoglobin: measuredHemoglobin,
+    isCalibrating: measurementIsCalibrating,
+    calibrationProgress: measurementCalibrationProgress
+  } = useVitalMeasurement({
+    isMeasuring: isMonitoring,
+    currentVitalSigns: vitalSigns,
+    currentArrhythmiaCount: arrhythmiaCountFromHeartBeatProcessor,
+    currentHeartRate: heartRateFromHeartBeatProcessor,
+    isCalibrating: isCalibrating,
+    calibrationProgress: realCalibrationProgress,
+  });
 
   const enterFullScreen = async () => {
     try {
@@ -164,6 +190,34 @@ const Index = () => {
     }
   }, [lastValidResults, isMonitoring]);
 
+  useEffect(() => {
+    // Sincronizar el estado local de la UI con los resultados del useVitalMeasurement
+    setVitalSigns({
+      spo2: measuredSpo2,
+      pressure: measuredPressure,
+      arrhythmiaStatus: measuredArrhythmiaCount?.toString() || "--",
+      glucose: measuredGlucose,
+      lipids: {
+        totalCholesterol: measuredTotalCholesterol,
+        triglycerides: measuredTriglycerides
+      },
+      hemoglobin: measuredHemoglobin
+    });
+    setHeartRate(measuredHeartRate);
+    setArrhythmiaCount(measuredArrhythmiaCount);
+    setIsCalibrating(measurementIsCalibrating);
+    setCalibrationProgress(measurementCalibrationProgress);
+    setElapsedTime(measurementElapsedTime);
+
+    if (measurementIsComplete) {
+      finalizeMeasurement();
+    }
+
+  }, [measuredHeartRate, measuredSpo2, measuredPressure, measuredArrhythmiaCount,
+      measuredGlucose, measuredTotalCholesterol, measuredTriglycerides, measuredHemoglobin,
+      measurementElapsedTime, measurementIsComplete, measurementIsCalibrating, measurementCalibrationProgress
+  ]);
+
   const startMonitoring = () => {
     if (isMonitoring) {
       finalizeMeasurement();
@@ -183,9 +237,25 @@ const Index = () => {
         arrhythmiaStatus: "SIN ARRITMIAS|0"
       }));
       
-      // Iniciar calibración automática
-      console.log("Iniciando fase de calibración automática");
-      startAutoCalibration();
+      // Iniciar calibración automática, confiando en el procesador real
+      console.log("Iniciando fase de calibración automática (gestionada por el procesador)");
+      startCalibration(); // Llama a la función real del procesador
+      setIsCalibrating(true); // Actualiza el estado de la UI
+      
+      // No más simulación de progreso aquí, el procesador se encargará de reportarlo.
+      // Inicializamos el progreso a 0, el useVitalSignsProcessor lo actualizará.
+      setCalibrationProgress({
+        isCalibrating: true,
+        progress: {
+          heartRate: 0,
+          spo2: 0,
+          pressure: 0,
+          arrhythmia: 0,
+          glucose: 0,
+          lipids: 0,
+          hemoglobin: 0
+        }
+      });
       
       // Iniciar temporizador para medición
       if (measurementTimerRef.current) {
@@ -206,116 +276,6 @@ const Index = () => {
         });
       }, 1000);
     }
-  };
-
-  const startAutoCalibration = () => {
-    console.log("Iniciando auto-calibración real con indicadores visuales");
-    setIsCalibrating(true);
-    
-    // Iniciar la calibración en el procesador
-    startCalibration();
-    
-    // Establecer explícitamente valores iniciales de calibración para CADA vital sign
-    // Esto garantiza que el estado comience correctamente
-    console.log("Estableciendo valores iniciales de calibración");
-    setCalibrationProgress({
-      isCalibrating: true,
-      progress: {
-        heartRate: 0,
-        spo2: 0,
-        pressure: 0,
-        arrhythmia: 0,
-        glucose: 0,
-        lipids: 0,
-        hemoglobin: 0
-      }
-    });
-    
-    // Logear para verificar que el estado se estableció
-    setTimeout(() => {
-      console.log("Estado de calibración establecido:", calibrationProgress);
-    }, 100);
-    
-    // Actualizar el progreso visualmente en intervalos regulares
-    let step = 0;
-    const calibrationInterval = setInterval(() => {
-      step += 1;
-      
-      // Actualizar progreso visual (10 pasos en total)
-      if (step <= 10) {
-        const progressPercent = step * 10; // 0-100%
-        console.log(`Actualizando progreso de calibración: ${progressPercent}%`);
-        
-        // Actualizar cada valor individualmente para asegurar que se renderice
-        setCalibrationProgress({
-          isCalibrating: true,
-          progress: {
-            heartRate: progressPercent,
-            spo2: Math.max(0, progressPercent - 10),
-            pressure: Math.max(0, progressPercent - 20),
-            arrhythmia: Math.max(0, progressPercent - 15),
-            glucose: Math.max(0, progressPercent - 5),
-            lipids: Math.max(0, progressPercent - 25),
-            hemoglobin: Math.max(0, progressPercent - 30)
-          }
-        });
-      } else {
-        // Al finalizar, detener el intervalo
-        console.log("Finalizando animación de calibración");
-        clearInterval(calibrationInterval);
-        
-        // Completar calibración
-        if (isCalibrating) {
-          console.log("Completando calibración");
-          forceCalibrationCompletion();
-          setIsCalibrating(false);
-          
-          // Importante: Establecer calibrationProgress a undefined o con valores 100
-          // para que la UI refleje que ya no está calibrando
-          setCalibrationProgress({
-            isCalibrating: false,
-            progress: {
-              heartRate: 100,
-              spo2: 100,
-              pressure: 100,
-              arrhythmia: 100,
-              glucose: 100,
-              lipids: 100,
-              hemoglobin: 100
-            }
-          });
-          
-          // Opcional: vibración si está disponible
-          if (navigator.vibrate) {
-            navigator.vibrate([100, 50, 100]);
-          }
-        }
-      }
-    }, 800); // Cada paso dura 800ms (8 segundos en total)
-    
-    // Temporizador de seguridad
-    setTimeout(() => {
-      if (isCalibrating) {
-        console.log("Forzando finalización de calibración por tiempo límite");
-        clearInterval(calibrationInterval);
-        forceCalibrationCompletion();
-        setIsCalibrating(false);
-        
-        // Asegurar que se limpie el estado de calibración
-        setCalibrationProgress({
-          isCalibrating: false,
-          progress: {
-            heartRate: 100,
-            spo2: 100,
-            pressure: 100,
-            arrhythmia: 100,
-            glucose: 100,
-            lipids: 100,
-            hemoglobin: 100
-          }
-        });
-      }
-    }, 10000); // 10 segundos como máximo
   };
 
   const finalizeMeasurement = () => {
@@ -454,10 +414,10 @@ const Index = () => {
             enhanceCtx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
             
             // Opcionales: Ajustes para mejorar la señal roja
-            enhanceCtx.globalCompositeOperation = 'source-over';
-            enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
-            enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
-            enhanceCtx.globalCompositeOperation = 'source-over';
+            // enhanceCtx.globalCompositeOperation = 'source-over';
+            // enhanceCtx.fillStyle = 'rgba(255,0,0,0.05)';  // Sutil refuerzo del canal rojo
+            // enhanceCtx.fillRect(0, 0, enhanceCanvas.width, enhanceCanvas.height);
+            // enhanceCtx.globalCompositeOperation = 'source-over';
           
             // Obtener datos de la imagen mejorada
             const imageData = enhanceCtx.getImageData(0, 0, enhanceCanvas.width, enhanceCanvas.height);
@@ -561,6 +521,12 @@ const Index = () => {
       startMonitoring();
     }
   };
+
+  // useEffect para actualizar el progreso de calibración desde el hook
+  useEffect(() => {
+    // Esto ya se maneja en el useEffect de sincronización con useVitalMeasurement
+    // setCalibrationProgress(realCalibrationProgress);
+  }, [realCalibrationProgress]);
 
   return (
     <div className="fixed inset-0 flex flex-col bg-black" style={{ 
