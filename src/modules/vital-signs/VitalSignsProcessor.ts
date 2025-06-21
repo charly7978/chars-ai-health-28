@@ -417,7 +417,7 @@ export class AdvancedVitalSignsProcessor {
   }
   
   private calculateCardiacMetrics(signal: number[]): [number, number] {
-    const peaks = this.findPeaks(signal);
+    const peaks = PPGAnalysisUtils.findPeaks(signal, 0.5 * Math.max(...signal));
     
     // Cálculo de frecuencia cardíaca
     const hr = peaks.length >= 2 
@@ -443,16 +443,16 @@ export class AdvancedVitalSignsProcessor {
   }
 
   private calculateSpO2(red: number[], ir: number[]): number {
-    const redACDC = this.calculateACDC(red);
-    const irACDC = this.calculateACDC(ir);
+    const redACDC = PPGAnalysisUtils.calculateACDC(red);
+    const irACDC = PPGAnalysisUtils.calculateACDC(ir);
     
     const R = (redACDC.ac/redACDC.dc) / (irACDC.ac/irACDC.dc);
     return Math.max(70, Math.min(100, 110 - 25 * R));
   }
 
   private calculateBloodPressure(red: number[], green: number[]): { sbp: number, dbp: number } {
-    const redPeaks = this.findPeaks(red);
-    const greenPeaks = this.findPeaks(green);
+    const redPeaks = PPGAnalysisUtils.findPeaks(red, 0.5 * Math.max(...red));
+    const greenPeaks = PPGAnalysisUtils.findPeaks(green, 0.5 * Math.max(...green));
     
     if (redPeaks.length < 2 || greenPeaks.length < 2) {
       return { sbp: 0, dbp: 0 };
@@ -466,8 +466,8 @@ export class AdvancedVitalSignsProcessor {
   }
 
   private estimateGlucose(red: number[], ir: number[], green: number[]): number {
-    const ratio1 = this.calculateACDC(red).ac / this.calculateACDC(ir).ac;
-    const ratio2 = this.calculateACDC(green).dc / this.calculateACDC(red).dc;
+    const ratio1 = PPGAnalysisUtils.calculateACDC(red).ac / PPGAnalysisUtils.calculateACDC(ir).ac;
+    const ratio2 = PPGAnalysisUtils.calculateACDC(green).dc / PPGAnalysisUtils.calculateACDC(red).dc;
     return Math.max(50, Math.min(300, 90 + (ratio1 * 15) - (ratio2 * 8)));
   }
 
@@ -484,17 +484,26 @@ export class AdvancedVitalSignsProcessor {
   }
 
   private calculateConfidence(red: number[], ir: number[]): number {
-    const redACDC = this.calculateACDC(red);
-    const irACDC = this.calculateACDC(ir);
+    const redACDC = PPGAnalysisUtils.calculateACDC(red);
+    const irACDC = PPGAnalysisUtils.calculateACDC(ir);
     
     const perfusionIndex = (redACDC.ac / redACDC.dc) * 100;
     const snr = 20 * Math.log10(redACDC.ac / (redACDC.dc * 0.1));
     
     return (Math.min(1, perfusionIndex/5) * 0.6 + Math.min(1, Math.max(0, (snr+10)/30)) * 0.4);
   }
+}
 
-  private findPeaks(signal: number[]): number[] {
-    const threshold = 0.5 * Math.max(...signal);
+export class PPGAnalysisUtils {
+  static calculateACDC(signal: number[]): { ac: number, dc: number } {
+    const dc = signal.reduce((sum, val) => sum + val, 0) / signal.length;
+    const ac = Math.sqrt(
+      signal.reduce((sum, val) => sum + Math.pow(val - dc, 2), 0) / signal.length
+    );
+    return { ac, dc };
+  }
+  
+  static findPeaks(signal: number[], threshold: number): number[] {
     const peaks: number[] = [];
     
     for (let i = 2; i < signal.length - 2; i++) {
@@ -509,12 +518,21 @@ export class AdvancedVitalSignsProcessor {
     
     return peaks;
   }
-
-  private calculateACDC(signal: number[]): { ac: number, dc: number } {
-    const dc = signal.reduce((sum, val) => sum + val, 0) / signal.length;
-    const ac = Math.sqrt(
-      signal.reduce((sum, val) => sum + Math.pow(val - dc, 2), 0) / signal.length
-    );
-    return { ac, dc };
+  
+  static createCircularBuffer(size: number): {
+    add: (value: number) => void,
+    get: () => number[]
+  } {
+    const buffer: number[] = [];
+    
+    return {
+      add: (value: number) => {
+        buffer.push(value);
+        if (buffer.length > size) {
+          buffer.shift();
+        }
+      },
+      get: () => buffer
+    };
   }
 }

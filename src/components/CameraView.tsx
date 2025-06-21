@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { toast } from "@/components/ui/use-toast";
-import { AdvancedVitalSignsProcessor, BiometricReading } from '../modules/vital-signs/VitalSignsProcessor';
+import { AdvancedVitalSignsProcessor, PPGAnalysisUtils } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -321,7 +321,7 @@ const CameraView = ({
     };
   };
 
-  const handleResults = (results: BiometricReading) => {
+  const handleResults = (results: any) => {
     console.log('Mediciones biométricas:', {
       spo2: results.spo2.toFixed(1) + '%',
       pressure: results.sbp + '/' + results.dbp + ' mmHg',
