@@ -10,7 +10,7 @@
 export class GlucoseProcessor {
   // Optimización: ajustar el modelo de estimación para glucosa
   // Se aumenta el factor de calibración de 1.12 a 1.15 (por ejemplo)
-  private readonly CALIBRATION_FACTOR = 1.01; // optimización actualizada
+  private readonly CALIBRATION_FACTOR = 1.10; // optimización actualizada
   private readonly CONFIDENCE_THRESHOLD = 0.65; // Minimum confidence for reporting
   private readonly MIN_GLUCOSE = 30; // Physiological minimum (mg/dL)
   private readonly MAX_GLUCOSE = 220; // Upper limit for reporting (mg/dL)
@@ -35,7 +35,7 @@ export class GlucoseProcessor {
     }
     
     // Use real-time PPG data for glucose estimation
-    const recentPPG = ppgValues.slice(-220);
+    const recentPPG = ppgValues.slice(-180);
     
     // Extract waveform features for glucose correlation
     const features = this.extractWaveformFeatures(recentPPG);
@@ -46,7 +46,7 @@ export class GlucoseProcessor {
       (features.derivativeRatio * 7.1) +     // antes: 7.2
       (features.riseFallRatio * 8.5) -         // antes: 8.1 (se invierte el signo para ajustar la correlación)
       (features.variabilityIndex * 5.0) +      // antes: -5.3, se invierte y ajusta el multiplicador
-      (features.peakWidth * 5.0) +             // antes: 4.7
+      (features.peakWidth * 4.0) +             // antes: 4.7
       this.calibrationOffset;
     
     // Calculate confidence based on signal quality
