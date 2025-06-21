@@ -12,8 +12,9 @@ export class FrameProcessor {
   private readonly GREEN_SUPPRESSION = 0.8; // Menos supresión para mantener información (antes 0.85)
   private readonly SIGNAL_GAIN = 1.3; // Aumentado para mejor detección (antes 1.1)
   private readonly EDGE_ENHANCEMENT = 0.18;  // Ajustado para mejor detección de bordes (antes 0.12)
-  private readonly MIN_RED_THRESHOLD = 0.25;  // Aumentado para reducir falsos positivos
-  private readonly RG_RATIO_RANGE = [0.9, 3.2];  // Rango más estricto para piel humana
+  private readonly MIN_RED_THRESHOLD = 0.28;  // Ligero aumento adicional
+  private readonly RG_RATIO_RANGE = [1.0, 3.0];  // Rango más estrecho
+  private readonly EDGE_CONTRAST_THRESHOLD = 0.12;  // Nuevo filtro por contraste
   
   // Historia para calibración adaptativa
   private lastFrames: Array<{red: number, green: number, blue: number}> = [];
@@ -212,8 +213,9 @@ export class FrameProcessor {
       const avgHistRed = this.lastFrames.reduce((sum, frame) => sum + frame.red, 0) / this.lastFrames.length;
       
       // Ganancia moderada incluso para señales muy débiles
-      if (avgHistRed < 40 && avgHistRed > this.MIN_RED_THRESHOLD) { // Umbral reducido (antes 15)
-        dynamicGain = 1.3; // Ganancia aumentada (antes 1.2)
+      if (avgHistRed < 40 && avgHistRed > this.MIN_RED_THRESHOLD && 
+          this.calculateEdgeContrast() > this.EDGE_CONTRAST_THRESHOLD) {
+        dynamicGain = 1.25; // Ganancia ligeramente reducida
       } else if (avgHistRed <= this.MIN_RED_THRESHOLD) { // Umbral reducido
         // Very weak signal - likely no finger present
         dynamicGain = 1.1; // Algo de amplificación incluso con señal muy débil (antes 1.0)
@@ -257,6 +259,21 @@ export class FrameProcessor {
       rToGRatio,
       rToBRatio
     };
+  }
+  
+  private calculateEdgeContrast(): number {
+    if (this.lastFrames.length < 2) return 0;
+    
+    const lastFrame = this.lastFrames[this.lastFrames.length - 1];
+    const prevFrame = this.lastFrames[this.lastFrames.length - 2];
+    
+    // Cálculo de diferencia entre frames consecutivos
+    const diff = Math.abs(lastFrame.red - prevFrame.red) + 
+                 Math.abs(lastFrame.green - prevFrame.green) + 
+                 Math.abs(lastFrame.blue - prevFrame.blue);
+    
+    // Normalizar a rango 0-1
+    return Math.min(1, diff / 255); 
   }
   
   /**
