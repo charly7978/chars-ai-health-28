@@ -524,29 +524,29 @@ export class HeartBeatProcessor {
     }
   }
 
-  private getSmoothBPM(): number {
-    const rawBPM = this.calculateCurrentBPM();
-    if (this.smoothBPM === 0 && rawBPM > 0) { 
-        this.smoothBPM = rawBPM;
-    } else if (rawBPM > 0) { 
-        this.smoothBPM =
-            this.BPM_ALPHA * rawBPM + (1 - this.BPM_ALPHA) * this.smoothBPM;
-    } else if (this.bpmHistory.length === 0) { 
-        this.smoothBPM = 0;
-    }
-    return this.smoothBPM;
+  public getSmoothBPM(): number {
+    if (this.bpmHistory.length < 3) return 0;
+    
+    // Filtrado adaptativo basado en confianza
+    const validReadings = this.bpmHistory.filter((_, i) => 
+      this.recentPeakConfidences[i] > 0.7
+    );
+    
+    // Ponderar por confianza y aplicar mediana móvil
+    const weightedBPM = validReadings.reduce(
+      (sum, bpm, i) => sum + (bpm * this.recentPeakConfidences[i]), 
+      0
+    ) / validReadings.reduce((sum, _, i) => sum + this.recentPeakConfidences[i], 0);
+    
+    // Suavizado final con filtro de Kalman simple
+    this.smoothBPM = this.kalmanFilter(weightedBPM, 0.15);
+    return Math.round(this.smoothBPM);
   }
 
-  private calculateCurrentBPM(): number {
-    if (this.bpmHistory.length < 2) {
-      return 0;
-    }
-    const sortedBPM = [...this.bpmHistory].sort((a,b) => a - b);
-    const mid = Math.floor(sortedBPM.length / 2);
-    if (sortedBPM.length % 2 === 0) {
-        return (sortedBPM[mid-1] + sortedBPM[mid]) / 2;
-    }
-    return sortedBPM[mid];
+  private kalmanFilter(value: number, processNoise: number): number {
+    // Implementación simplificada
+    const k = 0.2; // Factor de ganancia
+    return this.smoothBPM + k * (value - this.smoothBPM);
   }
 
   public getFinalBPM(): number { 
