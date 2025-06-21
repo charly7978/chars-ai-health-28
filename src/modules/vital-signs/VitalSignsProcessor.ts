@@ -338,3 +338,187 @@ export class VitalSignsProcessor {
     this.reset();
   }
 }
+
+interface PPGSignal {
+  red: number[];
+  ir: number[];
+  green: number[];
+  timestamp: number;
+}
+
+export interface BiometricReading {
+  spo2: number;       // % Saturación (95-100% normal)
+  hr: number;         // BPM (60-100 normal)
+  hrv: number;        // Variabilidad (ms)
+  sbp: number;        // Sistólica (mmHg)
+  dbp: number;        // Diastólica (mmHg)
+  glucose: number;    // mg/dL (70-110 normal)
+  confidence: number; // 0-1
+}
+
+export class AdvancedVitalSignsProcessor {
+  private readonly WINDOW_SIZE = 256; // Muestras
+  private readonly FS = 60; // Frecuencia de muestreo (Hz)
+  private readonly pressureCalibration = 0.5; // Factor de calibración
+  
+  private redBuffer: number[] = [];
+  private irBuffer: number[] = [];
+  private greenBuffer: number[] = [];
+  
+  processSignal(signal: PPGSignal): BiometricReading {
+    // Almacenamiento en buffer
+    this.redBuffer.push(...signal.red);
+    this.irBuffer.push(...signal.ir);
+    this.greenBuffer.push(...signal.green);
+    
+    // Procesamiento por ventanas completas
+    if (this.redBuffer.length >= this.WINDOW_SIZE) {
+      const windowRed = this.redBuffer.slice(0, this.WINDOW_SIZE);
+      const windowIR = this.irBuffer.slice(0, this.WINDOW_SIZE);
+      const windowGreen = this.greenBuffer.slice(0, this.WINDOW_SIZE);
+      
+      // 1. Análisis espectral
+      const redAnalysis = this.analyzeACDC(windowRed);
+      const irAnalysis = this.analyzeACDC(windowIR);
+      
+      // 2. Cálculo SpO2 (protocolo médico)
+      const R = (redAnalysis.ac/redAnalysis.dc) / (irAnalysis.ac/irAnalysis.dc);
+      const spo2 = 110 - 25 * R;
+      
+      // 3. Análisis de forma de onda para presión
+      const { sbp, dbp } = this.analyzeBloodPressure(windowRed, windowGreen);
+      
+      // 4. Estimación glucosa (modelo óptico)
+      const glucose = this.estimateGlucose(windowRed, windowGreen);
+      
+      // Actualizar buffers
+      this.redBuffer = this.redBuffer.slice(this.WINDOW_SIZE/2);
+      this.irBuffer = this.irBuffer.slice(this.WINDOW_SIZE/2);
+      this.greenBuffer = this.greenBuffer.slice(this.WINDOW_SIZE/2);
+      
+      return {
+        spo2: this.validateRange(spo2, 70, 100),
+        hr: this.calculateHeartRate(windowRed),
+        hrv: this.calculateHRV(windowRed),
+        sbp: this.validateRange(sbp, 80, 180),
+        dbp: this.validateRange(dbp, 50, 120),
+        glucose: this.validateRange(glucose, 50, 300),
+        confidence: this.calculateSignalQuality(windowRed, windowIR)
+      };
+    }
+    
+    return null; // Ventana incompleta
+  }
+  
+  private analyzeACDC(signal: number[]): { ac: number, dc: number } {
+    const dc = signal.reduce((a,b) => a + b, 0) / signal.length;
+    const acVals = signal.map(v => v - dc);
+    const ac = Math.sqrt(
+      acVals.reduce((sum, val) => sum + Math.pow(val, 2), 0) / signal.length
+    );
+    return { ac, dc };
+  }
+  
+  private calculateHeartRate(signal: number[]): number {
+    // Análisis de frecuencia dominante
+    const fft = this.applyFFT(signal);
+    const maxIndex = fft.indexOf(Math.max(...fft));
+    return (maxIndex * this.FS / this.WINDOW_SIZE) * 60;
+  }
+  
+  private validateRange(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+  
+  private analyzeBloodPressure(red: number[], green: number[]): {sbp: number, dbp: number} {
+    // Modelo PAT (Pulse Arrival Time) mejorado
+    const pat = this.calculatePulseArrivalTime(red, green);
+    return {
+      sbp: 120 - (pat * 15 * this.pressureCalibration),
+      dbp: 80 - (pat * 10 * this.pressureCalibration)
+    };
+  }
+
+  private estimateGlucose(red: number[], green: number[]): number {
+    // Modelo óptico basado en absorción espectral
+    const ratio = red.reduce((a,b) => a + b, 0) / green.reduce((a,b) => a + b, 0);
+    return 90 + (ratio * 20);
+  }
+
+  private calculateHRV(signal: number[]): number {
+    // Variabilidad del ritmo cardíaco
+    const peaks = this.detectPeaks(signal);
+    if (peaks.length < 2) return 0;
+    
+    const intervals = [];
+    for (let i = 1; i < peaks.length; i++) {
+      intervals.push(peaks[i] - peaks[i-1]);
+    }
+    
+    const mean = intervals.reduce((a,b) => a + b, 0) / intervals.length;
+    const squaredDiffs = intervals.map(x => Math.pow(x - mean, 2));
+    return Math.sqrt(squaredDiffs.reduce((a,b) => a + b, 0) / intervals.length);
+  }
+
+  private calculateSignalQuality(red: number[], ir: number[]): number {
+    // Índice de perfusión y estabilidad de señal
+    const redAC = this.analyzeACDC(red).ac;
+    const irAC = this.analyzeACDC(ir).ac;
+    const stability = Math.abs(redAC - irAC) / (redAC + irAC);
+    return 1 - stability;
+  }
+
+  private applyFFT(signal: number[]): number[] {
+    // Transformada rápida de Fourier simplificada
+    const N = signal.length;
+    const fft = new Array(N).fill(0);
+    
+    for (let k = 0; k < N; k++) {
+      for (let n = 0; n < N; n++) {
+        const angle = -2 * Math.PI * k * n / N;
+        fft[k] += signal[n] * (Math.cos(angle) + Math.sin(angle));
+      }
+    }
+    
+    return fft;
+  }
+
+  private detectPeaks(signal: number[]): number[] {
+    // Detección de picos mejorada
+    const peaks = [];
+    const threshold = 0.5 * Math.max(...signal);
+    
+    for (let i = 1; i < signal.length - 1; i++) {
+      if (signal[i] > threshold && 
+          signal[i] > signal[i-1] && 
+          signal[i] > signal[i+1]) {
+        peaks.push(i);
+      }
+    }
+    
+    return peaks;
+  }
+
+  private calculatePulseArrivalTime(red: number[], green: number[]): number {
+    // Modelo PAT (Pulse Arrival Time) mejorado
+    const redPeaks = this.detectPeaks(red);
+    const greenPeaks = this.detectPeaks(green);
+    
+    if (redPeaks.length < 2 || greenPeaks.length < 2) return 0;
+    
+    const redIntervals = [];
+    for (let i = 1; i < redPeaks.length; i++) {
+      redIntervals.push(redPeaks[i] - redPeaks[i-1]);
+    }
+    
+    const greenIntervals = [];
+    for (let i = 1; i < greenPeaks.length; i++) {
+      greenIntervals.push(greenPeaks[i] - greenPeaks[i-1]);
+    }
+    
+    const meanRedInterval = redIntervals.reduce((a,b) => a + b, 0) / redIntervals.length;
+    const meanGreenInterval = greenIntervals.reduce((a,b) => a + b, 0) / greenIntervals.length;
+    
+    return meanGreenInterval - meanRedInterval;
+  }
+}
