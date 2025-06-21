@@ -690,6 +690,26 @@ export class HeartBeatProcessor {
     const derivativeScore = Math.min(1, Math.abs(derivative) / 0.3);
     return (amplitudeScore * 0.6 + derivativeScore * 0.4);
   }
+
+  // Añadir método específico para detección de dedo
+  public isFingerDetected(rawValue: number): boolean {
+    // Umbrales independientes para detección inicial
+    const minRedThreshold = 0.15; // Más bajo que el mínimo para BPM
+    const minPulseAmplitude = 0.08; 
+  
+    // Filtrado básico sin afectar procesamiento BPM
+    const simpleFiltered = this.lowPassFilter(rawValue, 3); 
+  
+    // Detección basada en amplitud y variación
+    return simpleFiltered > minRedThreshold && 
+           this.calculatePulseAmplitude() > minPulseAmplitude;
+  }
+
+  private calculatePulseAmplitude(): number {
+    if (this.signalBuffer.length < 10) return 0;
+    const window = this.signalBuffer.slice(-10);
+    return Math.max(...window) - Math.min(...window);
+  }
 }
 
 interface HeartRateReading {
