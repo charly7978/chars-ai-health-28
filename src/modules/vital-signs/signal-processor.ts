@@ -1,4 +1,3 @@
-
 /**
  * Enhanced Signal Processor based on advanced biomedical signal processing techniques
  * Implementa algoritmos de detección ultra-sensibles para señales PPG
@@ -44,9 +43,6 @@ export class SignalProcessor {
    * y mejor preservación de picos cardíacos
    */
   public applySMAFilter(value: number): number {
-    // NUEVO: Amplificación inicial para garantizar señal mínima detectable
-    value = value * 1.5 + 2;
-    
     // Añadir valor al buffer
     this.ppgValues.push(value);
     if (this.ppgValues.length > this.WINDOW_SIZE) {

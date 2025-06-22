@@ -29,9 +29,37 @@ export class BiophysicalValidator {
    * @param value Current filtered signal value
    * @returns Normalized pulsatility index between 0-1
    */
-  // LÓGICA ULTRA-SIMPLE: la pulsatilidad siempre es 1
   calculatePulsatilityIndex(value: number): number {
-    return 1;
+    // Actualizar historial de valores crudos y tiempos
+    this.lastRawValues.push(value);
+    this.lastTimeStamps.push(Date.now());
+    if (this.lastRawValues.length > this.MAX_PULSATILITY_HISTORY) {
+      this.lastRawValues.shift();
+      this.lastTimeStamps.shift();
+    }
+
+    if (this.lastRawValues.length < 5) {
+      return 0; // No hay suficientes datos para analizar la pulsatilidad
+    }
+
+    // Calcular AC (Componente Alterna) y DC (Componente Directa)
+    const max = Math.max(...this.lastRawValues);
+    const min = Math.min(...this.lastRawValues);
+    const avg = this.lastRawValues.reduce((sum, val) => sum + val, 0) / this.lastRawValues.length;
+
+    const ac = max - min;
+    const dc = avg;
+
+    if (dc === 0) return 0; // Evitar división por cero
+
+    let pulsatilityIndex = ac / dc;
+
+    // Normalizar la pulsatilidad a un rango de 0-1 basándose en MIN/MAX_PULSATILITY
+    pulsatilityIndex = Math.max(this.MIN_PULSATILITY, Math.min(this.MAX_PULSATILITY, pulsatilityIndex));
+
+    const normalizedScore = (pulsatilityIndex - this.MIN_PULSATILITY) / (this.MAX_PULSATILITY - this.MIN_PULSATILITY);
+
+    return Math.max(0, Math.min(1, normalizedScore));
   }
   
   /**
@@ -233,9 +261,36 @@ export class BiophysicalValidator {
    * @param rToBRatio Red/blue ratio
    * @returns Biophysical plausibility score (0-1)
    */
-  // LÓGICA ULTRA-SIMPLE: la validación biofísica siempre es 1
   validateBiophysicalRange(redValue: number, rToGRatio: number, rToBRatio: number): number {
-    return 1;
+    const redScore = this.calculateRangeScore(
+      redValue,
+      this.PHYSIOLOGICAL_RANGES.redValue.min,
+      this.PHYSIOLOGICAL_RANGES.redValue.max
+    );
+
+    const rToGScore = this.calculateRangeScore(
+      rToGRatio,
+      this.PHYSIOLOGICAL_RANGES.redToGreen.min,
+      this.PHYSIOLOGICAL_RANGES.redToGreen.max
+    );
+
+    const rToBScore = this.calculateRangeScore(
+      rToBRatio,
+      this.PHYSIOLOGICAL_RANGES.redToBlue.min,
+      this.PHYSIOLOGICAL_RANGES.redToBlue.max
+    );
+
+    // Combinar las puntuaciones utilizando los pesos
+    const totalWeight = this.PHYSIOLOGICAL_RANGES.redValue.weight +
+                        this.PHYSIOLOGICAL_RANGES.redToGreen.weight +
+                        this.PHYSIOLOGICAL_RANGES.redToBlue.weight;
+
+    const weightedScore =
+      (redScore * this.PHYSIOLOGICAL_RANGES.redValue.weight +
+       rToGScore * this.PHYSIOLOGICAL_RANGES.redToGreen.weight +
+       rToBScore * this.PHYSIOLOGICAL_RANGES.redToBlue.weight) / totalWeight;
+
+    return weightedScore;
   }
 
   /**

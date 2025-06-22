@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
-import { VitalSigns } from '../types';
+import { BiometricReading } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface VitalSignsDisplayProps {
-  data: VitalSigns;
+  data: BiometricReading;
   loading?: boolean;
 }
 
@@ -19,7 +19,7 @@ const VitalSignsDisplay = memo(({ data, loading }: VitalSignsDisplayProps) => {
     <div className="vital-signs-container">
       <div className="vital-sign-item">
         <span className="label">Frecuencia Cardíaca:</span>
-        <span className="value">{data.heartRate} bpm</span>
+        <span className="value">{data.hr} bpm</span>
       </div>
       <div className="vital-sign-item">
         <span className="label">SpO2:</span>
@@ -27,11 +27,11 @@ const VitalSignsDisplay = memo(({ data, loading }: VitalSignsDisplayProps) => {
       </div>
       <div className="vital-sign-item">
         <span className="label">Presión Arterial:</span>
-        <span className="value">{data.bloodPressure.systolic}/{data.bloodPressure.diastolic}</span>
+        <span className="value">{data.sbp}/{data.dbp}</span>
       </div>
       <div className="vital-sign-item">
         <span className="label">Calidad de Señal:</span>
-        <span className="value">{data.signalQuality}%</span>
+        <span className="value">{Math.round(data.confidence * 100)}%</span>
       </div>
     </div>
   );
