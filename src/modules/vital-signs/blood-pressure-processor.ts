@@ -1,5 +1,14 @@
 import { calculateAmplitude, findPeaksAndValleys } from './utils';
 
+/**
+ * BloodPressureProcessor
+ * 
+ * Este módulo calcula la presión arterial (sistólica y diastólica) a partir de las características de la señal PPG.
+ * Es fundamental entender que esta es una ESTIMACIÓN basada en correlaciones empíricas entre la morfología
+ * de la onda de pulso y la presión arterial. NO es una medición directa como la obtenida con un manguito.
+ * Para obtener resultados clínicamente precisos y "reales", se requiere una calibración regular con un
+ * tensiómetro validado. Sin esta calibración, los valores deben considerarse indicativos y no diagnósticos.
+ */
 export class BloodPressureProcessor {
   private readonly BP_BUFFER_SIZE = 10;
   private readonly BP_ALPHA = 0.7;
