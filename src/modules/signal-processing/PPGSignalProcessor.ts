@@ -171,7 +171,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
 
       // 1. Extract frame features with enhanced validation
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
-      const { redValue, textureScore, rToGRatio, rToBRatio, avgRed, avgGreen, avgBlue } = extractionResult;
+      const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
 
       // DEBUGGING: Log extracted redValue and ROI
@@ -185,10 +185,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           roiHeight: roi.height,
           textureScore,
           rToGRatio,
-          rToBRatio,
-          avgRed,
-          avgGreen,
-          avgBlue
+          rToBRatio
         });
       }
 
@@ -205,10 +202,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0,
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0,
-          avgRed: avgRed,
-          avgGreen: avgGreen,
-          avgBlue: avgBlue
+          perfusionIndex: 0
         };
 
         this.onSignalReady(minimalSignal);
@@ -221,6 +215,9 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       // 2. Apply multi-stage filtering to the signal
       let filteredValue = this.kalmanFilter.filter(redValue);
       filteredValue = this.sgFilter.filter(filteredValue);
+      // Amplificar moderadamente PPG para visualizar variaciones reales
+      const AMPLIFICATION_FACTOR = 30;
+      filteredValue = filteredValue * AMPLIFICATION_FACTOR;
 
       // 3. Perform signal trend analysis with strict physiological validation
       const trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
@@ -237,10 +234,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0, 
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0,
-          avgRed: avgRed,
-          avgGreen: avgGreen,
-          avgBlue: avgBlue
+          perfusionIndex: 0
         };
 
         this.onSignalReady(rejectSignal);
@@ -266,10 +260,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0, 
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0,
-          avgRed: avgRed,
-          avgGreen: avgGreen,
-          avgBlue: avgBlue
+          perfusionIndex: 0
         };
 
         this.onSignalReady(rejectSignal);
@@ -309,10 +300,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         quality: quality,
         fingerDetected: isFingerDetected,
         roi: roi,
-        perfusionIndex: Math.max(0, perfusionIndex),
-        avgRed: avgRed,
-        avgGreen: avgGreen,
-        avgBlue: avgBlue
+        perfusionIndex: Math.max(0, perfusionIndex)
       };
 
       if (shouldLog) {

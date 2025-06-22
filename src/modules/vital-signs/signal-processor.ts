@@ -1,3 +1,4 @@
+
 /**
  * Enhanced Signal Processor based on advanced biomedical signal processing techniques
  * Implementa algoritmos de detección ultra-sensibles para señales PPG

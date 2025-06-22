@@ -1,142 +1,119 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
+import { PPGProcessor } from "../modules/signal-processing/PPGProcessor";
+import type { VitalSigns, SignalQuality } from "../modules/signal-processing/types";
 
-interface VitalMeasurements {
-  heartRate: number;
-  spo2: number;
-  pressure: string;
-  arrhythmiaCount: string | number;
-  glucose: number;
-  hemoglobin: number;
+export function useVitalMeasurement() {
+	const [measurements, setMeasurements] = useState<VitalSigns>({
+		heartRate: 0,
+		confidence: 0,
+		quality: { snr: 0, stability: 0, amplitude: 0, regularity: 0, overall: 0 },
+		timestamp: Date.now(),
+	});
+	const [isProcessing, setIsProcessing] = useState(false);
+	const [quality, setQuality] = useState<SignalQuality | null>(null);
+	const [elapsedTime, setElapsedTime] = useState(0);
+	const videoRef = useRef<HTMLVideoElement>(null);
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const processorRef = useRef<PPGProcessor | null>(null);
+	const animationFrameId = useRef<number | null>(null);
+	const startTimeRef = useRef<number | null>(null);
+	const intervalRef = useRef<number | null>(null);
+
+	const MEASUREMENT_DURATION = 30000; // 30 segundos
+
+	useEffect(() => {
+		processorRef.current = new PPGProcessor();
+		return () => {
+			stopMeasurement();
+		};
+	}, []);
+
+	const initializeCamera = async () => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: {
+					facingMode: "user",
+					width: { ideal: 640 },
+					height: { ideal: 480 },
+					frameRate: { ideal: 30 },
+				},
+			});
+			if (videoRef.current) {
+				videoRef.current.srcObject = stream;
+				await videoRef.current.play();
+			}
+		} catch (err) {
+			console.error("Error al acceder a la cámara:", err);
+			setIsProcessing(false);
+		}
+	};
+
+	const processFrame = () => {
+		if (!isProcessing || !videoRef.current || !canvasRef.current || !processorRef.current) {
+			animationFrameId.current = null;
+			return;
+		}
+
+		const context = canvasRef.current.getContext("2d");
+		if (context) {
+			canvasRef.current.width = videoRef.current.videoWidth;
+			canvasRef.current.height = videoRef.current.videoHeight;
+			context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+			const frame = context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+			const result = processorRef.current.processFrame(frame);
+
+			setQuality(result.quality);
+			setMeasurements((prev) => ({
+				...prev,
+				heartRate: 0, // PPGProcessor no devuelve bpm directamente. Este valor debe ser calculado por VitalSignsProcessor o HeartBeatProcessor.
+				quality: result.quality,
+				timestamp: Date.now(),
+			}));
+		}
+		animationFrameId.current = requestAnimationFrame(processFrame);
+	};
+
+	const startMeasurement = async () => {
+		setIsProcessing(true);
+		setElapsedTime(0);
+		startTimeRef.current = Date.now();
+		await initializeCamera();
+		animationFrameId.current = requestAnimationFrame(processFrame);
+
+		intervalRef.current = window.setInterval(() => {
+			if (startTimeRef.current) {
+				const elapsed = Date.now() - startTimeRef.current;
+				setElapsedTime(elapsed);
+				if (elapsed >= MEASUREMENT_DURATION) {
+					stopMeasurement();
+				}
+			}
+		}, 1000); // Actualizar cada segundo
+	};
+
+	const stopMeasurement = () => {
+		setIsProcessing(false);
+		if (animationFrameId.current) {
+			cancelAnimationFrame(animationFrameId.current);
+		}
+		if (intervalRef.current) {
+			clearInterval(intervalRef.current);
+		}
+		if (videoRef.current && videoRef.current.srcObject) {
+			(videoRef.current.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
+			videoRef.current.srcObject = null;
+		}
+	};
+
+	return {
+		measurements,
+		isProcessing,
+		quality,
+		elapsedTime,
+		videoRef,
+		canvasRef,
+		startMeasurement,
+		stopMeasurement,
+		isComplete: elapsedTime >= MEASUREMENT_DURATION,
+	};
 }
-
-interface UseVitalMeasurementProps {
-  isMeasuring: boolean;
-  currentVitalSigns: any; // Type needs to be adjusted based on actual use
-  currentArrhythmiaCount: string | number;
-  currentHeartRate: number;
-  isCalibrating: boolean;
-  calibrationProgress?: any; // Type needs to be adjusted based on actual use
-}
-
-export const useVitalMeasurement = ({
-  isMeasuring,
-  currentVitalSigns,
-  currentArrhythmiaCount,
-  currentHeartRate,
-  isCalibrating,
-  calibrationProgress,
-}: UseVitalMeasurementProps) => {
-  const [measurements, setMeasurements] = useState<VitalMeasurements>({
-    heartRate: 0,
-    spo2: 0,
-    pressure: "--/--",
-    arrhythmiaCount: 0,
-    glucose: 0,
-    hemoglobin: 0
-  });
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const measurementTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    console.log('useVitalMeasurement - Estado detallado:', {
-      isMeasuring,
-      currentMeasurements: measurements,
-      elapsedTime,
-      timestamp: new Date().toISOString(),
-      session: Math.random().toString(36).substring(2, 9), // Identificador único para esta sesión
-      isCalibrating,
-      calibrationProgress
-    });
-
-    if (!isMeasuring) {
-      console.log('useVitalMeasurement - Reiniciando mediciones por detención', {
-        prevValues: {...measurements},
-        timestamp: new Date().toISOString()
-      });
-      
-      setMeasurements({
-        heartRate: 0,
-        spo2: 0,
-        pressure: "--/--",
-        arrhythmiaCount: "--",
-        glucose: 0,
-        hemoglobin: 0
-      });
-      
-      setElapsedTime(0);
-
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-        measurementTimerRef.current = null;
-      }
-      return;
-    }
-
-    const startTime = Date.now();
-    console.log('useVitalMeasurement - Iniciando medición', {
-      startTime: new Date(startTime).toISOString(),
-      prevValues: {...measurements}
-    });
-    
-    const MEASUREMENT_DURATION = 30000; // Duración total de la medición en ms (30 segundos)
-
-    // Actualizar las mediciones directamente desde las props
-    setMeasurements({
-      heartRate: currentHeartRate,
-      spo2: currentVitalSigns.spo2 || 0,
-      pressure: currentVitalSigns.pressure || "--/--",
-      arrhythmiaCount: currentArrhythmiaCount,
-      glucose: currentVitalSigns.glucose || 0,
-      hemoglobin: currentVitalSigns.hemoglobin || 0
-    });
-
-    // Configurar temporizador para la duración de la medición
-    if (measurementTimerRef.current) {
-      clearInterval(measurementTimerRef.current);
-    }
-    measurementTimerRef.current = window.setInterval(() => {
-      const currentTime = Date.now();
-      const elapsed = currentTime - startTime;
-      
-      console.log('useVitalMeasurement - Progreso de medición', {
-        elapsed: elapsed / 1000,
-        porcentaje: (elapsed / MEASUREMENT_DURATION) * 100,
-        timestamp: new Date().toISOString()
-      });
-      
-      setElapsedTime(elapsed / 1000);
-
-      if (elapsed >= MEASUREMENT_DURATION) {
-        console.log('useVitalMeasurement - Medición completada', {
-          duracionTotal: MEASUREMENT_DURATION / 1000,
-          resultadosFinal: {...measurements},
-          timestamp: new Date().toISOString()
-        });
-        
-        clearInterval(measurementTimerRef.current);
-        measurementTimerRef.current = null;
-        // Disparar evento si es necesario, pero la finalización ahora es externa
-        // const event = new CustomEvent('measurementComplete');
-        // window.dispatchEvent(event);
-      }
-    }, 200);
-
-    return () => {
-      console.log('useVitalMeasurement - Limpiando intervalo', {
-        currentElapsed: elapsedTime,
-        timestamp: new Date().toISOString()
-      });
-      if (measurementTimerRef.current) {
-        clearInterval(measurementTimerRef.current);
-      }
-    };
-  }, [isMeasuring, currentVitalSigns, currentArrhythmiaCount, currentHeartRate, isCalibrating, calibrationProgress]); // Dependencias del useEffect
-
-  return {
-    ...measurements,
-    elapsedTime: Math.min(elapsedTime, 30), // Asegurar que no exceda 30 segundos
-    isComplete: elapsedTime >= 30, // Indicar si la medición está completa
-    isCalibrating,
-    calibrationProgress,
-  };
-};

@@ -1,12 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { RotateCcw } from "lucide-react";
-import { parseArrhythmiaStatus, getArrhythmiaText, getArrhythmiaColor } from '@/utils/arrhythmiaUtils';
 
 interface PPGResultDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  signalData: Array<{time: number, value: number, isPeak: boolean, status: any}>;
+  signalData: Array<{time: number, value: number, isPeak: boolean}>;
 }
 
 const PPGResultDialog = ({ isOpen, onClose, signalData }: PPGResultDialogProps) => {
@@ -65,9 +64,10 @@ const PPGResultDialog = ({ isOpen, onClose, signalData }: PPGResultDialogProps) 
         const normalizedY = (point.value - minVal) / range;
         const y = normalizedY * canvas.height * 0.8 + canvas.height * 0.1;
         
-        const status = parseArrhythmiaStatus(point.status);
-        ctx.fillStyle = getArrhythmiaColor(status);
-        ctx.fillText(getArrhythmiaText(status), x, y);
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ff0000';
+        ctx.fill();
       }
     });
 

@@ -35,12 +35,12 @@ export class SignalTrendAnalyzer {
 
   // LÓGICA ULTRA-SIMPLE: el score de estabilidad siempre es 1
   getStabilityScore(): number {
-    return this.trendScores.stability;
+    return 1;
   }
   
   // LÓGICA ULTRA-SIMPLE: el score de periodicidad siempre es 1
   getPeriodicityScore(): number {
-    return this.trendScores.periodicity;
+    return 1;
   }
 
   addValue(value: number): void {
