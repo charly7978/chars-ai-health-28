@@ -1,5 +1,18 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
+import { AdvancedVitalSignsProcessor, BiometricReading } from '../modules/vital-signs/VitalSignsProcessor';
+import { ProcessedSignal } from '../types/signal';
+
+// Define a new interface for the combined vital signs data returned by this hook
+export interface VitalSignsDisplayData extends BiometricReading {
+  pressure: string; // e.g., "120/80"
+  arrhythmiaStatus: string; // e.g., "SIN ARRITMIAS|0"
+  lastArrhythmiaData?: {
+    timestamp: number;
+    rmssd: number;
+    rrVariation: number;
+  } | null;
+  hemoglobin: number; // assuming this is a calculated value or placeholder
+}
 
 /**
  * Custom hook for processing vital signs with advanced algorithms
@@ -11,16 +24,15 @@ export const useVitalSignsProcessor = () => {
     console.log("useVitalSignsProcessor: Creando nueva instancia", {
       timestamp: new Date().toISOString()
     });
-    return new VitalSignsProcessor();
+    return new AdvancedVitalSignsProcessor();
   });
   const [arrhythmiaCounter, setArrhythmiaCounter] = useState(0);
-  const [lastValidResults, setLastValidResults] = useState<VitalSignsResult | null>(null);
+  const [lastValidResults, setLastValidResults] = useState<BiometricReading | null>(null);
   const lastArrhythmiaTime = useRef<number>(0);
   const hasDetectedArrhythmia = useRef<boolean>(false);
   const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
-  const [calibrationProgress, setCalibrationProgress] = useState<VitalSignsResult['calibration'] | undefined>(undefined);
   
   // Advanced configuration based on clinical guidelines
   const MIN_TIME_BETWEEN_ARRHYTHMIAS = 1000; // Minimum 1 second between arrhythmias
@@ -52,32 +64,22 @@ export const useVitalSignsProcessor = () => {
    * Start calibration for all vital signs
    */
   const startCalibration = useCallback(() => {
-    console.log("useVitalSignsProcessor: Iniciando calibración de todos los parámetros", {
-      timestamp: new Date().toISOString(),
-      sessionId: sessionId.current
-    });
-    
-    processor.startCalibration();
-  }, [processor]);
+    console.warn("Calibración no implementada en AdvancedVitalSignsProcessor.");
+  }, []);
   
   /**
    * Force calibration to complete immediately
    */
   const forceCalibrationCompletion = useCallback(() => {
-    console.log("useVitalSignsProcessor: Forzando finalización de calibración", {
-      timestamp: new Date().toISOString(),
-      sessionId: sessionId.current
-    });
-    
-    processor.forceCalibrationCompletion();
-  }, [processor]);
+    console.warn("Finalización forzada de calibración no implementada en AdvancedVitalSignsProcessor.");
+  }, []);
   
   // Process the signal with improved algorithms
-  const processSignal = useCallback((value: number, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
+  const processSignal = useCallback((signal: ProcessedSignal, rrData?: { intervals: number[], lastPeakTime: number | null }) => {
     processedSignals.current++;
     
     console.log("useVitalSignsProcessor: Procesando señal", {
-      valorEntrada: value,
+      valorEntrada: signal.filteredValue, // Log the filtered value from ProcessedSignal
       rrDataPresente: !!rrData,
       intervalosRR: rrData?.intervals.length || 0,
       ultimosIntervalos: rrData?.intervals.slice(-3) || [],
@@ -85,23 +87,26 @@ export const useVitalSignsProcessor = () => {
       señalNúmero: processedSignals.current,
       sessionId: sessionId.current,
       timestamp: new Date().toISOString(),
-      calibrando: processor.isCurrentlyCalibrating(),
-      progresoCalibración: processor.getCalibrationProgress()
+      // Removed calibration related logs
     });
     
-    // Actualizar el estado de progreso de calibración
-    setCalibrationProgress(processor.getCalibrationProgress());
-
     // Process signal through the vital signs processor
-    const result = processor.processSignal(value, rrData);
-    const currentTime = Date.now();
+    const ppgSignalForAdvancedProcessor = {
+        red: [signal.avgRed || 0], // Pass avgRed as a single-element array
+        green: [signal.avgGreen || 0],
+        ir: [signal.avgBlue || 0], // Assuming avgBlue is used for IR
+        timestamp: signal.timestamp,
+      };
+      
+      const biometricResult = processor.processSignal(ppgSignalForAdvancedProcessor); // Pass the constructed PPGSignal
+      const currentTime = Date.now();
     
     // Guardar para depuración
     if (processedSignals.current % 20 === 0) {
       signalLog.current.push({
         timestamp: currentTime,
-        value,
-        result: {...result}
+        value: signal.filteredValue,
+        result: {...biometricResult}
       });
       
       // Mantener el log a un tamaño manejable
@@ -115,17 +120,16 @@ export const useVitalSignsProcessor = () => {
       });
     }
     
-    // Si tenemos un resultado válido, guárdalo
-    if (result.spo2 > 0 && result.glucose > 0 && result.lipids.totalCholesterol > 0) {
+    // If we have a valid BiometricReading, save it
+    if (biometricResult && biometricResult.spo2 > 0 && biometricResult.glucose > 0) { // Removed lipids.totalCholesterol
       console.log("useVitalSignsProcessor: Resultado válido detectado", {
-        spo2: result.spo2,
-        presión: result.pressure,
-        glucosa: result.glucose,
-        lípidos: result.lipids,
+        spo2: biometricResult.spo2,
+        presión: `${biometricResult.sbp}/${biometricResult.dbp}`,
+        glucosa: biometricResult.glucose,
         timestamp: new Date().toISOString()
       });
       
-      setLastValidResults(result);
+      setLastValidResults(biometricResult);
     }
     
     // Enhanced RR interval analysis (more robust than previous)
@@ -144,16 +148,9 @@ export const useVitalSignsProcessor = () => {
       const lastRR = lastThreeIntervals[lastThreeIntervals.length - 1];
       const rrVariation = Math.abs(lastRR - avgRR) / avgRR;
       
-      // Calculate standard deviation of intervals
-      const rrSD = Math.sqrt(
-        lastThreeIntervals.reduce((acc, val) => acc + Math.pow(val - avgRR, 2), 0) / 
-        lastThreeIntervals.length
-      );
-      
       console.log("useVitalSignsProcessor: Análisis avanzado RR", {
         rmssd,
         rrVariation,
-        rrSD,
         lastRR,
         avgRR,
         lastThreeIntervals,
@@ -165,16 +162,13 @@ export const useVitalSignsProcessor = () => {
       
       // Multi-parametric arrhythmia detection algorithm
       if ((rmssd > 50 && rrVariation > 0.20) || // Primary condition
-          (rrSD > 35 && rrVariation > 0.18) ||  // Secondary condition
           (lastRR > 1.4 * avgRR) ||             // Extreme outlier condition
           (lastRR < 0.6 * avgRR)) {             // Extreme outlier condition
           
         console.log("useVitalSignsProcessor: Posible arritmia detectada", {
           rmssd,
           rrVariation,
-          rrSD,
           condición1: rmssd > 50 && rrVariation > 0.20,
-          condición2: rrSD > 35 && rrVariation > 0.18,
           condición3: lastRR > 1.4 * avgRR,
           condición4: lastRR < 0.6 * avgRR,
           timestamp: new Date().toISOString()
@@ -191,7 +185,6 @@ export const useVitalSignsProcessor = () => {
           console.log("Arritmia confirmada:", {
             rmssd,
             rrVariation,
-            rrSD,
             lastRR,
             avgRR,
             intervals: lastThreeIntervals,
@@ -200,13 +193,15 @@ export const useVitalSignsProcessor = () => {
           });
 
           return {
-            ...result,
+            ...(biometricResult || {} as BiometricReading),
+            pressure: biometricResult ? `${biometricResult.sbp}/${biometricResult.dbp}` : "--/--",
             arrhythmiaStatus: `ARRITMIA DETECTADA|${nuevoContador}`,
             lastArrhythmiaData: {
               timestamp: currentTime,
               rmssd,
               rrVariation
-            }
+            },
+            hemoglobin: biometricResult ? (biometricResult.spo2 * 0.15) : 0, // Placeholder calculation for hemoglobin
           };
         } else {
           console.log("useVitalSignsProcessor: Arritmia detectada pero ignorada", {
@@ -222,83 +217,66 @@ export const useVitalSignsProcessor = () => {
     }
     
     // If we previously detected an arrhythmia, maintain that state
+    let currentArrhythmiaStatus = `SIN ARRITMIAS|${arrhythmiaCounter}`;
     if (hasDetectedArrhythmia.current) {
-      return {
-        ...result,
-        arrhythmiaStatus: `ARRITMIA DETECTADA|${arrhythmiaCounter}`,
-        lastArrhythmiaData: null
-      };
+      currentArrhythmiaStatus = `ARRITMIA DETECTADA|${arrhythmiaCounter}`;
     }
     
-    // No arrhythmias detected
+    // Return the combined result, now using BiometricReading properties
     return {
-      ...result,
-      arrhythmiaStatus: `SIN ARRITMIAS|${arrhythmiaCounter}`
+      ...(biometricResult || {} as BiometricReading),
+      pressure: biometricResult ? `${biometricResult.sbp}/${biometricResult.dbp}` : "--/--",
+      arrhythmiaStatus: currentArrhythmiaStatus,
+      lastArrhythmiaData: null,
+      hemoglobin: biometricResult ? (biometricResult.spo2 * 0.15) : 0, // Placeholder calculation for hemoglobin
     };
   }, [processor, arrhythmiaCounter]);
 
-  // Soft reset: mantener los resultados pero reiniciar los procesadores
+  // Soft reset: reset internal states of the hook
   const reset = useCallback(() => {
     console.log("useVitalSignsProcessor: Reseteo suave", {
       estadoAnterior: {
         arritmias: arrhythmiaCounter,
         últimosResultados: lastValidResults ? {
           spo2: lastValidResults.spo2,
-          presión: lastValidResults.pressure
+          sbp: lastValidResults.sbp,
+          dbp: lastValidResults.dbp,
         } : null
       },
       timestamp: new Date().toISOString()
     });
     
-    const savedResults = processor.reset();
-    if (savedResults) {
-      console.log("useVitalSignsProcessor: Guardando resultados tras reset", {
-        resultadosGuardados: {
-          spo2: savedResults.spo2,
-          presión: savedResults.pressure,
-          estadoArritmia: savedResults.arrhythmiaStatus
-        },
-        timestamp: new Date().toISOString()
-      });
-      
-      setLastValidResults(savedResults);
-    } else {
-      console.log("useVitalSignsProcessor: No hay resultados para guardar tras reset", {
-        timestamp: new Date().toISOString()
-      });
-    }
-    
+    setLastValidResults(null);
     setArrhythmiaCounter(0);
     lastArrhythmiaTime.current = 0;
     hasDetectedArrhythmia.current = false;
-    console.log("Reseteo suave completado - manteniendo resultados");
-    return savedResults;
-  }, [processor]);
+    console.log("Reseteo suave completado");
+    return null; // Return null as there are no saved results from a stateless processor
+  }, [arrhythmiaCounter, lastValidResults]);
   
-  // Hard reset: borrar todos los resultados y reiniciar
+  // Hard reset: clear all results and reset
   const fullReset = useCallback(() => {
     console.log("useVitalSignsProcessor: Reseteo completo", {
       estadoAnterior: {
         arritmias: arrhythmiaCounter,
         últimosResultados: lastValidResults ? {
           spo2: lastValidResults.spo2,
-          presión: lastValidResults.pressure
+          sbp: lastValidResults.sbp,
+          dbp: lastValidResults.dbp,
         } : null,
         señalesProcesadas: processedSignals.current
       },
       timestamp: new Date().toISOString()
     });
     
-    processor.fullReset();
     setLastValidResults(null);
     setArrhythmiaCounter(0);
     lastArrhythmiaTime.current = 0;
     hasDetectedArrhythmia.current = false;
     processedSignals.current = 0;
     signalLog.current = [];
-    setCalibrationProgress(undefined);
-    console.log("Reseteo completo finalizado - borrando todos los resultados");
-  }, [processor, arrhythmiaCounter, lastValidResults]);
+    console.log("Reseteo completo finalizado");
+  }, [arrhythmiaCounter, lastValidResults]);
 
   return {
     processSignal,
@@ -308,7 +286,7 @@ export const useVitalSignsProcessor = () => {
     forceCalibrationCompletion,
     arrhythmiaCounter,
     lastValidResults,
-    calibrationProgress,
+    // Removed calibrationProgress
     debugInfo: {
       processedSignals: processedSignals.current,
       signalLog: signalLog.current.slice(-10)

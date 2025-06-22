@@ -171,7 +171,7 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
 
       // 1. Extract frame features with enhanced validation
       const extractionResult = this.frameProcessor.extractFrameData(imageData);
-      const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
+      const { redValue, textureScore, rToGRatio, rToBRatio, avgRed, avgGreen, avgBlue } = extractionResult;
       const roi = this.frameProcessor.detectROI(redValue, imageData);
 
       // DEBUGGING: Log extracted redValue and ROI
@@ -185,7 +185,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           roiHeight: roi.height,
           textureScore,
           rToGRatio,
-          rToBRatio
+          rToBRatio,
+          avgRed,
+          avgGreen,
+          avgBlue
         });
       }
 
@@ -202,7 +205,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0,
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0
+          perfusionIndex: 0,
+          avgRed: avgRed,
+          avgGreen: avgGreen,
+          avgBlue: avgBlue
         };
 
         this.onSignalReady(minimalSignal);
@@ -231,7 +237,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0, 
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0
+          perfusionIndex: 0,
+          avgRed: avgRed,
+          avgGreen: avgGreen,
+          avgBlue: avgBlue
         };
 
         this.onSignalReady(rejectSignal);
@@ -257,7 +266,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
           quality: 0, 
           fingerDetected: false,
           roi: roi,
-          perfusionIndex: 0
+          perfusionIndex: 0,
+          avgRed: avgRed,
+          avgGreen: avgGreen,
+          avgBlue: avgBlue
         };
 
         this.onSignalReady(rejectSignal);
@@ -297,7 +309,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         quality: quality,
         fingerDetected: isFingerDetected,
         roi: roi,
-        perfusionIndex: Math.max(0, perfusionIndex)
+        perfusionIndex: Math.max(0, perfusionIndex),
+        avgRed: avgRed,
+        avgGreen: avgGreen,
+        avgBlue: avgBlue
       };
 
       if (shouldLog) {

@@ -45,19 +45,6 @@ const VitalSign = ({
             }
           }
           return '';
-        case 'COLESTEROL/TRIGL.':
-          const lipidParts = value.split('/');
-          if (lipidParts.length === 2) {
-            const cholesterol = parseInt(lipidParts[0], 10);
-            const triglycerides = parseInt(lipidParts[1], 10);
-            if (!isNaN(cholesterol)) {
-              if (cholesterol > 200) return 'Hipercolesterolemia';
-            }
-            if (!isNaN(triglycerides)) {
-              if (triglycerides > 150) return 'Hipertrigliceridemia';
-            }
-          }
-          return '';
         case 'ARRITMIAS':
           const arrhythmiaParts = value.split('|');
           if (arrhythmiaParts.length === 2) {
@@ -87,8 +74,6 @@ const VitalSign = ({
       case 'Hipoxemia':
       case 'Hiperglucemia':
       case 'Hipertensión':
-      case 'Hipercolesterolemia':
-      case 'Hipertrigliceridemia':
         return 'text-[#ea384c]';
       case 'Bradicardia':
       case 'Hipoglucemia':

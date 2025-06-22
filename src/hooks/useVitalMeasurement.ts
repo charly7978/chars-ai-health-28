@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface VitalMeasurements {
   heartRate: number;
@@ -7,18 +6,16 @@ interface VitalMeasurements {
   pressure: string;
   arrhythmiaCount: string | number;
   glucose: number;
-  totalCholesterol: number;
-  triglycerides: number;
   hemoglobin: number;
 }
 
 interface UseVitalMeasurementProps {
   isMeasuring: boolean;
-  currentVitalSigns: VitalSignsResult;
+  currentVitalSigns: any; // Type needs to be adjusted based on actual use
   currentArrhythmiaCount: string | number;
   currentHeartRate: number;
   isCalibrating: boolean;
-  calibrationProgress?: VitalSignsResult['calibration'];
+  calibrationProgress?: any; // Type needs to be adjusted based on actual use
 }
 
 export const useVitalMeasurement = ({
@@ -35,8 +32,6 @@ export const useVitalMeasurement = ({
     pressure: "--/--",
     arrhythmiaCount: 0,
     glucose: 0,
-    totalCholesterol: 0,
-    triglycerides: 0,
     hemoglobin: 0
   });
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -65,8 +60,6 @@ export const useVitalMeasurement = ({
         pressure: "--/--",
         arrhythmiaCount: "--",
         glucose: 0,
-        totalCholesterol: 0,
-        triglycerides: 0,
         hemoglobin: 0
       });
       
@@ -94,8 +87,6 @@ export const useVitalMeasurement = ({
       pressure: currentVitalSigns.pressure || "--/--",
       arrhythmiaCount: currentArrhythmiaCount,
       glucose: currentVitalSigns.glucose || 0,
-      totalCholesterol: currentVitalSigns.lipids?.totalCholesterol || 0,
-      triglycerides: currentVitalSigns.lipids?.triglycerides || 0,
       hemoglobin: currentVitalSigns.hemoglobin || 0
     });
 

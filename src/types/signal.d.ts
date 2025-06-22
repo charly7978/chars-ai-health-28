@@ -13,6 +13,9 @@ export interface ProcessedSignal {
     height: number;
   };
   perfusionIndex?: number;
+  avgRed?: number;
+  avgGreen?: number;
+  avgBlue?: number;
 }
 
 export interface ProcessingError {
