@@ -40,3 +40,4 @@ const VitalSignsDisplay = memo(({ data, loading }: VitalSignsDisplayProps) => {
 VitalSignsDisplay.displayName = 'VitalSignsDisplay';
 
 export default VitalSignsDisplay;
+
