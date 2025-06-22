@@ -12,8 +12,8 @@ export class GlucoseProcessor {
   // Se aumenta el factor de calibración de 1.12 a 1.15 (por ejemplo)
   private readonly CALIBRATION_FACTOR = 1.15; // optimización actualizada
   private readonly CONFIDENCE_THRESHOLD = 0.65; // Minimum confidence for reporting
-  private readonly MIN_GLUCOSE = 70; // Physiological minimum (mg/dL)
-  private readonly MAX_GLUCOSE = 180; // Upper limit for reporting (mg/dL)
+  private readonly MIN_GLUCOSE = 40; // Physiological minimum (mg/dL)
+  private readonly MAX_GLUCOSE = 220; // Upper limit for reporting (mg/dL)
   
   private confidenceScore: number = 0;
   private lastEstimate: number = 0;
@@ -21,7 +21,7 @@ export class GlucoseProcessor {
   
   constructor() {
     // Initialize with conservative baseline
-    this.lastEstimate = 100; // Start with normal baseline (100 mg/dL)
+    this.lastEstimate = 92; // Start with normal baseline (92 mg/dL)
   }
   
   /**
@@ -29,7 +29,7 @@ export class GlucoseProcessor {
    * Using adaptive multi-parameter model based on waveform characteristics
    */
   public calculateGlucose(ppgValues: number[]): number {
-    if (ppgValues.length < 180) {
+    if (ppgValues.length < 220) {
       this.confidenceScore = 0;
       return 0; // Not enough data
     }
@@ -53,7 +53,7 @@ export class GlucoseProcessor {
     this.confidenceScore = this.calculateConfidence(features, recentPPG);
     
     // Apply physiological constraints
-    const maxAllowedChange = 15; // Maximum mg/dL change in short period
+    const maxAllowedChange = 10; // Maximum mg/dL change in short period
     let constrainedEstimate = this.lastEstimate;
     
     if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
