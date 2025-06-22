@@ -14,11 +14,15 @@ export class BloodPressureProcessor {
   private readonly BP_ALPHA = 0.7;
   private systolicBuffer: number[] = [];
   private diastolicBuffer: number[] = [];
+  private systolicCalibrationOffset: number = 0;
+  private diastolicCalibrationOffset: number = 0;
 
   /**
    * Calculates blood pressure using PPG signal features
+   * @param values Array of PPG signal values
+   * @param applyCalibration Optional. If false, calibration offsets are not applied. Used internally for calibration process.
    */
-  public calculateBloodPressure(values: number[]): {
+  public calculateBloodPressure(values: number[], applyCalibration: boolean = true): {
     systolic: number;
     diastolic: number;
   } {
@@ -79,6 +83,12 @@ export class BloodPressureProcessor {
       instantDiastolic = instantSystolic - 75;
     }
 
+    // Aplicar offsets de calibración si la bandera es verdadera
+    if (applyCalibration) {
+      instantSystolic += this.systolicCalibrationOffset;
+      instantDiastolic += this.diastolicCalibrationOffset;
+    }
+
     // Update pressure buffers with new values
     this.systolicBuffer.push(instantSystolic);
     this.diastolicBuffer.push(instantDiastolic);
@@ -115,5 +125,25 @@ export class BloodPressureProcessor {
   public reset(): void {
     this.systolicBuffer = [];
     this.diastolicBuffer = [];
+    this.systolicCalibrationOffset = 0;
+    this.diastolicCalibrationOffset = 0;
+  }
+
+  /**
+   * Sets calibration offsets based on a reference measurement and sample PPG values.
+   * This method should be called when the user provides a reliable external BP reading.
+   * @param referenceSystolic The systolic blood pressure from a reference device.
+   * @param referenceDiastolic The diastolic blood pressure from a reference device.
+   * @param ppgSampleValues A recent array of stable PPG values to calculate an uncalibrated estimate.
+   */
+  public setCalibration(referenceSystolic: number, referenceDiastolic: number, ppgSampleValues: number[]): void {
+    // Calculate an uncalibrated estimate using the provided sample values
+    const uncalibratedEstimate = this.calculateBloodPressure(ppgSampleValues, false); // Do not apply existing calibration
+
+    // Calculate the offsets
+    this.systolicCalibrationOffset = referenceSystolic - uncalibratedEstimate.systolic;
+    this.diastolicCalibrationOffset = referenceDiastolic - uncalibratedEstimate.diastolic;
+
+    console.log(`BloodPressureProcessor: Calibración establecida. Offset sistólico: ${this.systolicCalibrationOffset.toFixed(2)}, Offset diastólico: ${this.diastolicCalibrationOffset.toFixed(2)}`);
   }
 }

@@ -60,6 +60,13 @@ export class AdvancedVitalSignsProcessor {
   private irBuffer: number[] = [];
   private greenBuffer: number[] = [];
   
+  // Instancia del procesador de presión arterial
+  private bloodPressureProcessor: BloodPressureProcessor;
+  
+  constructor() {
+    this.bloodPressureProcessor = new BloodPressureProcessor();
+  }
+  
   // Método principal unificado
   processSignal(signal: PPGSignal): BiometricReading | null {
     // 1. Validación y preprocesamiento
@@ -145,18 +152,9 @@ export class AdvancedVitalSignsProcessor {
   }
 
   private calculateBloodPressure(red: number[], green: number[]): { sbp: number, dbp: number } {
-    const redPeaks = this.findPeaks(red);
-    const greenPeaks = this.findPeaks(green);
-    
-    if (redPeaks.length < 2 || greenPeaks.length < 2) {
-      return { sbp: 0, dbp: 0 };
-    }
-    
-    const pat = (greenPeaks[1] - redPeaks[1]) / this.FS * 1000;
-    return {
-      sbp: Math.max(80, Math.min(180, 125 - (0.45 * pat))),
-      dbp: Math.max(50, Math.min(120, 80 - (0.30 * pat)))
-    };
+    // Delegar el cálculo al BloodPressureProcessor, usando el canal rojo como entrada
+    const { systolic, diastolic } = this.bloodPressureProcessor.calculateBloodPressure(red);
+    return { sbp: systolic, dbp: diastolic };
   }
 
   private estimateGlucose(red: number[], ir: number[], green: number[]): number {
@@ -206,9 +204,32 @@ export class AdvancedVitalSignsProcessor {
 
   private calculateACDC(signal: number[]): { ac: number, dc: number } {
     const dc = signal.reduce((sum, val) => sum + val, 0) / signal.length;
-    const ac = Math.sqrt(
-      signal.reduce((sum, val) => sum + Math.pow(val - dc, 2), 0) / signal.length
-    );
+    const ac = Math.max(...signal) - Math.min(...signal);
     return { ac, dc };
+  }
+
+  /**
+   * Restablece el estado del procesador de signos vitales y sus sub-procesadores.
+   */
+  public reset(): void {
+    this.redBuffer = [];
+    this.irBuffer = [];
+    this.greenBuffer = [];
+    this.bloodPressureProcessor.reset();
+    // Si se instancian otros procesadores, sus métodos de reset también deberían llamarse aquí.
+  }
+
+  /**
+   * Establece los valores de calibración para la presión arterial.
+   * Requiere valores de referencia de un dispositivo externo y datos PPG de muestra.
+   * @param referenceSystolic Valor sistólico del dispositivo de referencia.
+   * @param referenceDiastolic Valor diastólico del dispositivo de referencia.
+   */
+  public setBloodPressureCalibration(referenceSystolic: number, referenceDiastolic: number): void {
+    if (this.redBuffer.length < this.WINDOW_SIZE) {
+      console.warn("AdvancedVitalSignsProcessor: No hay suficientes datos PPG en el buffer para la calibración de presión arterial.");
+      return;
+    }
+    this.bloodPressureProcessor.setCalibration(referenceSystolic, referenceDiastolic, this.redBuffer.slice());
   }
 }

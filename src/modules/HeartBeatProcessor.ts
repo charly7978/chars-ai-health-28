@@ -106,40 +106,12 @@ export class HeartBeatProcessor {
   private async initAudio() {
     try {
       this.audioContext = new AudioContext();
-      await this.audioContext.resume();
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
       console.log("HeartBeatProcessor: Audio Context Initialized and resumed");
-      
-      // Reproducir un sonido de prueba audible para desbloquear el audio
-      await this.playTestSound(0.3); // Volumen incrementado
     } catch (error) {
       console.error("HeartBeatProcessor: Error initializing audio", error);
-    }
-  }
-
-  private async playTestSound(volume: number = 0.2) {
-    if (!this.audioContext) return;
-    
-    try {
-      // console.log("HeartBeatProcessor: Reproduciendo sonido de prueba");
-      const oscillator = this.audioContext.createOscillator();
-      const gain = this.audioContext.createGain();
-      
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // Frecuencia A4 - claramente audible
-      
-      gain.gain.setValueAtTime(0, this.audioContext.currentTime);
-      gain.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.5);
-      
-      oscillator.connect(gain);
-      gain.connect(this.audioContext.destination);
-      
-      oscillator.start();
-      oscillator.stop(this.audioContext.currentTime + 0.6);
-      
-      // console.log("HeartBeatProcessor: Sonido de prueba reproducido");
-    } catch (error) {
-      console.error("HeartBeatProcessor: Error playing test sound", error);
     }
   }
 
@@ -215,9 +187,13 @@ export class HeartBeatProcessor {
         
         // Reseteamos la bandera después de reproducir el sonido de arritmia
         this.isArrhythmiaDetected = false;
+      } else {
+        // Play a single, quick "thump" sound for normal heartbeat
+        if (Date.now() - this.lastBeepTime > this.MIN_BEEP_INTERVAL_MS) {
+          this.lastBeepTime = Date.now();
+        }
       }
       const interval = now - this.lastBeepTime;
-      this.lastBeepTime = now;
       console.log(`HeartBeatProcessor: Latido reproducido. Intervalo: ${interval} ms, BPM estimado: ${Math.round(this.getSmoothBPM())}`);
     } catch (error) {
       console.error("HeartBeatProcessor: Error playing heart sound", error);
