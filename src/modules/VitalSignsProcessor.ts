@@ -53,9 +53,9 @@ export class VitalSignsProcessor {
     const glucose = this.estimateGlucose(red, green);
     
     return {
-      spo2: Math.min(98, Math.max(70, spo2)),
+      spo2: Math.min(100, Math.max(70, spo2)),
       pressure,
-      glucose: Math.min(300, Math.max(30, glucose)),
+      glucose: Math.min(300, Math.max(50, glucose)),
       confidence: this.calculateConfidence(red, ir, green),
       timestamp: Date.now()
     };
@@ -69,14 +69,14 @@ export class VitalSignsProcessor {
   private estimateBloodPressure(pat: number): {systolic: number, diastolic: number} {
     // Modelo lineal simplificado (requiere calibración individual)
     return {
-      systolic: 140 - (pat * 15),
-      diastolic: 50 - (pat * 10)
+      systolic: 120 - (pat * 15),
+      diastolic: 80 - (pat * 10)
     };
   }
   
   private estimateGlucose(red: number, green: number): number {
     // Basado en absorción espectral
-    return 80 + (red/green) * 10; // Modelo simplificado
+    return 90 + (red/green) * 20; // Modelo simplificado
   }
   
   private calculateConfidence(red: number, ir: number, green: number): number {
@@ -97,7 +97,7 @@ interface BiometricReading {
     systolic: number; // 90-120 normal
     diastolic: number; // 60-80 normal
   };
-  glucose: number;    // mg/dL (50-110 normal)
+  glucose: number;    // mg/dL (70-110 normal)
   confidence: number; // 0-1
   timestamp: number;
 }

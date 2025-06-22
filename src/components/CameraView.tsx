@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { toast } from "@/components/ui/use-toast";
-import { AdvancedVitalSignsProcessor, BiometricReading } from '../modules/vital-signs/VitalSignsProcessor';
+import { AdvancedVitalSignsProcessor, PPGAnalysisUtils } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -8,6 +8,34 @@ interface CameraViewProps {
   isFingerDetected?: boolean;
   signalQuality?: number;
 }
+
+interface PPGSignal {
+  red: number[];
+  green: number[];
+  ir: number[];
+  timestamp: number;
+}
+
+const usePerformanceThrottling = () => {
+  const [frameInterval, setFrameInterval] = useState(0);
+  const frameTimes = useRef<number[]>([]);
+
+  useEffect(() => {
+    const adjustFrameRate = () => {
+      if (frameTimes.current.length > 10) {
+        const avgTime = frameTimes.current.reduce((a, b) => a + b, 0) / frameTimes.current.length;
+        // Ajustar intervalo basado en performance
+        setFrameInterval(avgTime > 50 ? 100 : avgTime > 30 ? 50 : 0);
+        frameTimes.current = [];
+      }
+    };
+    
+    const timer = setInterval(adjustFrameRate, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return frameInterval;
+};
 
 const CameraView = ({ 
   onStreamReady, 
@@ -26,6 +54,17 @@ const CameraView = ({
   const torchAttempts = useRef<number>(0);
   const cameraInitialized = useRef<boolean>(false);
   const requestedTorch = useRef<boolean>(false);
+  const frameInterval = usePerformanceThrottling();
+  const workerRef = useRef<Worker>();
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('../workers/ppgProcessor.worker.ts', import.meta.url));
+    workerRef.current.onmessage = (e) => {
+      vitalProcessor.current.processSignal(e.data);
+    };
+    
+    return () => workerRef.current?.terminate();
+  }, []);
 
   const stopCamera = async () => {
     if (stream) {
@@ -66,35 +105,19 @@ const CameraView = ({
       const isAndroid = /android/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-      let baseVideoConstraints: MediaTrackConstraints = {
-        facingMode: { exact: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+      const getOptimizedConstraints = () => {
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        return {
+          video: {
+            width: isMobile ? 640 : 1280,
+            height: isMobile ? 480 : 720,
+            frameRate: isMobile ? 30 : 60,
+            facingMode: 'environment'
+          }
+        };
       };
 
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("CameraView: Configurando cámara para detección de dedo");
-      }
-
-      if (isAndroid) {
-        Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30, max: 30 },
-          resizeMode: 'crop-and-scale'
-        });
-      } else if (isIOS) {
-        Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30, min: 30 },
-        });
-      } else {
-        Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30 }
-        });
-      }
-
-      const constraints: MediaStreamConstraints = {
-        video: baseVideoConstraints,
-        audio: false
-      };
+      const constraints: MediaStreamConstraints = getOptimizedConstraints();
 
       if (process.env.NODE_ENV !== 'production') {
         console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
@@ -286,50 +309,6 @@ const CameraView = ({
     }
   };
 
-  const processFrame = (frameData: ImageData) => {
-    const { red, ir, green } = extractPPGSignals(frameData);
-    
-    const results = vitalProcessor.current.processSignal({
-      red,
-      ir, 
-      green,
-      timestamp: Date.now()
-    });
-    
-    if (results) {
-      handleResults(results);
-    }
-  };
-
-  const extractPPGSignals = (frameData: ImageData) => {
-    const { width, height, data } = frameData;
-    const pixelCount = width * height;
-    
-    // Promedios de canales
-    let redSum = 0, irSum = 0, greenSum = 0;
-    
-    for (let i = 0; i < pixelCount * 4; i += 4) {
-      redSum += data[i];     // Canal Rojo
-      greenSum += data[i+1]; // Canal Verde
-      irSum += data[i+2];    // Canal Infrarrojo (asumiendo configuración cámara)
-    }
-    
-    return {
-      red: [redSum / pixelCount],
-      ir: [irSum / pixelCount],
-      green: [greenSum / pixelCount]
-    };
-  };
-
-  const handleResults = (results: BiometricReading) => {
-    console.log('Mediciones biométricas:', {
-      spo2: results.spo2.toFixed(1) + '%',
-      pressure: results.sbp + '/' + results.dbp + ' mmHg',
-      glucose: results.glucose.toFixed(0) + ' mg/dL',
-      confidence: (results.confidence * 100).toFixed(1) + '%'
-    });
-  };
-
   useEffect(() => {
     if (isMonitoring && !stream) {
       if (process.env.NODE_ENV !== 'production') {
@@ -406,6 +385,27 @@ const CameraView = ({
       clearInterval(focusInterval);
     };
   }, [stream, isMonitoring, isFingerDetected, deviceSupportsAutoFocus]);
+
+  useEffect(() => {
+    if (!stream || !isMonitoring) return;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = videoRef.current?.videoWidth || 0;
+    canvas.height = videoRef.current?.videoHeight || 0;
+    
+    ctx?.drawImage(videoRef.current, 0, 0);
+    const frameData = ctx?.getImageData(0, 0, canvas.width, canvas.height).data;
+    
+    if (frameData) {
+      workerRef.current?.postMessage({
+        frameData,
+        width: canvas.width,
+        height: canvas.height
+      }, [frameData.buffer]);
+    }
+  }, [stream, isMonitoring, frameInterval]);
 
   return (
     <video
