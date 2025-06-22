@@ -13,20 +13,16 @@ const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [signalQuality, setSignalQuality] = useState(0);
-  const [vitalSigns, setVitalSigns] = useState({
+  const [vitalSigns, setVitalSigns] = useState<VitalSignsResult>({
     spo2: 0,
     pressure: "--/--",
     arrhythmiaStatus: "--",
-    apneaDetection: {
-      isDetected: false,
-      severity: 'none',
-      count: 0
+    glucose: 0,
+    lipids: {
+      totalCholesterol: 0,
+      triglycerides: 0
     },
-    concussionAssessment: {
-      score: 0,
-      pupilResponseTime: 0,
-      pupilSize: 0
-    }
+    hemoglobin: 0
   });
   const [heartRate, setHeartRate] = useState(0);
   const [heartbeatSignal, setHeartbeatSignal] = useState(0);
@@ -229,8 +225,9 @@ const Index = () => {
         spo2: 0,
         pressure: 0,
         arrhythmia: 0,
-        apnea: 0,
-        concussion: 0
+        glucose: 0,
+        lipids: 0,
+        hemoglobin: 0
       }
     });
     
@@ -257,8 +254,9 @@ const Index = () => {
             spo2: Math.max(0, progressPercent - 10),
             pressure: Math.max(0, progressPercent - 20),
             arrhythmia: Math.max(0, progressPercent - 15),
-            apnea: Math.max(0, progressPercent - 5),
-            concussion: Math.max(0, progressPercent - 10)
+            glucose: Math.max(0, progressPercent - 5),
+            lipids: Math.max(0, progressPercent - 25),
+            hemoglobin: Math.max(0, progressPercent - 30)
           }
         });
       } else {
@@ -281,8 +279,9 @@ const Index = () => {
               spo2: 100,
               pressure: 100,
               arrhythmia: 100,
-              apnea: 100,
-              concussion: 100
+              glucose: 100,
+              lipids: 100,
+              hemoglobin: 100
             }
           });
           
@@ -310,8 +309,9 @@ const Index = () => {
             spo2: 100,
             pressure: 100,
             arrhythmia: 100,
-            apnea: 100,
-            concussion: 100
+            glucose: 100,
+            lipids: 100,
+            hemoglobin: 100
           }
         });
       }
@@ -369,8 +369,12 @@ const Index = () => {
       spo2: 0,
       pressure: "--/--",
       arrhythmiaStatus: "--",
-      apneaDetection: { isDetected: false, severity: 'none', count: 0 },
-      concussionAssessment: { score: 0, pupilResponseTime: 0, pupilSize: 0 }
+      glucose: 0,
+      lipids: {
+        totalCholesterol: 0,
+        triglycerides: 0
+      },
+      hemoglobin: 0
     });
     setArrhythmiaCount("--");
     setSignalQuality(0);
@@ -504,48 +508,45 @@ const Index = () => {
   }, [lastSignal]);
 
   useEffect(() => {
-    if (lastSignal && lastSignal.fingerDetected && isMonitoring) {
-      const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
-      setHeartRate(heartBeatResult.bpm);
-      setHeartbeatSignal(heartBeatResult.filteredValue);
-      setBeatMarker(heartBeatResult.isPeak ? 1 : 0);
-      // Actualizar últimos intervalos RR para debug
-      if (heartBeatResult.rrData && heartBeatResult.rrData.intervals) {
-        setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
-      }
-      
-      const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
-      if (vitals) {
-        setVitalSigns(vitals);
-        
-        if (vitals.lastArrhythmiaData) {
-          setLastArrhythmiaData(vitals.lastArrhythmiaData);
-          const [status, count] = vitals.arrhythmiaStatus.split('|');
-          setArrhythmiaCount(count || "0");
-          
-          // Aquí detectamos si hay arritmia y enviamos la señal al HeartBeatProcessor
-          const isArrhythmiaDetected = status === "ARRITMIA DETECTADA";
-          
-          // Solo actualizamos cuando cambia el estado para no sobrecargar
-          if (isArrhythmiaDetected !== arrhythmiaDetectedRef.current) {
-            arrhythmiaDetectedRef.current = isArrhythmiaDetected;
-            setArrhythmiaState(isArrhythmiaDetected);
-            
-            // Mostrar un toast cuando se detecta arritmia por primera vez
-            if (isArrhythmiaDetected) {
-              console.log("Arritmia detectada - Activando sonido distintivo");
-              toast({
-                title: "¡Arritmia detectada!",
-                description: "Se activará un sonido distintivo con los latidos.",
-                variant: "destructive",
-                duration: 3000,
-              });
-            }
+    if (!lastSignal) return;
+    // Actualizar calidad siempre
+    setSignalQuality(lastSignal.quality);
+    // Si no está monitoreando, no procesar
+    if (!isMonitoring) return;
+    // Umbral mínimo de calidad para medir
+    const MIN_SIGNAL_QUALITY_TO_MEASURE = 30;
+    // Si no hay dedo válido o calidad insuficiente, resetear indicadores
+    if (!lastSignal.fingerDetected || lastSignal.quality < MIN_SIGNAL_QUALITY_TO_MEASURE) {
+      setHeartRate(0);
+      setHeartbeatSignal(0);
+      setBeatMarker(0);
+      return;
+    }
+    // Señal válida, procesar latidos y signos vitales
+    const heartBeatResult = processHeartBeat(lastSignal.filteredValue);
+    setHeartRate(heartBeatResult.bpm);
+    setHeartbeatSignal(heartBeatResult.filteredValue);
+    setBeatMarker(heartBeatResult.isPeak ? 1 : 0);
+    // Actualizar últimos intervalos RR para debug
+    if (heartBeatResult.rrData?.intervals) {
+      setRRIntervals(heartBeatResult.rrData.intervals.slice(-5));
+    }
+    const vitals = processVitalSigns(lastSignal.filteredValue, heartBeatResult.rrData);
+    if (vitals) {
+      setVitalSigns(vitals);
+      if (vitals.lastArrhythmiaData) {
+        setLastArrhythmiaData(vitals.lastArrhythmiaData);
+        const [status, count] = vitals.arrhythmiaStatus.split('|');
+        setArrhythmiaCount(count || "0");
+        const isArrhythmiaDetected = status === "ARRITMIA DETECTADA";
+        if (isArrhythmiaDetected !== arrhythmiaDetectedRef.current) {
+          arrhythmiaDetectedRef.current = isArrhythmiaDetected;
+          setArrhythmiaState(isArrhythmiaDetected);
+          if (isArrhythmiaDetected) {
+            toast({ title: "¡Arritmia detectada!", description: "Se activará un sonido distintivo con los latidos.", variant: "destructive", duration: 3000 });
           }
         }
       }
-      
-      setSignalQuality(lastSignal.quality);
     }
   }, [lastSignal, isMonitoring, processHeartBeat, processVitalSigns, setArrhythmiaState]);
 
@@ -648,15 +649,21 @@ const Index = () => {
                 highlighted={showResults}
               />
               <VitalSign 
-                label="APNEA"
-                value={vitalSigns.apneaDetection.isDetected ? "Sí" : "No"}
-                unit={vitalSigns.apneaDetection.severity}
+                label="HEMOGLOBINA"
+                value={vitalSigns.hemoglobin || "--"}
+                unit="g/dL"
                 highlighted={showResults}
               />
               <VitalSign 
-                label="CONMOCIÓN CEREBRAL"
-                value={vitalSigns.concussionAssessment.score || "--"}
-                unit="puntos"
+                label="GLUCOSA"
+                value={vitalSigns.glucose || "--"}
+                unit="mg/dL"
+                highlighted={showResults}
+              />
+              <VitalSign 
+                label="COLESTEROL/TRIGL."
+                value={`${vitalSigns.lipids?.totalCholesterol || "--"}/${vitalSigns.lipids?.triglycerides || "--"}`}
+                unit="mg/dL"
                 highlighted={showResults}
               />
             </div>

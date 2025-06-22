@@ -174,23 +174,28 @@ export class SignalAnalyzer {
     // Umbrales adicionales para robustez en adquisición
     const stabilityOn = 0.4;
     const pulseOn = 0.3;
+    // Nuevo umbral de periodicidad para evitar detecciones sin pulso real
+    const periodicityOn = 0.5;
     // Lógica de histeresis: adquisición vs mantenimiento
     if (!this.isCurrentlyDetected) {
-      // Detección inicial: calidad, estabilidad, pulsatilidad y tendencia válida
+      // Detección inicial: calidad, tendencia válida, estabilidad, pulsatilidad y periodicidad
       if (avgQuality > qualityOn && trendResult !== 'non_physiological' &&
           this.detectorScores.stability > stabilityOn &&
-          this.detectorScores.pulsatility > pulseOn) {
+          this.detectorScores.pulsatility > pulseOn &&
+          this.detectorScores.periodicity > periodicityOn) {
         this.consecutiveDetections++;
       } else {
         this.consecutiveDetections = 0;
       }
     } else {
-      // Mantenimiento: añadir estabilidad y pulsatilidad para reducir falsos positivos
+      // Mantenimiento: estabilidad, pulsatilidad y periodicidad para confirmar dedo
       const stabilityOff = 0.3;
       const pulseOff = 0.25;
+      const periodicityOff = 0.4;
       if (avgQuality < qualityOff || trendResult === 'non_physiological' ||
           this.detectorScores.stability < stabilityOff ||
-          this.detectorScores.pulsatility < pulseOff) {
+          this.detectorScores.pulsatility < pulseOff ||
+          this.detectorScores.periodicity < periodicityOff) {
         this.consecutiveNoDetections++;
       } else {
         this.consecutiveNoDetections = 0;

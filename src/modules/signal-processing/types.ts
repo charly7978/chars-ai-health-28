@@ -1,3 +1,4 @@
+
 import { ProcessedSignal, ProcessingError } from '../../types/signal';
 
 export interface SignalProcessorConfig {
@@ -47,33 +48,4 @@ export interface DetectionResult {
   isFingerDetected: boolean;
   quality: number;
   detectorDetails: Record<string, number | string>;
-}
-
-export interface SignalQuality {
-  snr: number;          // Signal-to-noise ratio
-  stability: number;    // Baseline stability
-  amplitude: number;    // Peak amplitude consistency
-  regularity: number;   // Inter-beat interval regularity
-  overall: number;      // Overall quality score
-}
-
-export interface PPGFrame {
-  timestamp: number;
-  rawSignal: number;
-  filteredSignal: number;
-  quality: SignalQuality;
-  peaks?: number[];
-}
-
-export interface VitalSigns {
-  heartRate: number;
-  confidence: number;
-  quality: SignalQuality;
-  timestamp: number;
-}
-
-export type FilterConfig = {
-  windowSize: number;
-  samplingRate: number;
-  cutoffFreq: number;
 }

@@ -234,10 +234,3 @@ export class GlucoseProcessor {
     return this.confidenceScore;
   }
 }
-
-// Revisar y eliminar cualquier funcionalidad vinculada a la hemoglobina.
-// En este ejemplo, se retorna el valor de glucosa directamente.
-export const processGlucose = (rawValue: number): number => {
-  // Procesamiento únicamente de glucosa; se ignoran mediciones de hemoglobina.
-  return rawValue;
-};
