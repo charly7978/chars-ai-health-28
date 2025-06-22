@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { toast } from "@/components/ui/use-toast";
+import { AdvancedVitalSignsProcessor, BiometricReading } from '../modules/vital-signs/VitalSignsProcessor';
 
 interface CameraViewProps {
   onStreamReady?: (stream: MediaStream) => void;
@@ -16,6 +17,7 @@ const CameraView = ({
 }: CameraViewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const vitalProcessor = useRef(new AdvancedVitalSignsProcessor());
   const [torchEnabled, setTorchEnabled] = useState(false);
   const frameIntervalRef = useRef<number>(1000 / 30); // 30 FPS
   const lastFrameTimeRef = useRef<number>(0);
@@ -191,11 +193,7 @@ const CameraView = ({
             setDeviceSupportsTorch(true);
             
             try {
-              await videoTrack.applyConstraints({
-                advanced: [{ torch: true }]
-              });
-              setTorchEnabled(true);
-              requestedTorch.current = true;
+              await handleTorch(true);
               if (process.env.NODE_ENV !== 'production') {
                 console.log("CameraView: Linterna activada para medición PPG");
               }
@@ -207,10 +205,7 @@ const CameraView = ({
               
               setTimeout(async () => {
                 try {
-                  await videoTrack.applyConstraints({
-                    advanced: [{ torch: true }]
-                  });
-                  setTorchEnabled(true);
+                  await handleTorch(true);
                   if (process.env.NODE_ENV !== 'production') {
                     console.log("CameraView: Linterna activada en segundo intento");
                   }
@@ -262,6 +257,79 @@ const CameraView = ({
     }
   };
 
+  const handleTorch = async (enable: boolean) => {
+    if (!deviceSupportsTorch) return;
+    
+    try {
+      await stream?.getVideoTracks()[0].applyConstraints({
+        advanced: [{ torch: enable }]
+      });
+      setTorchEnabled(enable);
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error("Error al manejar linterna:", err);
+      }
+    }
+  };
+
+  const handleAutoFocus = async () => {
+    if (!deviceSupportsAutoFocus) return;
+    
+    try {
+      await stream?.getVideoTracks()[0].applyConstraints({
+        advanced: [{ focusMode: 'continuous' }]
+      });
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn("Error al ajustar enfoque:", err);
+      }
+    }
+  };
+
+  const processFrame = (frameData: ImageData) => {
+    const { red, ir, green } = extractPPGSignals(frameData);
+    
+    const results = vitalProcessor.current.processSignal({
+      red,
+      ir, 
+      green,
+      timestamp: Date.now()
+    });
+    
+    if (results) {
+      handleResults(results);
+    }
+  };
+
+  const extractPPGSignals = (frameData: ImageData) => {
+    const { width, height, data } = frameData;
+    const pixelCount = width * height;
+    
+    // Promedios de canales
+    let redSum = 0, irSum = 0, greenSum = 0;
+    
+    for (let i = 0; i < pixelCount * 4; i += 4) {
+      redSum += data[i];     // Canal Rojo
+      greenSum += data[i+1]; // Canal Verde
+      irSum += data[i+2];    // Canal Infrarrojo (asumiendo configuración cámara)
+    }
+    
+    return {
+      red: [redSum / pixelCount],
+      ir: [irSum / pixelCount],
+      green: [greenSum / pixelCount]
+    };
+  };
+
+  const handleResults = (results: BiometricReading) => {
+    console.log('Mediciones biométricas:', {
+      spo2: results.spo2.toFixed(1) + '%',
+      pressure: results.sbp + '/' + results.dbp + ' mmHg',
+      glucose: results.glucose.toFixed(0) + ' mg/dL',
+      confidence: (results.confidence * 100).toFixed(1) + '%'
+    });
+  };
+
   useEffect(() => {
     if (isMonitoring && !stream) {
       if (process.env.NODE_ENV !== 'production') {
@@ -285,22 +353,17 @@ const CameraView = ({
   useEffect(() => {
     if (!stream || !deviceSupportsTorch || !isMonitoring) return;
     
-    const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack || !videoTrack.getCapabilities()?.torch) return;
-    
     const keepTorchOn = async () => {
       if (!isMonitoring || !deviceSupportsTorch) return;
 
-      const torchIsReallyOn = videoTrack.getSettings && (videoTrack.getSettings() as any).torch === true;
+      const torchIsReallyOn = stream.getVideoTracks()[0].getSettings && (stream.getVideoTracks()[0].getSettings() as any).torch === true;
 
       if (!torchIsReallyOn) {
         try {
+          await handleTorch(true);
           if (process.env.NODE_ENV !== 'production') {
             console.log("CameraView: Re-activando linterna (torch)");
           }
-          await videoTrack.applyConstraints({ advanced: [{ torch: true }] });
-          setTorchEnabled(true);
-          requestedTorch.current = true;
         } catch (err) {
           if (process.env.NODE_ENV !== 'production') {
             console.error("CameraView: Error re-encendiendo linterna:", err);
@@ -331,20 +394,8 @@ const CameraView = ({
     
     const focusIntervalTime = isFingerDetected ? 4000 : 1500;
     
-    const attemptRefocus = () => {
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack && videoTrack.getCapabilities()?.focusMode) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("CameraView: Ajustando enfoque para optimizar detección");
-        }
-        videoTrack.applyConstraints({
-          advanced: [{ focusMode: 'continuous' }]
-        }).catch(err => {
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn("CameraView: Error al intentar re-enfocar:", err);
-          }
-        });
-      }
+    const attemptRefocus = async () => {
+      await handleAutoFocus();
     };
     
     attemptRefocus();
