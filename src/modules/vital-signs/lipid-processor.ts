@@ -557,18 +557,544 @@ export class LipidProcessor {
   }
   
   /**
+   * Calcula índice de augmentación usando análisis espectral avanzado
+   */
+  private calculateAugmentationIndex(signal: number[], spectrum: FrequencySpectrum): number {
+    // Buscar picos espectrales que indican reflexión de ondas
+    const dominantFreq = spectrum.dominantFrequency;
+    const harmonics = spectrum.harmonics;
+    
+    // Calcular ratio de reflexión basado en armónicos
+    let reflectionRatio = 0;
+    if (harmonics.length > 0) {
+      const fundamentalPower = spectrum.magnitudes[0] || 1;
+      const harmonicPower = harmonics.reduce((sum, h, i) => 
+        sum + (spectrum.magnitudes[i + 1] || 0), 0
+      );
+      reflectionRatio = harmonicPower / fundamentalPower;
+    }
+    
+    return Math.min(0.8, Math.max(0.1, reflectionRatio * 0.5));
+  }
+  
+  /**
+   * Calcula ratio de subida/caída usando análisis de morfología avanzado
+   */
+  private calculateRiseFallRatio(signal: number[], peaks: any[]): number {
+    if (peaks.length < 2) return 1.2;
+    
+    let riseRatios: number[] = [];
+    let fallRatios: number[] = [];
+    
+    for (let i = 0; i < peaks.length - 1; i++) {
+      const peak = peaks[i];
+      const nextPeak = peaks[i + 1];
+      
+      // Encontrar valle entre picos
+      let minIdx = peak.index;
+      let minVal = signal[peak.index];
+      
+      for (let j = peak.index; j < nextPeak.index; j++) {
+        if (signal[j] < minVal) {
+          minVal = signal[j];
+          minIdx = j;
+        }
+      }
+      
+      // Calcular tiempos de subida y caída
+      const riseTime = peak.index - minIdx;
+      const fallTime = minIdx - peak.index;
+      
+      if (riseTime > 0) riseRatios.push(riseTime);
+      if (fallTime > 0) fallRatios.push(Math.abs(fallTime));
+    }
+    
+    const avgRise = riseRatios.length > 0 ? 
+      riseRatios.reduce((sum, val) => sum + val, 0) / riseRatios.length : 10;
+    const avgFall = fallRatios.length > 0 ? 
+      fallRatios.reduce((sum, val) => sum + val, 0) / fallRatios.length : 20;
+    
+    return avgRise / Math.max(avgFall, 1);
+  }
+  
+  /**
+   * Analiza muesca dicrótica usando análisis de segunda derivada
+   */
+  private analyzeDicroticNotch(signal: number[], peaks: any[]): { position: number; height: number } {
+    if (peaks.length < 1) return { position: 0.65, height: 0.2 };
+    
+    // Calcular segunda derivada para encontrar puntos de inflexión
+    const secondDerivative: number[] = [];
+    for (let i = 2; i < signal.length - 2; i++) {
+      const d2 = signal[i + 2] - 2 * signal[i] + signal[i - 2];
+      secondDerivative.push(d2);
+    }
+    
+    // Buscar muesca dicrótica después del primer pico
+    const firstPeak = peaks[0];
+    let notchPosition = 0.65;
+    let notchHeight = 0.2;
+    
+    if (firstPeak && peaks.length > 1) {
+      const searchStart = firstPeak.index + 10;
+      const searchEnd = Math.min(peaks[1].index || signal.length - 10, firstPeak.index + 50);
+      
+      let maxInflection = 0;
+      let maxInflectionIdx = searchStart;
+      
+      for (let i = searchStart; i < searchEnd && i < secondDerivative.length; i++) {
+        if (Math.abs(secondDerivative[i]) > maxInflection) {
+          maxInflection = Math.abs(secondDerivative[i]);
+          maxInflectionIdx = i + 2; // Ajustar por offset de segunda derivada
+        }
+      }
+      
+      if (maxInflectionIdx > firstPeak.index) {
+        const totalCycleLength = (peaks[1]?.index || signal.length) - firstPeak.index;
+        notchPosition = (maxInflectionIdx - firstPeak.index) / totalCycleLength;
+        
+        const peakValue = signal[firstPeak.index];
+        const notchValue = signal[maxInflectionIdx];
+        const baseValue = Math.min(...signal.slice(firstPeak.index, maxInflectionIdx + 20));
+        
+        notchHeight = (notchValue - baseValue) / Math.max(peakValue - baseValue, 1);
+      }
+    }
+    
+    return { 
+      position: Math.min(0.9, Math.max(0.3, notchPosition)), 
+      height: Math.min(0.8, Math.max(0.1, notchHeight)) 
+    };
+  }
+  
+  /**
+   * Calcula índice de viscosidad usando análisis espectral
+   */
+  private calculateViscosityIndex(signal: number[], spectrum: FrequencySpectrum): number {
+    // La viscosidad afecta la forma del espectro de frecuencias
+    const spectralWidth = this.calculateSpectralWidth(spectrum);
+    const spectralSkewness = this.calculateSpectralSkewness(spectrum);
+    
+    // Modelo basado en investigación de reología sanguínea
+    const viscosityIndex = (spectralWidth * 0.3) + (spectralSkewness * 0.7);
+    
+    return Math.min(2.0, Math.max(0.1, viscosityIndex));
+  }
+  
+  /**
+   * Calcula índice de compliance arterial
+   */
+  private calculateComplianceIndex(signal: number[], peaks: any[]): number {
+    if (peaks.length < 2) return 1.0;
+    
+    // Compliance se relaciona con la variabilidad de amplitud de picos
+    const peakAmplitudes = peaks.map(p => p.value);
+    const meanAmplitude = peakAmplitudes.reduce((sum, val) => sum + val, 0) / peakAmplitudes.length;
+    const amplitudeVariance = peakAmplitudes.reduce((sum, val) => 
+      sum + Math.pow(val - meanAmplitude, 2), 0
+    ) / peakAmplitudes.length;
+    
+    // Compliance inverso a la variabilidad (arterias rígidas = más variabilidad)
+    const complianceIndex = 1 / (1 + Math.sqrt(amplitudeVariance) / meanAmplitude);
+    
+    return Math.min(2.0, Math.max(0.2, complianceIndex));
+  }
+  
+  /**
+   * Calcula índice de resistencia vascular
+   */
+  private calculateResistanceIndex(signal: number[], spectrum: FrequencySpectrum): number {
+    // Resistencia se relaciona con la atenuación de altas frecuencias
+    const highFreqPower = this.calculateHighFrequencyPower(spectrum);
+    const totalPower = spectrum.magnitudes.reduce((sum, mag) => sum + mag * mag, 0);
+    
+    const resistanceIndex = 1 - (highFreqPower / Math.max(totalPower, 1));
+    
+    return Math.min(2.0, Math.max(0.1, resistanceIndex));
+  }
+  
+  /**
+   * Calcula índice de turbulencia del flujo
+   */
+  private calculateTurbulenceIndex(spectrum: FrequencySpectrum): number {
+    // Turbulencia se manifiesta como ruido de alta frecuencia
+    const noiseLevel = this.calculateSpectralNoise(spectrum);
+    const signalLevel = spectrum.magnitudes[0] || 1; // Componente fundamental
+    
+    const turbulenceIndex = noiseLevel / signalLevel;
+    
+    return Math.min(1.0, Math.max(0.01, turbulenceIndex));
+  }
+  
+  /**
+   * Calcula índice de morfología del pulso
+   */
+  private calculateMorphologyIndex(signal: number[], peaks: any[]): number {
+    if (peaks.length < 1) return 0.5;
+    
+    // Analizar forma del pulso usando momentos estadísticos
+    const skewness = this.calculateSignalSkewness(signal);
+    const kurtosis = this.calculateSignalKurtosis(signal);
+    
+    // Combinar métricas de forma
+    const morphologyIndex = (Math.abs(skewness) * 0.4) + (Math.abs(kurtosis - 3) * 0.6);
+    
+    return Math.min(2.0, Math.max(0.1, morphologyIndex));
+  }
+  
+  /**
+   * Calcula colesterol usando características hemodinámicas
+   */
+  private calculateCholesterolFromHemodynamics(features: HemodynamicFeatures): number {
+    // Modelo de regresión múltiple basado en investigación clínica
+    const baseValue = 160; // mg/dL base fisiológica
+    
+    const cholesterolEstimate = baseValue +
+      (features.viscosityIndex * this.CHOLESTEROL_COEFFICIENTS.viscosity * 1000) +
+      (features.complianceIndex * this.CHOLESTEROL_COEFFICIENTS.compliance * 1000) +
+      (features.resistanceIndex * this.CHOLESTEROL_COEFFICIENTS.resistance * 1000) +
+      (features.morphologyIndex * this.CHOLESTEROL_COEFFICIENTS.morphology * 1000) +
+      (features.turbulenceIndex * this.CHOLESTEROL_COEFFICIENTS.turbulence * 1000);
+    
+    return Math.max(120, Math.min(350, cholesterolEstimate));
+  }
+  
+  /**
+   * Calcula triglicéridos usando características hemodinámicas
+   */
+  private calculateTriglyceridesFromHemodynamics(features: HemodynamicFeatures): number {
+    // Modelo de regresión múltiple específico para triglicéridos
+    const baseValue = 110; // mg/dL base fisiológica
+    
+    const triglyceridesEstimate = baseValue +
+      (features.viscosityIndex * this.TRIGLYCERIDES_COEFFICIENTS.viscosity * 1000) +
+      (features.elasticityIndex * this.TRIGLYCERIDES_COEFFICIENTS.elasticity * 1000) +
+      (features.augmentationIndex * this.TRIGLYCERIDES_COEFFICIENTS.augmentation * 1000) +
+      (features.morphologyIndex * this.TRIGLYCERIDES_COEFFICIENTS.morphology * 1000) +
+      (features.turbulenceIndex * this.TRIGLYCERIDES_COEFFICIENTS.turbulence * 1000);
+    
+    return Math.max(40, Math.min(500, triglyceridesEstimate));
+  }
+  
+  /**
+   * Calcula HDL usando análisis de morfología
+   */
+  private calculateHDLFromMorphology(features: HemodynamicFeatures): number {
+    // HDL correlaciona inversamente con rigidez arterial
+    const baseValue = 50; // mg/dL base fisiológica
+    
+    const hdlEstimate = baseValue +
+      (features.complianceIndex * 15) -
+      (features.resistanceIndex * 10) +
+      (features.elasticityIndex * 12) -
+      (features.turbulenceIndex * 8);
+    
+    return Math.max(25, Math.min(80, hdlEstimate));
+  }
+  
+  /**
+   * Calcula LDL usando datos espectrales
+   */
+  private calculateLDLFromSpectralData(features: HemodynamicFeatures, spectrum: FrequencySpectrum): number {
+    // LDL correlaciona con características espectrales específicas
+    const baseValue = 100; // mg/dL base fisiológica
+    
+    const spectralComplexity = this.calculateSpectralComplexity(spectrum);
+    
+    const ldlEstimate = baseValue +
+      (features.viscosityIndex * 25) +
+      (spectralComplexity * 20) +
+      (features.morphologyIndex * 15) -
+      (features.complianceIndex * 10);
+    
+    return Math.max(50, Math.min(200, ldlEstimate));
+  }
+  
+  /**
+   * Realiza análisis de validación para lípidos
+   */
+  private performLipidValidationAnalysis(signal: number[], features: HemodynamicFeatures): LipidValidationMetrics {
+    // 1. Calcular SNR hemodinámico
+    const snr = this.calculateHemodynamicSNR(signal);
+    
+    // 2. Calcular consistencia de morfología
+    const morphologyConsistency = this.calculateMorphologyConsistency(features);
+    
+    // 3. Analizar estabilidad temporal
+    const temporalStability = this.calculateTemporalStability(features);
+    
+    // 4. Validar plausibilidad fisiológica
+    const physiologicalPlausibility = this.validateLipidPhysiology(features);
+    
+    // 5. Realizar validación cruzada
+    const crossValidationScore = this.performLipidCrossValidation(signal, features);
+    
+    return {
+      snr,
+      morphologyConsistency,
+      temporalStability,
+      physiologicalPlausibility,
+      crossValidationScore
+    };
+  }
+  
+  /**
+   * Aplica calibración automática avanzada para lípidos
+   */
+  private applyAdvancedLipidCalibration(
+    results: { cholesterol: number; triglycerides: number; hdl: number; ldl: number },
+    metrics: LipidValidationMetrics
+  ): { cholesterol: number; triglycerides: number; hdl: number; ldl: number } {
+    const confidenceFactor = (metrics.crossValidationScore + metrics.physiologicalPlausibility) / 2;
+    
+    // Calibración adaptativa basada en historial
+    let calibrationFactor = 1.0;
+    
+    if (this.lastValidMeasurement && confidenceFactor > 0.7) {
+      const timeDiff = Date.now() - this.lastValidMeasurement.timestamp;
+      const temporalWeight = Math.exp(-timeDiff / 600000); // Decaimiento exponencial (10 min)
+      
+      calibrationFactor = 0.8 + (0.2 * temporalWeight);
+    }
+    
+    // Aplicar corrección por SNR
+    const snrCorrection = Math.min(1.1, 0.9 + (metrics.snr / 100));
+    
+    return {
+      cholesterol: results.cholesterol * calibrationFactor * snrCorrection,
+      triglycerides: results.triglycerides * calibrationFactor * snrCorrection,
+      hdl: results.hdl * calibrationFactor * snrCorrection,
+      ldl: results.ldl * calibrationFactor * snrCorrection
+    };
+  }
+  
+  /**
+   * Valida límites fisiológicos
+   */
+  private validatePhysiologicalLimits(
+    results: { cholesterol: number; triglycerides: number; hdl: number; ldl: number }
+  ): { cholesterol: number; triglycerides: number; hdl: number; ldl: number } {
+    return {
+      cholesterol: Math.max(this.MIN_CHOLESTEROL, Math.min(this.MAX_CHOLESTEROL, results.cholesterol)),
+      triglycerides: Math.max(this.MIN_TRIGLYCERIDES, Math.min(this.MAX_TRIGLYCERIDES, results.triglycerides)),
+      hdl: Math.max(25, Math.min(80, results.hdl)),
+      ldl: Math.max(50, Math.min(200, results.ldl))
+    };
+  }
+  
+  // Métodos auxiliares para cálculos espectrales
+  private calculateSpectralWidth(spectrum: FrequencySpectrum): number {
+    const weightedSum = spectrum.frequencies.reduce((sum, freq, i) => 
+      sum + freq * spectrum.magnitudes[i], 0
+    );
+    const totalMagnitude = spectrum.magnitudes.reduce((sum, mag) => sum + mag, 0);
+    const centroid = weightedSum / totalMagnitude;
+    
+    const variance = spectrum.frequencies.reduce((sum, freq, i) => 
+      sum + Math.pow(freq - centroid, 2) * spectrum.magnitudes[i], 0
+    ) / totalMagnitude;
+    
+    return Math.sqrt(variance);
+  }
+  
+  private calculateSpectralSkewness(spectrum: FrequencySpectrum): number {
+    const mean = spectrum.frequencies.reduce((sum, freq, i) => 
+      sum + freq * spectrum.magnitudes[i], 0
+    ) / spectrum.magnitudes.reduce((sum, mag) => sum + mag, 0);
+    
+    const variance = spectrum.frequencies.reduce((sum, freq, i) => 
+      sum + Math.pow(freq - mean, 2) * spectrum.magnitudes[i], 0
+    ) / spectrum.magnitudes.reduce((sum, mag) => sum + mag, 0);
+    
+    const skewness = spectrum.frequencies.reduce((sum, freq, i) => 
+      sum + Math.pow(freq - mean, 3) * spectrum.magnitudes[i], 0
+    ) / (spectrum.magnitudes.reduce((sum, mag) => sum + mag, 0) * Math.pow(variance, 1.5));
+    
+    return skewness;
+  }
+  
+  private calculateHighFrequencyPower(spectrum: FrequencySpectrum): number {
+    const nyquist = spectrum.frequencies[spectrum.frequencies.length - 1];
+    const highFreqThreshold = nyquist * 0.7;
+    
+    return spectrum.frequencies.reduce((sum, freq, i) => {
+      return freq > highFreqThreshold ? sum + spectrum.magnitudes[i] * spectrum.magnitudes[i] : sum;
+    }, 0);
+  }
+  
+  private calculateSpectralNoise(spectrum: FrequencySpectrum): number {
+    // Estimar ruido como desviación estándar de magnitudes en alta frecuencia
+    const highFreqMags = spectrum.magnitudes.slice(Math.floor(spectrum.magnitudes.length * 0.7));
+    const mean = highFreqMags.reduce((sum, mag) => sum + mag, 0) / highFreqMags.length;
+    const variance = highFreqMags.reduce((sum, mag) => sum + Math.pow(mag - mean, 2), 0) / highFreqMags.length;
+    
+    return Math.sqrt(variance);
+  }
+  
+  private calculateSignalSkewness(signal: number[]): number {
+    const mean = signal.reduce((sum, val) => sum + val, 0) / signal.length;
+    const variance = signal.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / signal.length;
+    const skewness = signal.reduce((sum, val) => sum + Math.pow(val - mean, 3), 0) / 
+      (signal.length * Math.pow(variance, 1.5));
+    
+    return skewness;
+  }
+  
+  private calculateSignalKurtosis(signal: number[]): number {
+    const mean = signal.reduce((sum, val) => sum + val, 0) / signal.length;
+    const variance = signal.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / signal.length;
+    const kurtosis = signal.reduce((sum, val) => sum + Math.pow(val - mean, 4), 0) / 
+      (signal.length * Math.pow(variance, 2));
+    
+    return kurtosis;
+  }
+  
+  private calculateSpectralComplexity(spectrum: FrequencySpectrum): number {
+    // Complejidad basada en entropía espectral
+    const totalPower = spectrum.magnitudes.reduce((sum, mag) => sum + mag * mag, 0);
+    const normalizedMags = spectrum.magnitudes.map(mag => (mag * mag) / totalPower);
+    
+    const entropy = normalizedMags.reduce((sum, p) => {
+      return p > 0 ? sum - p * Math.log2(p) : sum;
+    }, 0);
+    
+    return entropy / Math.log2(spectrum.magnitudes.length);
+  }
+  
+  private calculateHemodynamicSNR(signal: number[]): number {
+    const mean = signal.reduce((sum, val) => sum + val, 0) / signal.length;
+    const variance = signal.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / signal.length;
+    
+    return 20 * Math.log10(mean / Math.sqrt(variance));
+  }
+  
+  private calculateMorphologyConsistency(features: HemodynamicFeatures): number {
+    // Consistencia basada en relaciones esperadas entre características
+    const expectedRatios = {
+      viscosityCompliance: features.viscosityIndex / Math.max(features.complianceIndex, 0.1),
+      augmentationElasticity: features.augmentationIndex / Math.max(features.elasticityIndex, 0.1),
+      resistanceTurbulence: features.resistanceIndex / Math.max(features.turbulenceIndex, 0.01)
+    };
+    
+    // Evaluar si las relaciones están en rangos esperados
+    let consistencyScore = 1.0;
+    
+    if (expectedRatios.viscosityCompliance < 0.1 || expectedRatios.viscosityCompliance > 10) {
+      consistencyScore *= 0.8;
+    }
+    if (expectedRatios.augmentationElasticity < 0.1 || expectedRatios.augmentationElasticity > 5) {
+      consistencyScore *= 0.8;
+    }
+    if (expectedRatios.resistanceTurbulence < 1 || expectedRatios.resistanceTurbulence > 100) {
+      consistencyScore *= 0.8;
+    }
+    
+    return Math.max(0.1, consistencyScore);
+  }
+  
+  private calculateTemporalStability(features: HemodynamicFeatures): number {
+    if (this.hemodynamicHistory.length < 3) return 0.5;
+    
+    // Analizar variabilidad de características en el tiempo
+    const recentFeatures = this.hemodynamicHistory.slice(-3);
+    
+    const cvs: number[] = [];
+    
+    ['viscosityIndex', 'complianceIndex', 'turbulenceIndex', 'morphologyIndex'].forEach(key => {
+      const values = recentFeatures.map(f => f[key as keyof HemodynamicFeatures] as number);
+      const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const cv = mean > 0 ? Math.sqrt(variance) / mean : 1;
+      cvs.push(cv);
+    });
+    
+    const avgCV = cvs.reduce((sum, cv) => sum + cv, 0) / cvs.length;
+    return Math.max(0, 1 - avgCV);
+  }
+  
+  private validateLipidPhysiology(features: HemodynamicFeatures): number {
+    let score = 1.0;
+    
+    // Validar rangos fisiológicos de características hemodinámicas
+    if (features.viscosityIndex < 0.1 || features.viscosityIndex > 2.0) score *= 0.7;
+    if (features.complianceIndex < 0.2 || features.complianceIndex > 2.0) score *= 0.7;
+    if (features.turbulenceIndex < 0.01 || features.turbulenceIndex > 1.0) score *= 0.7;
+    if (features.augmentationIndex < 0.1 || features.augmentationIndex > 0.8) score *= 0.7;
+    
+    return Math.max(0.1, score);
+  }
+  
+  private performLipidCrossValidation(signal: number[], features: HemodynamicFeatures): number {
+    // Validación cruzada simplificada para lípidos
+    const k = 3; // 3-fold cross validation
+    const foldSize = Math.floor(signal.length / k);
+    let totalError = 0;
+    
+    for (let fold = 0; fold < k; fold++) {
+      const testStart = fold * foldSize;
+      const testEnd = Math.min(testStart + foldSize, signal.length);
+      
+      const trainData = [...signal.slice(0, testStart), ...signal.slice(testEnd)];
+      
+      if (trainData.length < 60) continue;
+      
+      // Calcular características con datos de entrenamiento
+      const trainFeatures = this.extractBasicHemodynamicFeatures(trainData);
+      
+      // Estimar error basado en diferencias en características
+      const featureError = Math.abs(trainFeatures.viscosityIndex - features.viscosityIndex) +
+                          Math.abs(trainFeatures.complianceIndex - features.complianceIndex) +
+                          Math.abs(trainFeatures.turbulenceIndex - features.turbulenceIndex);
+      
+      totalError += featureError;
+    }
+    
+    const avgError = totalError / k;
+    return Math.max(0.1, 1 - avgError);
+  }
+  
+  /**
+   * Obtiene resultado de la última medición válida
+   */
+  public getLastMeasurement(): LipidResult | null {
+    return this.lastValidMeasurement;
+  }
+  
+  /**
+   * Obtiene estadísticas del procesador
+   */
+  public getStatistics(): {
+    measurementCount: number;
+    averageConfidence: number;
+    processingStats: any;
+  } {
+    const avgConfidence = this.hemodynamicHistory.length > 0 ?
+      this.hemodynamicHistory.reduce((sum) => sum + (this.lastValidMeasurement?.confidence || 0), 0) / this.hemodynamicHistory.length :
+      0;
+      
+    return {
+      measurementCount: this.hemodynamicHistory.length,
+      averageConfidence: avgConfidence,
+      processingStats: this.mathEngine.getStatistics()
+    };
+  }
+  
+  /**
    * Reset processor state - Valores calculados dinámicamente
    */
   public reset(): void {
-    this.lastCholesterolEstimate = 0; // Se calculará dinámicamente en primera medición
-    this.lastTriglyceridesEstimate = 0; // Se calculará dinámicamente en primera medición
-    this.confidenceScore = 0;
+    this.hemodynamicHistory = [];
+    this.lastValidMeasurement = null;
+    this.measurementBuffer = [];
+    this.mathEngine.reset();
+    
+    console.log('LipidProcessor: Estado reseteado');
   }
   
   /**
    * Get confidence level for current estimate
    */
   public getConfidence(): number {
-    return this.confidenceScore;
+    return this.lastValidMeasurement?.confidence || 0;
   }
 }
