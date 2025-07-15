@@ -36,6 +36,12 @@ export class CameraAnalysis {
       this.ppgValues.shift();
     }
 
+    // Agregar frame al buffer
+    this.frames.push(frame);
+    if (this.frames.length > CameraAnalysis.FRAME_WINDOW_SIZE) {
+      this.frames.shift();
+    }
+
     // Detectar picos y calcular intervalos RR
     const peaks = this.detectPeaks(this.ppgValues);
     const rrIntervals = this.calculateRRIntervals(peaks);
@@ -105,66 +111,56 @@ export class CameraAnalysis {
   }
 
   private calculateRRIntervals(peaks: number[]): number[] {
-    const intervals: number[] = [];
+    const rrIntervals: number[] = [];
     for (let i = 1; i < peaks.length; i++) {
       const interval = peaks[i] - peaks[i - 1];
-      // Validación fisiológica: descartar intervalos imposibles
-      if (interval > 30 && interval < 2000) {
-        intervals.push(interval);
-      }
+      rrIntervals.push(interval);
     }
-    return intervals;
+    return rrIntervals;
   }
 
   private applyKalmanFilter(values: number[]): number[] {
-    const filtered: number[] = [];
-    let x = values[0];
-    let p = 1;
-    const q = 0.1; // Proceso de ruido
-    const r = 0.1; // Ruido de medición
-    
-    for (const z of values) {
+    const Q = 1e-5;  // Proceso de varianza
+    const R = 1e-1;  // Ruido de medición
+    let P = 1.0;     // Error de estimación
+    let x = values[0]; // Estado inicial
+    const filteredValues: number[] = [];
+
+    values.forEach((z) => {
       // Predicción
-      const x_pred = x;
-      const p_pred = p + q;
+      P = P + Q;
       
       // Actualización
-      const k = p_pred / (p_pred + r);
-      x = x_pred + k * (z - x_pred);
-      p = (1 - k) * p_pred;
+      const K = P / (P + R);
+      x = x + K * (z - x);
+      P = (1 - K) * P;
       
-      filtered.push(x);
-    }
+      filteredValues.push(x);
+    });
     
-    return filtered;
+    return filteredValues;
   }
 
   private calculateAC(values: number[]): number {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    return Math.max(...values) - mean;
+    const mean = this.calculateDC(values);
+    return Math.sqrt(values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length);
   }
 
   private calculateDC(values: number[]): number {
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
+    return values.reduce((sum, val) => sum + val, 0) / values.length;
   }
 
   private calculateThreshold(data: number[]): number {
-    const sorted = [...data].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    return median * 0.7; // Umbral adaptativo basado en la mediana
+    const mean = this.calculateDC(data);
+    const std = this.calculateAC(data);
+    return mean + std;
   }
 
   reset(): void {
     this.frames = [];
     this.ppgValues = [];
-    this.lastFrameTime = 0;
-    this.colorAnalyzer = new ColorAnalyzer();
     this.arrhythmiaDetector.reset();
   }
-    ];
-    const pixels = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
     const filteredPixels = new Uint8ClampedArray(pixels.length);
 
     for (let y = 0; y < height; y++) {

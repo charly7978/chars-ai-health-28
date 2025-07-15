@@ -1,10 +1,4 @@
-export interface HRVMetrics {
-  rmssd: number;
-  sdnn: number;
-  pnn50: number;
-  lfhfRatio: number;
-  entropy: number;
-}
+import type { HRVMetrics } from '../../types';
 
 export class HRVAnalyzer {
   private static readonly RR_WINDOW_SIZE = 100;
@@ -131,6 +125,9 @@ export class HRVAnalyzer {
 
     return Math.log(B / A);
   }
+    calculateSD(data: number[]) {
+        throw new Error("Method not implemented.");
+    }
 
   private isMatch(data: number[], i: number, j: number, m: number, r: number): boolean {
     for (let k = 0; k < m; k++) {

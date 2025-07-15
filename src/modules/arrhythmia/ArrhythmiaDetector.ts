@@ -1,42 +1,82 @@
-import { HRVMetrics } from './HRVAnalyzer';
-
-export interface ArrhythmiaAnalysis {
-  hasArrhythmia: boolean;
-  type: ArrhythmiaType;
-  confidence: number;
-  severity: ArrhythmiaSeverity;
-  abnormalBeatsPercentage: number;
-  riskScore: number;
-  metrics: {
-    rmssd: number;
-    sdnn: number;
-    pnn50: number;
-    entropy: number;
-  };
-}
-
-export enum ArrhythmiaType {
-  NONE = 'NONE',
-  SINUS_BRADYCARDIA = 'SINUS_BRADYCARDIA',
-  SINUS_TACHYCARDIA = 'SINUS_TACHYCARDIA',
-  ATRIAL_FIBRILLATION = 'ATRIAL_FIBRILLATION',
-  SINUS_ARRHYTHMIA = 'SINUS_ARRHYTHMIA',
-  PVC = 'PVC',
-}
+import { HRVAnalyzer } from './HRVAnalyzer';
+import type { HRVMetrics } from '../../types';
+import { ArrhythmiaAnalysis, ArrhythmiaSeverity, ArrhythmiaType } from '../../types';
 
 export class ArrhythmiaDetector {
   private static readonly RR_WINDOW_SIZE = 100;
   private static readonly RMSSD_THRESHOLD = 45;
   private static readonly PNN50_THRESHOLD = 0.1;
   private static readonly SDNN_THRESHOLD = 100;
-  
+  private static readonly CONSECUTIVE_ANOMALIES_THRESHOLD = 3;
+  private static readonly ABNORMAL_BEATS_THRESHOLD = 10; // 10% de latidos anormales
+
   private rrIntervals: number[] = [];
+  private consecutiveAnomalies: number = 0;
   private lastAnalysis: ArrhythmiaAnalysis | null = null;
   private hrvAnalyzer: HRVAnalyzer;
 
   constructor() {
     this.hrvAnalyzer = new HRVAnalyzer();
-    return true;
+    this.reset();
+  }
+
+  addRRInterval(interval: number): void {
+    this.rrIntervals.push(interval);
+    if (this.rrIntervals.length > ArrhythmiaDetector.RR_WINDOW_SIZE) {
+      this.rrIntervals.shift();
+    }
+    this.hrvAnalyzer.addRRInterval(interval);
+  }
+
+  analyze(): ArrhythmiaAnalysis {
+    if (this.rrIntervals.length < ArrhythmiaDetector.RR_WINDOW_SIZE) {
+      const defaultAnalysis = {
+        hasArrhythmia: false,
+        type: ArrhythmiaType.NONE,
+        severity: ArrhythmiaSeverity.NONE,
+        confidence: 0,
+        riskScore: 0,
+        rmssd: 0,
+        sdnn: 0,
+        pnn50: 0,
+        lfhfRatio: 1,
+        entropy: 0
+      };
+      this.lastAnalysis = defaultAnalysis;
+      return defaultAnalysis;
+    }
+
+    const metrics = this.hrvAnalyzer.analyze();
+    const abnormalBeats = this.detectAbnormalBeats(this.rrIntervals);
+    const abnormalBeatsPercentage = (abnormalBeats.length / this.rrIntervals.length) * 100;
+    
+    const currentAnalysis: ArrhythmiaAnalysis = {
+      ...metrics,
+      type: this.classifyArrhythmiaType(this.rrIntervals, metrics) as ArrhythmiaType,
+      severity: this.determineSeverity(metrics, abnormalBeatsPercentage),
+      confidence: this.calculateArrhythmiaConfidence(this.rrIntervals, metrics),
+      riskScore: this.calculateArrhythmiaRiskScore(metrics, abnormalBeatsPercentage),
+      hasArrhythmia: abnormalBeatsPercentage > ArrhythmiaDetector.ABNORMAL_BEATS_THRESHOLD
+    };
+
+    // Actualizar estado de anomalías consecutivas
+    if (this.lastAnalysis?.hasArrhythmia && this.lastAnalysis.confidence > 0.7) {
+      this.consecutiveAnomalies++;
+    } else {
+      this.consecutiveAnomalies = 0;
+    }
+
+    // Si hay 3 análisis consecutivos con arritmia, confirmar
+    if (this.consecutiveAnomalies >= 3 && this.lastAnalysis && !this.lastAnalysis.hasArrhythmia) {
+      console.log("ArrhythmiaDetector: Aritmia confirmada por análisis consecutivos", {
+        type: currentAnalysis.type,
+        confidence: currentAnalysis.confidence,
+        severity: currentAnalysis.severity
+      });
+    }
+
+    this.lastAnalysis = currentAnalysis;
+    return currentAnalysis;
   }
 
   private calculateSD(data: number[]): number {
@@ -55,32 +95,15 @@ export class ArrhythmiaDetector {
     );
   }
 
-  private evaluateArrhythmiaSeverity(abnormalBeatsPercentage: number, metrics: HRVMetrics): ArrhythmiaSeverity {
-    if (abnormalBeatsPercentage > 20 || metrics.lfhfRatio > 5 || metrics.entropy > 1.5) {
-      return ArrhythmiaSeverity.SEVERE;
-    } else if (abnormalBeatsPercentage > 10 || metrics.lfhfRatio > 3 || metrics.entropy > 1.2) {
-      return ArrhythmiaSeverity.MODERATE;
-    } else if (abnormalBeatsPercentage > 5 || metrics.lfhfRatio > 2 || metrics.entropy > 1.0) {
-      return ArrhythmiaSeverity.MILD;
-    }
-    return ArrhythmiaSeverity.NONE;
-  }
-
   private classifyArrhythmiaType(intervals: number[], metrics: HRVMetrics): ArrhythmiaType {
     const meanRR = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
     const meanHR = 60000 / meanRR;
     
-    if (meanHR < 60) {
-      return ArrhythmiaType.SINUS_BRADYCARDIA;
-    } else if (meanHR > 100) {
-      return ArrhythmiaType.SINUS_TACHYCARDIA;
-    } else if (metrics.rmssd > 100 && metrics.pnn50 > 0.3) {
-      return ArrhythmiaType.ATRIAL_FIBRILLATION;
-    } else if (metrics.sdnn > 100) {
-      return ArrhythmiaType.SINUS_ARRHYTHMIA;
-    } else if (metrics.entropy > 1.5) {
-      return ArrhythmiaType.PVC;
-    }
+    if (meanHR < 60) return ArrhythmiaType.SINUS_BRADYCARDIA;
+    if (meanHR > 100) return ArrhythmiaType.SINUS_TACHYCARDIA;
+    if (metrics.rmssd > 100 && metrics.pnn50 > 0.3) return ArrhythmiaType.ATRIAL_FIBRILLATION;
+    if (metrics.sdnn > 100) return ArrhythmiaType.SINUS_ARRHYTHMIA;
+    if (metrics.entropy > 1.5) return ArrhythmiaType.PVC;
     
     return ArrhythmiaType.NONE;
   }
@@ -113,81 +136,78 @@ export class ArrhythmiaDetector {
     );
   }
 
-  addRRInterval(interval: number): void {
-    this.rrIntervals.push(interval);
-    if (this.rrIntervals.length > ArrhythmiaDetector.RR_WINDOW_SIZE) {
-      this.rrIntervals.shift();
+  private determineSeverity(metrics: HRVMetrics, abnormalBeatsPercentage: number): ArrhythmiaSeverity {
+    let severity = ArrhythmiaSeverity.NONE;
+    
+    // Evaluar porcentaje de latidos anormales
+    if (abnormalBeatsPercentage > 20) {
+      severity = ArrhythmiaSeverity.SEVERE;
+    } else if (abnormalBeatsPercentage > 10) {
+      severity = ArrhythmiaSeverity.MODERATE;
+    } else if (abnormalBeatsPercentage > 5) {
+      severity = ArrhythmiaSeverity.MINOR;
     }
-  }
-
-  analyze(): ArrhythmiaAnalysis {
-    if (this.rrIntervals.length < ArrhythmiaDetector.RR_WINDOW_SIZE) {
-      return {
-        hasArrhythmia: false,
-        type: ArrhythmiaType.NONE,
-        confidence: 0,
-        severity: ArrhythmiaSeverity.NONE,
-        abnormalBeatsPercentage: 0,
-        riskScore: 0,
-        metrics: {
-          rmssd: 0,
-          sdnn: 0,
-          pnn50: 0,
-          entropy: 0
-        }
-      };
+    
+    // Evaluar RMSSD
+    if (metrics.rmssd > ArrhythmiaDetector.RMSSD_THRESHOLD) {
+      severity = this.increaseSeverity(severity, ArrhythmiaSeverity.MINOR);
     }
-
-    const recentRR = this.rrIntervals.slice(-ArrhythmiaDetector.RR_WINDOW_SIZE);
-    const metrics = {
-      rmssd: this.calculateRMSSD(recentRR),
-      sdnn: this.calculateSDNN(recentRR),
-      pnn50: this.calculatePNN50(recentRR),
-      entropy: this.calculateSampleEntropy(recentRR)
-    };
-
-    const abnormalBeats = this.detectAbnormalBeats(recentRR);
-    const abnormalBeatsPercentage = (abnormalBeats.length / recentRR.length) * 100;
-
-    const arrhythmiaType = this.classifyArrhythmiaType(recentRR, metrics);
-    const severity = this.evaluateArrhythmiaSeverity(abnormalBeatsPercentage, metrics);
-    const riskScore = this.calculateArrhythmiaRiskScore(metrics, abnormalBeatsPercentage);
-    const confidence = this.calculateArrhythmiaConfidence(recentRR, metrics);
-
-    const analysis: ArrhythmiaAnalysis = {
-      hasArrhythmia: arrhythmiaType !== ArrhythmiaType.NONE || severity !== ArrhythmiaSeverity.NONE,
-      type: arrhythmiaType,
-      confidence,
-      severity,
-      abnormalBeatsPercentage,
-      riskScore,
-      metrics
-    };
-
-    // Actualizar estado de anomalías consecutivas
-    if (analysis.hasArrhythmia && analysis.confidence > 0.7) {
+    
+    // Evaluar PNN50
+    if (metrics.pnn50 > ArrhythmiaDetector.PNN50_THRESHOLD) {
+      severity = this.increaseSeverity(severity, ArrhythmiaSeverity.MODERATE);
+    }
+    
+    // Evaluar SDNN
+    if (metrics.sdnn > ArrhythmiaDetector.SDNN_THRESHOLD) {
+      severity = this.increaseSeverity(severity, ArrhythmiaSeverity.SEVERE);
+    }
+    
+    // Evaluar ratio LF/HF
+    if (metrics.lfhfRatio > 5) {
+      severity = this.increaseSeverity(severity, ArrhythmiaSeverity.MODERATE);
+    }
+    
+    // Evaluar entropía
+    if (metrics.entropy > 1.5) {
+      severity = this.increaseSeverity(severity, ArrhythmiaSeverity.MINOR);
+    }
+    
+    // Evaluar anomalías consecutivas
+    if (severity !== ArrhythmiaSeverity.NONE) {
       this.consecutiveAnomalies++;
+      if (this.consecutiveAnomalies >= ArrhythmiaDetector.CONSECUTIVE_ANOMALIES_THRESHOLD) {
+        severity = ArrhythmiaSeverity.SEVERE;
+      }
     } else {
       this.consecutiveAnomalies = 0;
     }
-
-    // Si hay 3 análisis consecutivos con arritmia, confirmar
-    if (this.consecutiveAnomalies >= 3 && !this.lastAnalysis?.hasArrhythmia) {
-      console.log("ArrhythmiaDetector: Aritmia confirmada por análisis consecutivos", {
-        type: analysis.type,
-        confidence: analysis.confidence,
-        severity: analysis.severity
-      });
-    }
-
-    this.lastAnalysis = analysis;
-    return analysis;
+    
+    return severity;
+  }
+  
+  private increaseSeverity(current: ArrhythmiaSeverity, toAdd: ArrhythmiaSeverity): ArrhythmiaSeverity {
+    const severityValues = {
+      [ArrhythmiaSeverity.NONE]: 0,
+      [ArrhythmiaSeverity.MINOR]: 1,
+      [ArrhythmiaSeverity.MODERATE]: 2,
+      [ArrhythmiaSeverity.SEVERE]: 3
+    };
+    
+    return severityValues[current] >= severityValues[toAdd] 
+      ? current 
+      : toAdd;
   }
 
   reset(): void {
     this.rrIntervals = [];
     this.lastAnalysis = null;
     this.consecutiveAnomalies = 0;
+    this.hrvAnalyzer.reset();
     console.log("ArrhythmiaDetector: Reset completo");
+  }
+
+  getLastAnalysis(): ArrhythmiaAnalysis | null {
+    return this.lastAnalysis;
   }
 }
