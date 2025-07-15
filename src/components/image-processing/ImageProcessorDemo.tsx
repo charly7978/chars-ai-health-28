@@ -9,7 +9,7 @@ import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
-import { Eye, Activity, Settings, Camera } from 'lucide-react';
+import { Eye, Activity, Settings } from 'lucide-react';
 import type { ProcessedFrame, ImageProcessingConfig } from '../../types/image-processing';
 
 export const ImageProcessorDemo: React.FC = () => {
@@ -43,11 +43,302 @@ export const ImageProcessorDemo: React.FC = () => {
     processorRef.current = new RealTimeImageProcessor(config);
   }, [config]);
   
+  // Función para crear ImageData de prueba
+  const createTestImageData = useCallback((width: number, height: number): ImageData => {
+    const data = new Uint8ClampedArray(width * height * 4);
+    
+    for (let i = 0; i < width * height; i++) {
+      const pixelIndex = i * 4;
+      // Simular patrón de piel
+      data[pixelIndex] = 180 + Math.sin(i * 0.01) * 20;     // R
+      data[pixelIndex + 1] = 140 + Math.cos(i * 0.01) * 15; // G
+      data[pixelIndex + 2] = 120 + Math.sin(i * 0.005) * 10; // B
+      data[pixelIndex + 3] = 255;                            // A
+    }
+    
+    return new ImageData(data, width, height);
+  }, []);
+  
   // Función para procesar frame de prueba
   const processTestFrame = useCallback(() => {
-    if (!processorRef.current) return;
+    if (!processorRef.current || !canvasRef.current) return;
     
     const startTime = performance.now();
+    
+    try {
+      // Crear frame de prueba
+      const testImageData = createTestImageData(200, 200);
+      
+      // Procesar frame
+      const processedFrame = processorRef.current.processFrame(testImageData);
+      
+      const endTime = performance.now();
+      const processingTime = endTime - startTime;
+      
+      // Actualizar estadísticas
+      setProcessingStats(prev => {
+        const newTotalFrames = prev.totalFrames + 1;
+        const newAverageTime = (prev.averageTime * prev.totalFrames + processingTime) / newTotalFrames;
+        const newFps = newTotalFrames > 1 ? 1000 / newAverageTime : 0;
+        
+        return {
+          averageTime: newAverageTime,
+          fps: newFps,
+          totalFrames: newTotalFrames
+        };
+      });
+      
+      setCurrentFrame(processedFrame);
+      setFrameCount(prev => prev + 1);
+      
+      // Visualizar en canvas
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (ctx && canvas) {
+        canvas.width = 200;
+        canvas.height = 200;
+        
+        // Dibujar frame procesado
+        ctx.putImageData(testImageData, 0, 0);
+        
+        // Dibujar información de detección
+        if (processedFrame.fingerDetection.isPresent) {
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(10, 10, 180, 180);
+          
+          ctx.fillStyle = '#10b981';
+          ctx.font = '12px sans-serif';
+          ctx.fillText(
+            `Confianza: ${(processedFrame.fingerDetection.confidence * 100).toFixed(0)}%`,
+            15, 25
+          );
+        }
+        
+        // Mostrar calidad
+        ctx.fillStyle = '#1f2937';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`Calidad: ${processedFrame.qualityMetrics.overallQuality.toFixed(0)}%`, 15, 185);
+      }
+      
+    } catch (error) {
+      console.error('Error procesando frame:', error);
+    }
+  }, [createTestImageData]);
+  
+  // Iniciar procesamiento
+  const startProcessing = useCallback(() => {
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    setFrameCount(0);
+    setProcessingStats({ averageTime: 0, fps: 0, totalFrames: 0 });
+    
+    const interval = setInterval(processTestFrame, 100); // 10 FPS para demo
+    setProcessingInterval(interval);
+  }, [isProcessing, processTestFrame]);
+  
+  // Detener procesamiento
+  const stopProcessing = useCallback(() => {
+    setIsProcessing(false);
+    if (processingInterval) {
+      clearInterval(processingInterval);
+      setProcessingInterval(null);
+    }
+  }, [processingInterval]);
+  
+  // Resetear procesador
+  const resetProcessor = useCallback(() => {
+    stopProcessing();
+    if (processorRef.current) {
+      processorRef.current.reset();
+    }
+    setCurrentFrame(null);
+    setFrameCount(0);
+    setProcessingStats({ averageTime: 0, fps: 0, totalFrames: 0 });
+  }, [stopProcessing]);
+  
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (processingInterval) {
+        clearInterval(processingInterval);
+      }
+    };
+  }, [processingInterval]);
+  
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Eye className="w-5 h-5" />
+            RealTimeImageProcessor Demo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Estado y controles */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={isProcessing ? "default" : "outline"}>
+              Procesamiento: {isProcessing ? "Activo" : "Detenido"}
+            </Badge>
+            <Badge variant={currentFrame?.fingerDetection.isPresent ? "default" : "secondary"}>
+              Dedo: {currentFrame?.fingerDetection.isPresent ? "Detectado" : "No detectado"}
+            </Badge>
+            <Badge variant={config.enableStabilization ? "default" : "outline"}>
+              Estabilización: {config.enableStabilization ? "ON" : "OFF"}
+            </Badge>
+          </div>
+          
+          {/* Controles principales */}
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              onClick={startProcessing} 
+              disabled={isProcessing}
+              className="flex items-center gap-2"
+            >
+              <Activity className="w-4 h-4" />
+              Iniciar Procesamiento
+            </Button>
+            
+            <Button 
+              onClick={stopProcessing} 
+              disabled={!isProcessing}
+              variant="outline"
+            >
+              Detener
+            </Button>
+            
+            <Button 
+              onClick={resetProcessor} 
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Reset
+            </Button>
+          </div>
+          
+          {/* Métricas de rendimiento */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Frames Procesados</div>
+              <div className="text-2xl font-bold">{frameCount}</div>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">FPS Promedio</div>
+              <div className="text-2xl font-bold">{processingStats.fps.toFixed(1)}</div>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Tiempo Procesamiento</div>
+              <div className="text-2xl font-bold">{processingStats.averageTime.toFixed(1)}ms</div>
+            </div>
+            
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Calidad General</div>
+              <div className="text-2xl font-bold">
+                {currentFrame ? currentFrame.qualityMetrics.overallQuality.toFixed(0) : '0'}%
+              </div>
+              <Progress 
+                value={currentFrame ? currentFrame.qualityMetrics.overallQuality : 0} 
+                className="h-2" 
+              />
+            </div>
+          </div>
+          
+          {/* Canvas de visualización */}
+          <div className="flex justify-center">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Frame Procesado</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <canvas
+                  ref={canvasRef}
+                  width={200}
+                  height={200}
+                  className="border rounded-lg bg-slate-100"
+                />
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Métricas detalladas */}
+          {currentFrame && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Detección de Dedo</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Confianza</span>
+                    <span className="text-sm font-semibold">
+                      {(currentFrame.fingerDetection.confidence * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress value={currentFrame.fingerDetection.confidence * 100} className="h-2" />
+                  
+                  <div className="flex justify-between">
+                    <span className="text-sm">Cobertura</span>
+                    <span className="text-sm font-semibold">
+                      {(currentFrame.fingerDetection.coverage * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress value={currentFrame.fingerDetection.coverage * 100} className="h-2" />
+                  
+                  <div className="flex justify-between">
+                    <span className="text-sm">Score de Textura</span>
+                    <span className="text-sm font-semibold">
+                      {(currentFrame.fingerDetection.textureScore * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress value={currentFrame.fingerDetection.textureScore * 100} className="h-2" />
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Métricas de Calidad</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">SNR</div>
+                      <div className="text-lg font-semibold">
+                        {currentFrame.qualityMetrics.snr.toFixed(1)} dB
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Contraste</div>
+                      <div className="text-lg font-semibold">
+                        {currentFrame.qualityMetrics.contrast.toFixed(3)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Nitidez</div>
+                      <div className="text-lg font-semibold">
+                        {currentFrame.qualityMetrics.sharpness.toFixed(3)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Iluminación</div>
+                      <div className="text-lg font-semibold">
+                        {currentFrame.qualityMetrics.illumination.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
     
     try {
       // Crear ImageData de prueba
