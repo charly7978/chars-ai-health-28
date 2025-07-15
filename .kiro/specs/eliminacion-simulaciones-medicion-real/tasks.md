@@ -131,6 +131,7 @@
 - [ ] 11. Implementar procesador de glucosa real con espectroscopía NIR
   - Eliminar GlucoseProcessor vacío y crear implementación real
   - Desarrollar análisis espectral para absorción lumínica en diferentes longitudes de onda
+
   - Implementar algoritmo de calibración: Glucose = Σ(i) α(i) × A(λi) + β
   - Crear sistema de coeficientes de calibración basado en datos espectrales
   - Desarrollar validación de rangos fisiológicos (70-180 mg/dL)
