@@ -43,9 +43,11 @@
   - Crear análisis espectral FFT para identificación de frecuencias dominantes
   - Implementar filtros Butterworth de orden 4 para eliminación de ruido
   - Escribir pruebas unitarias para extracción y procesamiento de señales PPG
+
   - _Requisitos: 2.2, 2.4, 4.3_
 
-- [ ] 5. Implementar AdvancedMathEngine con algoritmos matemáticos complejos
+- [-] 5. Implementar AdvancedMathEngine con algoritmos matemáticos complejos
+
   - Desarrollar implementación de FFT: X(k) = Σ(n=0 to N-1) x(n) × e^(-j2πkn/N)
   - Crear filtro de Kalman extendido con predicción y actualización
   - Implementar filtro Savitzky-Golay: y(i) = Σ(j=-m to m) c(j) × x(i+j)
