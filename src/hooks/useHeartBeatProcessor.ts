@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { HeartBeatProcessor } from '../modules/HeartBeatProcessor';
+import { generateSessionId } from '../utils/deterministicId';
 
 interface HeartBeatResult {
   bpm: number;
@@ -19,7 +20,7 @@ export const useHeartBeatProcessor = () => {
   const [currentBPM, setCurrentBPM] = useState<number>(0);
   const [confidence, setConfidence] = useState<number>(0);
   const [signalQuality, setSignalQuality] = useState<number>(0); // Estado para calidad de señal
-  const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
+  const sessionId = useRef<string>(generateSessionId());
   // Variables para seguimiento de detección
   const detectionAttempts = useRef<number>(0);
   const lastDetectionTime = useRef<number>(Date.now());

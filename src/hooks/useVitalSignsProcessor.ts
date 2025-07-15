@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { VitalSignsProcessor, VitalSignsResult } from '../modules/vital-signs/VitalSignsProcessor';
+import { generateSessionId } from '../utils/deterministicId';
 
 /**
  * Custom hook for processing vital signs with advanced algorithms
@@ -17,7 +18,7 @@ export const useVitalSignsProcessor = () => {
   const [lastValidResults, setLastValidResults] = useState<VitalSignsResult | null>(null);
   const lastArrhythmiaTime = useRef<number>(0);
   const hasDetectedArrhythmia = useRef<boolean>(false);
-  const sessionId = useRef<string>(Math.random().toString(36).substring(2, 9));
+  const sessionId = useRef<string>(generateSessionId());
   const processedSignals = useRef<number>(0);
   const signalLog = useRef<{timestamp: number, value: number, result: any}[]>([]);
   

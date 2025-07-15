@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { generateSessionId } from '../utils/deterministicId';
 
 interface VitalMeasurements {
   heartRate: number;
@@ -23,7 +24,7 @@ export const useVitalMeasurement = (isMeasuring: boolean) => {
       currentMeasurements: measurements,
       elapsedTime,
       timestamp: new Date().toISOString(),
-      session: Math.random().toString(36).substring(2, 9) // Identificador único para esta sesión
+      session: generateSessionId() // Identificador único determinístico para esta sesión
     });
 
     if (!isMeasuring) {

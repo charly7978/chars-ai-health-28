@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
+import { generateSessionId } from '../utils/deterministicId';
 
 /**
  * Custom hook for managing PPG signal processing
@@ -29,7 +30,7 @@ export const useSignalProcessor = () => {
   useEffect(() => {
     console.log("useSignalProcessor: Creating new processor instance", {
       timestamp: new Date().toISOString(),
-      sessionId: Math.random().toString(36).substring(2, 9)
+      sessionId: generateSessionId()
     });
 
     // Define signal ready callback with proper physiological validation

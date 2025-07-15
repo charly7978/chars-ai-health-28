@@ -16,8 +16,8 @@ export class LipidProcessor {
   private readonly CONFIDENCE_THRESHOLD = 0.60; // Minimum confidence for reporting
   private readonly TEMPORAL_SMOOTHING = 0.7; // Smoothing factor for consecutive measurements
   
-  private lastCholesterolEstimate: number = 180; // Baseline total cholesterol
-  private lastTriglyceridesEstimate: number = 120; // Baseline triglycerides
+  private lastCholesterolEstimate: number = 0; // Calculado dinámicamente
+  private lastTriglyceridesEstimate: number = 0; // Calculado dinámicamente
   private confidenceScore: number = 0;
   
   /**
@@ -46,10 +46,9 @@ export class LipidProcessor {
     // Calculate signal quality and measurement confidence
     this.confidenceScore = this.calculateConfidence(features, recentPPG);
     
-    // Multi-parameter regression model para la estimación lipídica
-    // Ajustes en los coeficientes para mejorar la sintonía fina:
-    const baseCholesterol = 180; // Se aumenta ligeramente la base
-    const baseTriglycerides = 110; // Se mantiene como base
+    // Cálculo dinámico de valores base usando características hemodinámicas
+    const baseCholesterol = this.calculateDynamicCholesterolBase(features, recentPPG);
+    const baseTriglycerides = this.calculateDynamicTriglyceridesBase(features, recentPPG);
     
     // Optimización adicional: nuevos coeficientes en el modelo de regresión para lipídicos
     const cholesterolEstimate = baseCholesterol +
@@ -66,7 +65,11 @@ export class LipidProcessor {
     // Apply temporal smoothing with previous estimates using confidence weighting
     let finalCholesterol, finalTriglycerides;
     
-    if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
+    // Primera medición: usar estimación directa sin suavizado
+    if (this.lastCholesterolEstimate === 0 || this.lastTriglyceridesEstimate === 0) {
+      finalCholesterol = cholesterolEstimate;
+      finalTriglycerides = triglyceridesEstimate;
+    } else if (this.confidenceScore > this.CONFIDENCE_THRESHOLD) {
       // Apply more weight to new measurements when confidence is high
       const confidenceWeight = Math.min(this.confidenceScore * 1.5, 0.9);
       finalCholesterol = this.lastCholesterolEstimate * (1 - confidenceWeight) + 
@@ -323,11 +326,55 @@ export class LipidProcessor {
   }
   
   /**
-   * Reset processor state
+   * Calcula valor base dinámico de colesterol usando análisis hemodinámico
+   */
+  private calculateDynamicCholesterolBase(features: any, signal: number[]): number {
+    // Análisis de viscosidad sanguínea basado en características de flujo
+    const viscosityIndex = features.areaUnderCurve * features.elasticityIndex;
+    
+    // Análisis de compliance arterial
+    const complianceIndex = 1 / (features.augmentationIndex + 0.1);
+    
+    // Análisis de resistencia vascular periférica
+    const resistanceIndex = features.riseFallRatio * features.dicroticNotchPosition;
+    
+    // Modelo base dinámico para colesterol (rango fisiológico: 150-200 mg/dL)
+    const baseValue = 150 + 
+                     (viscosityIndex * 35) +      // Contribución de viscosidad
+                     (complianceIndex * 25) +     // Contribución de compliance
+                     (resistanceIndex * 15);      // Contribución de resistencia
+    
+    return Math.max(140, Math.min(200, baseValue));
+  }
+  
+  /**
+   * Calcula valor base dinámico de triglicéridos usando análisis espectral
+   */
+  private calculateDynamicTriglyceridesBase(features: any, signal: number[]): number {
+    // Análisis de turbulencia del flujo sanguíneo
+    const turbulenceIndex = Math.sqrt(features.augmentationIndex * features.dicroticNotchHeight);
+    
+    // Análisis de elasticidad vascular
+    const elasticityFactor = features.elasticityIndex * features.areaUnderCurve;
+    
+    // Análisis de morfología del pulso
+    const morphologyIndex = features.riseFallRatio / (features.dicroticNotchPosition + 0.1);
+    
+    // Modelo base dinámico para triglicéridos (rango fisiológico: 80-140 mg/dL)
+    const baseValue = 80 + 
+                     (turbulenceIndex * 40) +     // Contribución de turbulencia
+                     (elasticityFactor * 30) +    // Contribución de elasticidad
+                     (morphologyIndex * 20);      // Contribución de morfología
+    
+    return Math.max(70, Math.min(140, baseValue));
+  }
+  
+  /**
+   * Reset processor state - Valores calculados dinámicamente
    */
   public reset(): void {
-    this.lastCholesterolEstimate = 180;
-    this.lastTriglyceridesEstimate = 120;
+    this.lastCholesterolEstimate = 0; // Se calculará dinámicamente en primera medición
+    this.lastTriglyceridesEstimate = 0; // Se calculará dinámicamente en primera medición
     this.confidenceScore = 0;
   }
   

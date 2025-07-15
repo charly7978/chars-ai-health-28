@@ -33,14 +33,43 @@ export class SignalTrendAnalyzer {
     return stabilityScore > 0.6 ? "stable" : "unstable";
   }
 
-  // LÓGICA ULTRA-SIMPLE: el score de estabilidad siempre es 1
+  // CÁLCULO REAL: score de estabilidad basado en análisis matemático de la señal
   getStabilityScore(): number {
-    return 1;
+    if (this.valueHistory.length < 3) return 0;
+    
+    // Calcular desviación estándar normalizada
+    const mean = this.valueHistory.reduce((sum, val) => sum + val, 0) / this.valueHistory.length;
+    const variance = this.valueHistory.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / this.valueHistory.length;
+    const stdDev = Math.sqrt(variance);
+    const normalizedStdDev = stdDev / Math.max(1, Math.abs(mean));
+    
+    // Score de estabilidad: 1 = muy estable, 0 = muy inestable
+    return Math.max(0, Math.min(1, 1 - normalizedStdDev));
   }
   
-  // LÓGICA ULTRA-SIMPLE: el score de periodicidad siempre es 1
+  // CÁLCULO REAL: score de periodicidad basado en análisis de frecuencia
   getPeriodicityScore(): number {
-    return 1;
+    if (this.patternHistory.length < 6) return 0;
+    
+    // Contar cambios de dirección para detectar periodicidad
+    let directionChanges = 0;
+    for (let i = 1; i < this.patternHistory.length; i++) {
+      if (this.patternHistory[i] !== this.patternHistory[i-1]) {
+        directionChanges++;
+      }
+    }
+    
+    // Calcular periodicidad normalizada (óptimo: 8-20 cambios para ventana de 30)
+    const normalizedChanges = directionChanges / this.patternHistory.length;
+    
+    // Score óptimo entre 0.2 y 0.6 cambios por muestra
+    if (normalizedChanges < 0.2) {
+      return normalizedChanges * 5; // Escalar linealmente hasta 1
+    } else if (normalizedChanges > 0.6) {
+      return Math.max(0, 1 - (normalizedChanges - 0.6) * 2.5); // Decrecer después de 0.6
+    } else {
+      return 1; // Rango óptimo
+    }
   }
 
   addValue(value: number): void {
