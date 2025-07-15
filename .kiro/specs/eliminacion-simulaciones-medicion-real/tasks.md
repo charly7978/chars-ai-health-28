@@ -131,7 +131,8 @@
   - Escribir pruebas unitarias para análisis lipídico avanzado
   - _Requisitos: 1.2, 4.2, 7.2_
 
-- [ ] 13. Optimizar procesadores existentes eliminando simulaciones residuales
+- [-] 13. Optimizar procesadores existentes eliminando simulaciones residuales
+
   - Revisar BloodPressureProcessor para eliminar estimaciones no científicas
   - Actualizar SpO2Processor con calibración espectral precisa
   - Mejorar VitalSignsProcessor con integración de todos los nuevos algoritmos

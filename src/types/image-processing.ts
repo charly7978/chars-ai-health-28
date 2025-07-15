@@ -22,13 +22,14 @@ export interface OpticalDensity {
 }
 
 export interface FingerDetection {
-  [x: string]: number;
   isPresent: boolean;
   confidence: number;
   coverage: number; // Porcentaje de área cubierta
   textureScore: number;
   edgeScore: number;
   colorConsistency: number;
+  quality: number;
+  area: number;
   position: { x: number; y: number; width: number; height: number };
 }
 
