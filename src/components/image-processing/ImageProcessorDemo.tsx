@@ -247,8 +247,8 @@ export const ImageProcessorDemo: React.FC = () => {
                       <span>{(currentFrame.fingerDetection.confidence * 100).toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Área:</span>
-                      <span>{currentFrame.fingerDetection.area.toFixed(0)} px²</span>
+                      <span>Calidad:</span>
+                      <span>{(currentFrame.fingerDetection.quality * 100).toFixed(1)}%</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -328,7 +328,7 @@ export const ImageProcessorDemo: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="text-center">
                   <div className="text-lg font-semibold">
-                    {stats.framesProcessed}
+                    {stats.frameCounter}
                   </div>
                   <div className="text-sm text-gray-600">Frames Procesados</div>
                 </div>
@@ -340,19 +340,19 @@ export const ImageProcessorDemo: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-semibold">
-                    {stats.fingerDetectionRate.toFixed(1)}%
+                    {stats.processingRate.toFixed(1)}
                   </div>
-                  <div className="text-sm text-gray-600">Detección de Dedo</div>
+                  <div className="text-sm text-gray-600">Tasa de Procesamiento</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-semibold">
-                    {stats.averageProcessingTime.toFixed(1)}ms
+                    {stats.frameHistorySize}
                   </div>
-                  <div className="text-sm text-gray-600">Tiempo Promedio</div>
+                  <div className="text-sm text-gray-600">Historial de Frames</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-semibold">
-                    {stats.stabilizationActive ? 'ON' : 'OFF'}
+                    {stats.hasStabilizationReference ? 'ON' : 'OFF'}
                   </div>
                   <div className="text-sm text-gray-600">Estabilización</div>
                 </div>

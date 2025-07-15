@@ -324,9 +324,12 @@ export class AndroidCameraController {
     }
     
     try {
-      // Intentar habilitar estabilización de imagen
+      // Intentar habilitar estabilización de imagen usando constraints estándar
       await this.videoTrack.applyConstraints({
-        advanced: [{ imageStabilization: true }]
+        advanced: [{ 
+          focusMode: 'continuous',
+          exposureMode: 'continuous'
+        }]
       });
       
       this.stabilizationEnabled = true;

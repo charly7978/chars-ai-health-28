@@ -22,6 +22,7 @@ export interface OpticalDensity {
 }
 
 export interface FingerDetection {
+  [x: string]: number;
   isPresent: boolean;
   confidence: number;
   coverage: number; // Porcentaje de área cubierta

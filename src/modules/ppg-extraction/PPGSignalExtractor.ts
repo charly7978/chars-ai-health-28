@@ -501,28 +501,7 @@ export class PPGSignalExtractor {
     return qualityIndex;
   }
 
-  private performRealSpectralAnalysis(signal: number[]): SpectralFeatures {
-    // Aplicar ventana de Hanning para reducir leakage espectral
-    const windowedSignal = this.applyHanningWindow(signal);
-    
-    // Calcular FFT
-    const fftResult = this.computeRealFFT(windowedSignal);
-    
-    // Calcular magnitudes
-    const magnitudes = fftResult.map(complex => 
-      Math.sqrt(complex.real * complex.real + complex.imag * complex.imag)
-    );
-    
-    // Generar frecuencias
-    const frequencies = Array.from({ length: magnitudes.length }, (_, i) => 
-      (i * this.config.samplingRate) / magnitudes.length
-    );
-    
-    // Encontrar frecuencia dominante en rango fisiológico
-    const dominantFrequency = this.findRealDominantFrequency(frequencies, magnitudes);
-    
-    // Detectar armónicos
-    const harmonics = this.detectRealHarmonics(frequencies, magnitudes, dominantFrequency);
+  // Función duplicada eliminada - se mantiene solo la implementación pública
     
     // Calcular pureza espectral
     const spectralPurity = this.calculateRealSpectralPurity(magnitudes, dominantFrequency, frequencies);
