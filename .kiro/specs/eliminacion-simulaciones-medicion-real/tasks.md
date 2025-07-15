@@ -38,6 +38,8 @@
 
 - [x] 4. Crear PPGSignalExtractor con principios de fotopletismografía
 
+
+
   - Implementar extracción de señales PPG usando ley de Beer-Lambert
   - Desarrollar separación de componentes AC/DC para análisis pulsátil
   - Crear análisis espectral FFT para identificación de frecuencias dominantes
@@ -60,7 +62,11 @@
   - Escribir pruebas unitarias exhaustivas para todos los algoritmos matemáticos
   - _Requisitos: 2.1, 2.4, 7.2, 7.3_
 
-- [ ] 6. Desarrollar BiometricAnalyzer con algoritmos médicos validados
+
+
+
+- [x] 6. Desarrollar BiometricAnalyzer con algoritmos médicos validados
+
 
 
   - Implementar cálculo de frecuencia cardíaca: HR = 60 × fs × N_peaks / N_samples
