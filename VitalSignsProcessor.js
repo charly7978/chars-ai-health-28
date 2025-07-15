@@ -1,25 +1,24 @@
+import { CameraAnalysis } from '../lib/cameraAnalysis';
+
 export class VitalSignsProcessor {
-  private readonly WINDOW_SIZE = 300;
-  private readonly SPO2_CALIBRATION_FACTOR = 1.02;
-  private readonly PERFUSION_INDEX_THRESHOLD = 0.05;
-  private readonly SPO2_WINDOW = 10;
-  private readonly SMA_WINDOW = 3;
+  constructor() {
+    this.cameraAnalysis = new CameraAnalysis();
+    this.isLearningPhase = true;
+    this.measurementStartTime = Date.now();
+    this.rrIntervals = [];
+    this.RR_WINDOW_SIZE = 100;
+    this.RMSSD_THRESHOLD = 45;
+    this.arrhythmiaDetected = false;
+    this.lastPeakTime = null;
+    this.ppgValues = [];
+    this.smaBuffer = [];
+    this.spo2Buffer = [];
+    this.lastValue = 0;
+    this.systolicBuffer = [];
+    this.diastolicBuffer = [];
+  }
 
-  private readonly RR_WINDOW_SIZE = 5;
-  private readonly RMSSD_THRESHOLD = 25;
-  private readonly ARRHYTHMIA_LEARNING_PERIOD = 3000;
-  private readonly PEAK_THRESHOLD = 0.3;
-
-  private ppgValues: number[] = [];
-  private lastValue = 0;
-  private lastPeakTime: number | null = null;
-  private rrIntervals: number[] = [];
-  private baselineRhythm = 0;
-  private isLearningPhase = true;
-  private arrhythmiaDetected = false;
-  private measurementStartTime: number = Date.now();
-
-  private detectArrhythmia() {
+  detectArrhythmia() {
     if (this.rrIntervals.length < this.RR_WINDOW_SIZE) {
       console.log("VitalSignsProcessor: Insuficientes intervalos RR para RMSSD", {
         current: this.rrIntervals.length,
@@ -30,6 +29,7 @@ export class VitalSignsProcessor {
 
     const recentRR = this.rrIntervals.slice(-this.RR_WINDOW_SIZE);
     
+    // Calcular RMSSD con corrección de ruido
     let sumSquaredDiff = 0;
     for (let i = 1; i < recentRR.length; i++) {
       const diff = recentRR[i] - recentRR[i-1];
@@ -37,98 +37,143 @@ export class VitalSignsProcessor {
     }
     
     const rmssd = Math.sqrt(sumSquaredDiff / (recentRR.length - 1));
+    const correctedRMSSD = this.applyRMSSDCorrection(rmssd);
     
+    // Calcular métricas adicionales
     const avgRR = recentRR.reduce((a, b) => a + b, 0) / recentRR.length;
     const lastRR = recentRR[recentRR.length - 1];
     const prematureBeat = Math.abs(lastRR - avgRR) > (avgRR * 0.25);
     
-    console.log("VitalSignsProcessor: Análisis RMSSD", {
+    // Calcular variabilidad de frecuencia cardíaca
+    const sdnn = Math.sqrt(recentRR.reduce((sum, rr) => sum + Math.pow(rr - avgRR, 2), 0) / recentRR.length);
+    const pnn50 = recentRR.filter((rr, i) => i > 0 && Math.abs(rr - recentRR[i-1]) > 50).length / (recentRR.length - 1);
+    
+    // Calcular entropía
+    const shannonEntropy = this.calculateShannonEntropy(recentRR);
+    const sampleEntropy = this.calculateSampleEntropy(recentRR);
+    
+    console.log("VitalSignsProcessor: Análisis completo de arritmia", {
       timestamp: new Date().toISOString(),
       rmssd,
-      threshold: this.RMSSD_THRESHOLD,
-      recentRR,
+      correctedRMSSD,
+      sdnn,
+      pnn50,
+      shannonEntropy,
+      sampleEntropy,
       avgRR,
       lastRR,
       prematureBeat
     });
 
-    const newArrhythmiaState = rmssd > this.RMSSD_THRESHOLD && prematureBeat;
+    // Determinar estado de arritmia con múltiples métricas
+    const newArrhythmiaState = (
+      correctedRMSSD > this.RMSSD_THRESHOLD &&
+      prematureBeat &&
+      (sdnn > 100 || pnn50 > 0.1) &&
+      (shannonEntropy > 1.8 || sampleEntropy > 1.4)
+    );
 
     if (newArrhythmiaState !== this.arrhythmiaDetected) {
       this.arrhythmiaDetected = newArrhythmiaState;
       console.log("VitalSignsProcessor: Cambio en estado de arritmia", {
         previousState: !this.arrhythmiaDetected,
         newState: this.arrhythmiaDetected,
-        cause: {
-          rmssdExceeded: rmssd > this.RMSSD_THRESHOLD,
-          prematureBeat,
-          rmssdValue: rmssd
+        metrics: {
+          rmssd: correctedRMSSD,
+          sdnn,
+          pnn50,
+          shannonEntropy,
+          sampleEntropy
         }
       });
     }
   }
 
-  public processSignal(
-    ppgValue: number,
-    rrData?: { intervals: number[]; lastPeakTime: number | null }
-  ): {
-    spo2: number;
-    pressure: string;
-    arrhythmiaStatus: string;
-  } {
-    console.log("VitalSignsProcessor: Entrada de señal", {
-      ppgValue,
-      isLearning: this.isLearningPhase,
-      rrIntervalsCount: this.rrIntervals.length,
-      receivedRRData: rrData
+  applyRMSSDCorrection(rmssd) {
+    // Corrección empírica basada en la variabilidad de la frecuencia cardíaca
+    return rmssd * 1.05; // Factor de corrección
+  }
+
+  calculateShannonEntropy(data) {
+    // Implementación de entropía de Shannon
+    const probabilities = new Map();
+    data.forEach(value => {
+      probabilities.set(value, (probabilities.get(value) || 0) + 1);
     });
-
-    const filteredValue = this.applySMAFilter(ppgValue);
     
-    this.ppgValues.push(filteredValue);
-    if (this.ppgValues.length > this.WINDOW_SIZE) {
-      this.ppgValues.shift();
-    }
+    const entropy = Array.from(probabilities.values())
+      .map(count => count / data.length)
+      .reduce((sum, p) => sum - p * Math.log2(p), 0);
+    
+    return entropy;
+  }
 
-    if (rrData && rrData.intervals.length > 0) {
-      this.rrIntervals = [...rrData.intervals];
-      this.lastPeakTime = rrData.lastPeakTime;
-      
-      if (!this.isLearningPhase && this.rrIntervals.length >= this.RR_WINDOW_SIZE) {
-        this.detectArrhythmia();
+  calculateSampleEntropy(data) {
+    // Implementación de entropía de muestra
+    const m = 2; // Dimensión
+    const r = 0.2 * this.calculateSD(data); // Tolerancia
+    const N = data.length;
+    
+    let B = 0;
+    let A = 0;
+    
+    for (let i = 0; i < N - m; i++) {
+      for (let j = i + 1; j < N - m; j++) {
+        if (this.isMatch(data, i, j, m, r)) {
+          B++;
+          if (this.isMatch(data, i, j, m + 1, r)) {
+            A++;
+          }
+        }
       }
     }
-
-    const spo2 = this.calculateSpO2(this.ppgValues.slice(-60));
-    const bp = this.calculateBloodPressure(this.ppgValues.slice(-60));
-    const pressureString = `${bp.systolic}/${bp.diastolic}`;
-
-    let arrhythmiaStatus = "--";
     
+    return Math.log(B / A);
+  }
+
+  isMatch(data, i, j, m, r) {
+    for (let k = 0; k < m; k++) {
+      if (Math.abs(data[i + k] - data[j + k]) > r) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  calculateSD(data) {
+    // Cálculo de desviación estándar
+    const mean = data.reduce((a, b) => a + b, 0) / data.length;
+    const variance = data.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / data.length;
+    return Math.sqrt(variance);
+  }
+
+  processFrame(frame) {
+    // Procesar el frame con el análisis de cámara
+    this.cameraAnalysis.processFrame(frame);
+
+    // Calcular métricas
+    const spo2 = this.cameraAnalysis.calculateSpO2();
+    const heartRate = this.cameraAnalysis.calculateHeartRate();
+    const arrhythmiaDetected = this.cameraAnalysis.detectArrhythmias();
+
+    // Determinar estado de arritmia
+    let arrhythmiaStatus = "--";
     const currentTime = Date.now();
     const timeSinceStart = currentTime - this.measurementStartTime;
 
-    if (timeSinceStart > this.ARRHYTHMIA_LEARNING_PERIOD) {
+    if (timeSinceStart > 3000) { // 3 segundos de aprendizaje inicial
       this.isLearningPhase = false;
-      arrhythmiaStatus = this.arrhythmiaDetected ? "ARRITMIA DETECTADA" : "SIN ARRITMIAS";
+      arrhythmiaStatus = arrhythmiaDetected ? "ARRITMIA DETECTADA" : "SIN ARRITMIAS";
     }
-
-    console.log("VitalSignsProcessor: Estado actual", {
-      timestamp: currentTime,
-      isLearningPhase: this.isLearningPhase,
-      arrhythmiaDetected: this.arrhythmiaDetected,
-      arrhythmiaStatus,
-      rrIntervals: this.rrIntervals.length
-    });
 
     return {
       spo2,
-      pressure: pressureString,
+      heartRate,
       arrhythmiaStatus
     };
   }
 
-  private processHeartBeat() {
+  processHeartBeat() {
     const currentTime = Date.now();
     
     if (this.lastPeakTime === null) {
@@ -156,83 +201,10 @@ export class VitalSignsProcessor {
     this.lastPeakTime = currentTime;
   }
 
-  private spo2Buffer: number[] = [];
-  private readonly SPO2_BUFFER_SIZE = 10;
+  BP_BUFFER_SIZE = 10;
+  BP_ALPHA = 0.7;
 
-  private systolicBuffer: number[] = [];
-  private diastolicBuffer: number[] = [];
-  private readonly BP_BUFFER_SIZE = 10;
-  private readonly BP_ALPHA = 0.7;
-
-  private calculateSpO2(values: number[]): number {
-    if (values.length < 30) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 1);
-      }
-      return 0;
-    }
-
-    const dc = this.calculateDC(values);
-    if (dc === 0) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 1);
-      }
-      return 0;
-    }
-
-    const ac = this.calculateAC(values);
-    
-    const perfusionIndex = ac / dc;
-    
-    if (perfusionIndex < this.PERFUSION_INDEX_THRESHOLD) {
-      if (this.spo2Buffer.length > 0) {
-        const lastValid = this.spo2Buffer[this.spo2Buffer.length - 1];
-        return Math.max(0, lastValid - 2);
-      }
-      return 0;
-    }
-
-    const R = (ac / dc) / this.SPO2_CALIBRATION_FACTOR;
-    
-    let spO2 = Math.round(98 - (15 * R));
-    
-    if (perfusionIndex > 0.15) {
-      spO2 = Math.min(98, spO2 + 1);
-    } else if (perfusionIndex < 0.08) {
-      spO2 = Math.max(0, spO2 - 1);
-    }
-
-    spO2 = Math.min(98, spO2);
-
-    this.spo2Buffer.push(spO2);
-    if (this.spo2Buffer.length > this.SPO2_BUFFER_SIZE) {
-      this.spo2Buffer.shift();
-    }
-
-    if (this.spo2Buffer.length > 0) {
-      const sum = this.spo2Buffer.reduce((a, b) => a + b, 0);
-      spO2 = Math.round(sum / this.spo2Buffer.length);
-    }
-
-    console.log("VitalSignsProcessor: Cálculo SpO2", {
-      ac,
-      dc,
-      ratio: R,
-      perfusionIndex,
-      rawSpO2: spO2,
-      bufferSize: this.spo2Buffer.length,
-      smoothedSpO2: spO2
-    });
-
-    return spO2;
-  }
-
-  private calculateBloodPressure(values: number[]): {
-    systolic: number;
-    diastolic: number;
-  } {
+  calculateBloodPressure(values) {
     if (values.length < 30) {
       return { systolic: 0, diastolic: 0 };
     }
@@ -245,7 +217,7 @@ export class VitalSignsProcessor {
     const fps = 30;
     const msPerSample = 1000 / fps;
 
-    const pttValues: number[] = [];
+    const pttValues = [];
     for (let i = 1; i < peakIndices.length; i++) {
       const dt = (peakIndices[i] - peakIndices[i - 1]) * msPerSample;
       pttValues.push(dt);
@@ -318,9 +290,9 @@ export class VitalSignsProcessor {
     };
   }
 
-  private localFindPeaksAndValleys(values: number[]) {
-    const peakIndices: number[] = [];
-    const valleyIndices: number[] = [];
+  localFindPeaksAndValleys(values) {
+    const peakIndices = [];
+    const valleyIndices = [];
 
     for (let i = 2; i < values.length - 2; i++) {
       const v = values[i];
@@ -344,14 +316,10 @@ export class VitalSignsProcessor {
     return { peakIndices, valleyIndices };
   }
 
-  private calculateAmplitude(
-    values: number[],
-    peaks: number[],
-    valleys: number[]
-  ): number {
+  calculateAmplitude(values, peaks, valleys) {
     if (peaks.length === 0 || valleys.length === 0) return 0;
 
-    const amps: number[] = [];
+    const amps = [];
     const len = Math.min(peaks.length, valleys.length);
     for (let i = 0; i < len; i++) {
       const amp = values[peaks[i]] - values[valleys[i]];
@@ -365,7 +333,7 @@ export class VitalSignsProcessor {
     return mean;
   }
 
-  private detectPeak(value: number): boolean {
+  detectPeak(value) {
     const currentTime = Date.now();
     if (this.lastPeakTime === null) {
       if (value > this.PEAK_THRESHOLD) {
@@ -383,7 +351,7 @@ export class VitalSignsProcessor {
     return false;
   }
 
-  private calculateStandardDeviation(values: number[]): number {
+  calculateStandardDeviation(values) {
     const n = values.length;
     if (n === 0) return 0;
     const mean = values.reduce((a, b) => a + b, 0) / n;
@@ -392,18 +360,17 @@ export class VitalSignsProcessor {
     return Math.sqrt(avgSqDiff);
   }
 
-  private calculateAC(values: number[]): number {
+  calculateAC(values) {
     if (values.length === 0) return 0;
     return Math.max(...values) - Math.min(...values);
   }
 
-  private calculateDC(values: number[]): number {
+  calculateDC(values) {
     if (values.length === 0) return 0;
     return values.reduce((a, b) => a + b, 0) / values.length;
   }
 
-  private smaBuffer: number[] = [];
-  private applySMAFilter(value: number): number {
+  applySMAFilter(value) {
     this.smaBuffer.push(value);
     if (this.smaBuffer.length > this.SMA_WINDOW) {
       this.smaBuffer.shift();
@@ -412,7 +379,7 @@ export class VitalSignsProcessor {
     return sum / this.smaBuffer.length;
   }
 
-  public reset(): void {
+  reset() {
     this.ppgValues = [];
     this.smaBuffer = [];
     this.spo2Buffer = [];

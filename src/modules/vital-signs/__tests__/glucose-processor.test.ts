@@ -285,7 +285,7 @@ describe('GlucoseProcessor - Algoritmos Matemáticos Reales', () => {
         });
 
         test('debe aplicar análisis FFT para extracción espectral', () => {
-            const result = processor.calculateGlucose(realPPGSignalData);
+            const result = processor.calculateGlucose(realPPGSalData);
             
             // Verificar que se realizó análisis espectral
             expect(result.spectralAnalysis.spectralFeatures.acComponent).toBeGreaterThan(0);
