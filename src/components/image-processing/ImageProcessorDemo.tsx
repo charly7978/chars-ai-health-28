@@ -1,523 +1,107 @@
 /**
  * Componente de demostración para RealTimeImageProcessor
- * Permite probar y visualizar todas las funcionalidades de procesamiento de imagen
+ * Permite probar y visualizar el procesamiento de imagen en tiempo real
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useImageProcessor } from '../../hooks/useImageProcessor';
+import { RealTimeImageProcessor } from '../../modules/image-processing/RealTimeImageProcessor';
 import { useAndroidCamera } from '../../hooks/useAndroidCamera';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { 
-  Camera, 
-  Image, 
-  Activity, 
-  BarChart3, 
-  Settings, 
+import { Slider } from '../ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import {
+  Camera,
+  Activity,
   Eye,
   Zap,
-  Target
+  Settings,
+  BarChart3,
+  Target,
+  Palette,
+  Grid3X3,
+  Gauge
 } from 'lucide-react';
+import type { ProcessedFrame, ImageProcessingConfig } from '../../types/image-processing';
 
 export const ImageProcessorDemo: React.FC = () => {
+  // Referencias y estados
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const originalCanvasRef = useRef<HTMLCanvasElement>(null);
+  const processorRef = useRef<RealTimeImageProcessor | null>(null);
+
+  // Estados del componente
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentFrame, setCurrentFrame] = useState<ProcessedFrame | null>(null);
+  const [processingInterval, setProcessingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [frameCount, setFrameCount] = useState(0);
+  const [processingStats, setProcessingStats] = useState({
+    averageTime: 0,
+    fps: 0,
+    totalFrames: 0
+  });
+
+  // Configuración del procesador
+  const [config, setConfig] = useState<ImageProcessingConfig>({
+    roiSize: { width: 200, height: 200 },
+    roiPosition: { x: 0.5, y: 0.5 },
+    enableStabilization: true,
+    qualityThreshold: 70,
+    textureAnalysisDepth: 3,
+    colorSpaceConversion: 'Lab'
+  });
+
+  // Hook para cámara
   const {
     isInitialized: cameraInitialized,
     mediaStream,
     initialize: initializeCamera,
     captureFrame
   } = useAndroidCamera();
-  
-  const {
-    isProcessing,
-    lastFrame,
-    frameCount,
-    averageQuality,
-    currentQuality,
-    fingerDetection,
-    opticalDensity,
-    config,
-    processFrame,
-    updateConfig,
-    reset,
-    processingStats
-  } = useImageProcessor();
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const roiCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [processingInterval, setProcessingInterval] = useState<NodeJS.Timeout | null>(null);
-  
+
+  // Inicializar procesador
+  useEffect(() => {
+    processorRef.current = new RealTimeImageProcessor(config);
+  }, []);
+
   // Configurar video stream
   useEffect(() => {
     if (mediaStream && videoRef.current) {
       videoRef.current.srcObject = mediaStream;
     }
   }, [mediaStream]);
-  
+
   // Inicializar cámara automáticamente
   useEffect(() => {
     if (!cameraInitialized) {
       initializeCamera();
     }
   }, [cameraInitialized, initializeCamera]);
-  
-  // Función para procesar frames continuamente
-  const startProcessing = useCallback(() => {
-    if (!cameraInitialized || isRunning) return;
-    
-    setIsRunning(true);
-    
-    const interval = setInterval(() => {
-      const imageData = captureFrame();
-      if (imageData) {
-        const result = processFrame(imageData);
-        
-        // Visualizar ROI si hay resultado
-        if (result && roiCanvasRef.current) {
-          const ctx = roiCanvasRef.current.getContext('2d');
-          if (ctx) {
-            roiCanvasRef.current.width = config.roiSize.width;
-            roiCanvasRef.current.height = config.roiSize.height;
-            
-            // Dibujar ROI extraído (simulado)
-            ctx.fillStyle = fingerDetection?.isPresent ? '#4ade80' : '#ef4444';
-            ctx.fillRect(0, 0, config.roiSize.width, config.roiSize.height);
-            ctx.globalAlpha = 0.3;
-            ctx.fillRect(0, 0, config.roiSize.width, config.roiSize.height);
-            ctx.globalAlpha = 1;
-            
-            // Dibujar información de detección
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '12px monospace';
-            ctx.fillText(`Finger: ${fingerDetection?.isPresent ? 'YES' : 'NO'}`, 5, 15);
-            ctx.fillText(`Conf: ${(fingerDetection?.confidence || 0).toFixed(2)}`, 5, 30);
-            ctx.fillText(`Qual: ${(currentQuality?.overallQuality || 0).toFixed(0)}`, 5, 45);
-          }
-        }
-      }
-    }, 100); // 10 FPS para demo
-    
-    setProcessingInterval(interval);
-  }, [cameraInitialized, isRunning, captureFrame, processFrame, config, fingerDetection, currentQuality]);
-  
-  const stopProcessing = useCallback(() => {
-    setIsRunning(false);
-    if (processingInterval) {
-      clearInterval(processingInterval);
-      setProcessingInterval(null);
+
+  // Función para capturar y procesar frame
+  const processCurrentFrame = useCallback(() => {
+    if (!processorRef.current || !videoRef.current || !canvasRef.current || !originalCanvasRef.current) {
+      return;
     }
-  }, [processingInterval]);
-  
-  const handleReset = useCallback(() => {
-    stopProcessing();
-    reset();
-  }, [stopProcessing, reset]);
-  
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (processingInterval) {
-        clearInterval(processingInterval);
-      }
-    };
-  }, [processingInterval]);
-  
-  return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Image className="w-5 h-5" />
-            RealTimeImageProcessor Demo
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Estado y controles */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={cameraInitialized ? "default" : "secondary"}>
-              Cámara: {cameraInitialized ? "Lista" : "No inicializada"}
-            </Badge>
-            <Badge variant={isRunning ? "default" : "outline"}>
-              Procesamiento: {isRunning ? "Activo" : "Detenido"}
-            </Badge>
-            <Badge variant={fingerDetection?.isPresent ? "default" : "secondary"}>
-              Dedo: {fingerDetection?.isPresent ? "Detectado" : "No detectado"}
-            </Badge>
-            <Badge variant="outline">
-              Frames: {frameCount}
-            </Badge>
-          </div>
-          
-          {/* Controles principales */}
-          <div className="flex gap-2 flex-wrap">
-            <Button 
-              onClick={startProcessing} 
-              disabled={!cameraInitialized || isRunning}
-              className="flex items-center gap-2"
-            >
-              <Activity className="w-4 h-4" />
-              Iniciar Procesamiento
-            </Button>
-            
-            <Button 
-              onClick={stopProcessing} 
-              disabled={!isRunning}
-              variant="outline"
-            >
-              Detener
-            </Button>
-            
-            <Button 
-              onClick={handleReset} 
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Zap className="w-4 h-4" />
-              Reset
-            </Button>
-          </div>
-          
-          {/* Métricas principales */}
-          {currentQuality && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1">
-                <div className="text-sm text-muted-foreground">Calidad General</div>
-                <div className="text-2xl font-bold">{currentQuality.overallQuality.toFixed(0)}%</div>
-                <Progress value={currentQuality.overallQuality} className="h-2" />
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-sm text-muted-foreground">SNR</div>
-                <div className="text-2xl font-bold">{currentQuality.snr.toFixed(1)} dB</div>
-                <Progress value={Math.min(currentQuality.snr * 2, 100)} className="h-2" />
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-sm text-muted-foreground">Contraste</div>
-                <div className="text-2xl font-bold">{(currentQuality.contrast * 100).toFixed(0)}%</div>
-                <Progress value={currentQuality.contrast * 100} className="h-2" />
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-sm text-muted-foreground">Estabilidad</div>
-                <div className="text-2xl font-bold">{currentQuality.stability.toFixed(0)}%</div>
-                <Progress value={currentQuality.stability} className="h-2" />
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
-      <Tabs defaultValue="video" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="video" className="flex items-center gap-2">
-            <Camera className="w-4 h-4" />
-            Video
-          </TabsTrigger>
-          <TabsTrigger value="detection" className="flex items-center gap-2">
-            <Eye className="w-4 h-4" />
-            Detección
-          </TabsTrigger>
-          <TabsTrigger value="analysis" className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" />
-            Análisis
-          </TabsTrigger>
-          <TabsTrigger value="config" className="flex items-center gap-2">
-            <Settings className="w-4 h-4" />
-            Configuración
-          </TabsTrigger>
-        </TabsList>
-        
-        {/* Tab de Video */}
-        <TabsContent value="video" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Video en Vivo</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-auto bg-black rounded-lg"
-                  style={{ maxHeight: '300px' }}
-                />
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">ROI Procesado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <canvas
-                  ref={roiCanvasRef}
-                  className="w-full h-auto bg-gray-100 rounded-lg border"
-                  style={{ maxHeight: '300px' }}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
-        {/* Tab de Detección */}
-        <TabsContent value="detection" className="space-y-4">
-          {fingerDetection && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Detección de Dedo</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Presente</div>
-                      <Badge variant={fingerDetection.isPresent ? "default" : "secondary"}>
-                        {fingerDetection.isPresent ? "SÍ" : "NO"}
-                      </Badge>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Confianza</div>
-                      <div className="text-lg font-semibold">
-                        {(fingerDetection.confidence * 100).toFixed(1)}%
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Cobertura</div>
-                      <div className="text-lg font-semibold">
-                        {(fingerDetection.coverage * 100).toFixed(1)}%
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Textura</div>
-                      <div className="text-lg font-semibold">
-                        {(fingerDetection.textureScore * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">Posición</div>
-                    <div className="text-sm font-mono">
-                      X: {fingerDetection.position.x.toFixed(0)}, 
-                      Y: {fingerDetection.position.y.toFixed(0)}<br/>
-                      W: {fingerDetection.position.width.toFixed(0)}, 
-                      H: {fingerDetection.position.height.toFixed(0)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              {opticalDensity && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Densidad Óptica</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-sm text-muted-foreground">OD Promedio</div>
-                        <div className="text-lg font-semibold">
-                          {opticalDensity.averageOD.toFixed(3)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-muted-foreground">Ratio OD</div>
-                        <div className="text-lg font-semibold">
-                          {opticalDensity.odRatio.toFixed(3)}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">Canales</div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span>Rojo:</span>
-                          <span>{opticalDensity.redOD.length} muestras</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Verde:</span>
-                          <span>{opticalDensity.greenOD.length} muestras</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Azul:</span>
-                          <span>{opticalDensity.blueOD.length} muestras</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-        </TabsContent>
-        
-        {/* Tab de Análisis */}
-        <TabsContent value="analysis" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Estadísticas de Procesamiento</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Frames Procesados</div>
-                    <div className="text-2xl font-bold">{processingStats.framesProcessed}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Tiempo Promedio</div>
-                    <div className="text-2xl font-bold">
-                      {processingStats.averageProcessingTime.toFixed(1)}ms
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Calidad Promedio</div>
-                    <div className="text-2xl font-bold">{averageQuality.toFixed(1)}%</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Detección de Dedo</div>
-                    <div className="text-2xl font-bold">
-                      {processingStats.fingerDetectionRate.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {currentQuality && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Métricas Detalladas</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>SNR:</span>
-                      <span>{currentQuality.snr.toFixed(2)} dB</span>
-                    </div>
-                    <Progress value={Math.min(currentQuality.snr * 2, 100)} className="h-2" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Contraste:</span>
-                      <span>{(currentQuality.contrast * 100).toFixed(1)}%</span>
-                    </div>
-                    <Progress value={currentQuality.contrast * 100} className="h-2" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Nitidez:</span>
-                      <span>{(currentQuality.sharpness * 1000).toFixed(1)}</span>
-                    </div>
-                    <Progress value={Math.min(currentQuality.sharpness * 1000, 100)} className="h-2" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Iluminación:</span>
-                      <span>{currentQuality.illumination.toFixed(1)}%</span>
-                    </div>
-                    <Progress value={currentQuality.illumination} className="h-2" />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-        
-        {/* Tab de Configuración */}
-        <TabsContent value="config" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Configuración del Procesador</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Tamaño ROI</label>
-                    <div className="flex gap-2 mt-1">
-                      <input
-                        type="number"
-                        value={config.roiSize.width}
-                        onChange={(e) => updateConfig({
-                          roiSize: { ...config.roiSize, width: parseInt(e.target.value) }
-                        })}
-                        className="flex-1 px-3 py-2 border rounded-md"
-                        placeholder="Ancho"
-                      />
-                      <input
-                        type="number"
-                        value={config.roiSize.height}
-                        onChange={(e) => updateConfig({
-                          roiSize: { ...config.roiSize, height: parseInt(e.target.value) }
-                        })}
-                        className="flex-1 px-3 py-2 border rounded-md"
-                        placeholder="Alto"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Umbral de Calidad</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={config.qualityThreshold}
-                      onChange={(e) => updateConfig({ qualityThreshold: parseInt(e.target.value) })}
-                      className="w-full mt-1"
-                    />
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {config.qualityThreshold}%
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Espacio de Color</label>
-                    <select
-                      value={config.colorSpaceConversion}
-                      onChange={(e) => updateConfig({ 
-                        colorSpaceConversion: e.target.value as 'RGB' | 'XYZ' | 'Lab' | 'YUV'
-                      })}
-                      className="w-full mt-1 px-3 py-2 border rounded-md"
-                    >
-                      <option value="RGB">RGB</option>
-                      <option value="XYZ">XYZ</option>
-                      <option value="Lab">Lab</option>
-                      <option value="YUV">YUV</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="stabilization"
-                      checked={config.enableStabilization}
-                      onChange={(e) => updateConfig({ enableStabilization: e.target.checked })}
-                    />
-                    <label htmlFor="stabilization" className="text-sm font-medium">
-                      Habilitar Estabilización
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-};
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const originalCanvas = originalCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const originalCtx = originalCanvas.getContext('2d');
+
+    if (!ctx || !originalCtx || video.videoWidth === 0 || video.videoHeight === 0) {
+      return;
+    }
+
+    // Configurar tamaño de canvas
+    canvas.width = config.roiSize.width;
+    canvas.height = config.roiSize.height;
+    originalCanvas.width = video.videoWidth;
+    originalCanvas.height = video.videoHeight;
+
+// Dibujar frame original\n    originalCtx.drawImage(video, 0, 0);\n    \n    // Capturar ImageData del video completo\n    const fullImageData = originalCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);\n    \n    const startTime = performance.now();\n    \n    try {\n      // Procesar frame\n      const processedFrame = processorRef.current.processFrame(fullImageData);\n      \n      const endTime = performance.now();\n      const processingTime = endTime - startTime;\n      \n      // Actualizar estadísticas\n      setProcessingStats(prev => {\n        const newTotalFrames = prev.totalFrames + 1;\n        const newAverageTime = (prev.averageTime * prev.totalFrames + processingTime) / newTotalFrames;\n        const newFps = newTotalFrames > 1 ? 1000 / newAverageTime : 0;\n        \n        return {\n          averageTime: newAverageTime,\n          fps: newFps,\n          totalFrames: newTotalFrames\n        };\n      });\n      \n      setCurrentFrame(processedFrame);\n      setFrameCount(prev => prev + 1);\n      \n      // Visualizar ROI procesado\n      drawProcessedFrame(processedFrame, ctx);\n      \n      // Dibujar ROI en frame original\n      drawROIOverlay(originalCtx, video.videoWidth, video.videoHeight);\n      \n    } catch (error) {\n      console.error('Error procesando frame:', error);\n    }\n  }, [config]);\n  \n  // Función para dibujar frame procesado\n  const drawProcessedFrame = useCallback((frame: ProcessedFrame, ctx: CanvasRenderingContext2D) => {\n    const { width, height } = ctx.canvas;\n    \n    // Limpiar canvas\n    ctx.clearRect(0, 0, width, height);\n    \n    // Dibujar fondo basado en calidad\n    const qualityColor = frame.qualityMetrics.overallQuality > 70 ? '#10b981' : \n                        frame.qualityMetrics.overallQuality > 40 ? '#f59e0b' : '#ef4444';\n    \n    ctx.fillStyle = `${qualityColor}20`;\n    ctx.fillRect(0, 0, width, height);\n    \n    // Dibujar información de detección de dedo\n    if (frame.fingerDetection.isPresent) {\n      const { position } = frame.fingerDetection;\n      \n      // Escalar posición al tamaño del canvas\n      const scaleX = width / config.roiSize.width;\n      const scaleY = height / config.roiSize.height;\n      \n      ctx.strokeStyle = '#10b981';\n      ctx.lineWidth = 2;\n      ctx.strokeRect(\n        position.x * scaleX,\n        position.y * scaleY,\n        position.width * scaleX,\n        position.height * scaleY\n      );\n      \n      // Etiqueta de confianza\n      ctx.fillStyle = '#10b981';\n      ctx.font = '12px sans-serif';\n      ctx.fillText(\n        `Dedo: ${(frame.fingerDetection.confidence * 100).toFixed(0)}%`,\n        10, 20\n      );\n    } else {\n      ctx.fillStyle = '#ef4444';\n      ctx.font = '12px sans-serif';\n      ctx.fillText('No se detecta dedo', 10, 20);\n    }\n    \n    // Dibujar métricas de calidad\n    ctx.fillStyle = '#1f2937';\n    ctx.font = '10px sans-serif';\n    ctx.fillText(`Calidad: ${frame.qualityMetrics.overallQuality.toFixed(0)}%`, 10, 40);\n    ctx.fillText(`SNR: ${frame.qualityMetrics.snr.toFixed(1)} dB`, 10, 55);\n    ctx.fillText(`Contraste: ${frame.qualityMetrics.contrast.toFixed(3)}`, 10, 70);\n    \n    // Dibujar offset de estabilización si está habilitado\n    if (config.enableStabilization && (frame.stabilizationOffset.x !== 0 || frame.stabilizationOffset.y !== 0)) {\n      ctx.fillStyle = '#3b82f6';\n      ctx.fillText(\n        `Offset: (${frame.stabilizationOffset.x}, ${frame.stabilizationOffset.y})`,\n        10, height - 10\n      );\n    }\n  }, [config]);\n  \n  // Función para dibujar overlay de ROI\n  const drawROIOverlay = useCallback((ctx: CanvasRenderingContext2D, videoWidth: number, videoHeight: number) => {\n    // Calcular posición del ROI\n    const roiX = (videoWidth - config.roiSize.width) * config.roiPosition.x;\n    const roiY = (videoHeight - config.roiSize.height) * config.roiPosition.y;\n    \n    // Dibujar rectángulo del ROI\n    ctx.strokeStyle = '#3b82f6';\n    ctx.lineWidth = 2;\n    ctx.strokeRect(roiX, roiY, config.roiSize.width, config.roiSize.height);\n    \n    // Etiqueta del ROI\n    ctx.fillStyle = '#3b82f6';\n    ctx.font = '14px sans-serif';\n    ctx.fillText('ROI', roiX + 5, roiY + 20);\n  }, [config]);\n  \n  // Iniciar procesamiento\n  const startProcessing = useCallback(() => {\n    if (!cameraInitialized || isProcessing) return;\n    \n    setIsProcessing(true);\n    setFrameCount(0);\n    setProcessingStats({ averageTime: 0, fps: 0, totalFrames: 0 });\n    \n    const interval = setInterval(processCurrentFrame, 33); // ~30 FPS\n    setProcessingInterval(interval);\n  }, [cameraInitialized, isProcessing, processCurrentFrame]);\n  \n  // Detener procesamiento\n  const stopProcessing = useCallback(() => {\n    setIsProcessing(false);\n    if (processingInterval) {\n      clearInterval(processingInterval);\n      setProcessingInterval(null);\n    }\n  }, [processingInterval]);\n  \n  // Actualizar configuración del procesador\n  const updateProcessorConfig = useCallback((newConfig: Partial<ImageProcessingConfig>) => {\n    const updatedConfig = { ...config, ...newConfig };\n    setConfig(updatedConfig);\n    \n    if (processorRef.current) {\n      processorRef.current.updateConfig(updatedConfig);\n    }\n  }, [config]);\n  \n  // Resetear procesador\n  const resetProcessor = useCallback(() => {\n    stopProcessing();\n    if (processorRef.current) {\n      processorRef.current.reset();\n    }\n    setCurrentFrame(null);\n    setFrameCount(0);\n    setProcessingStats({ averageTime: 0, fps: 0, totalFrames: 0 });\n  }, [stopProcessing]);\n  \n  // Cleanup\n  useEffect(() => {\n    return () => {\n      if (processingInterval) {\n        clearInterval(processingInterval);\n      }\n    };\n  }, [processingInterval]);\n  \n  return (\n    <div className=\"p-6 max-w-7xl mx-auto space-y-6\">\n      <Card>\n        <CardHeader>\n          <CardTitle className=\"flex items-center gap-2\">\n            <Eye className=\"w-5 h-5\" />\n            RealTimeImageProcessor Demo\n          </CardTitle>\n        </CardHeader>\n        <CardContent className=\"space-y-4\">\n          {/* Estado y controles principales */}\n          <div className=\"flex items-center gap-2 flex-wrap\">\n            <Badge variant={cameraInitialized ? \"default\" : \"secondary\"}>\n              Cámara: {cameraInitialized ? \"Lista\" : \"No inicializada\"}\n            </Badge>\n            <Badge variant={isProcessing ? \"default\" : \"outline\"}>\n              Procesamiento: {isProcessing ? \"Activo\" : \"Detenido\"}\n            </Badge>\n            <Badge variant={currentFrame?.fingerDetection.isPresent ? \"default\" : \"secondary\"}>\n              Dedo: {currentFrame?.fingerDetection.isPresent ? \"Detectado\" : \"No detectado\"}\n            </Badge>\n            <Badge variant={config.enableStabilization ? \"default\" : \"outline\"}>\n              Estabilización: {config.enableStabilization ? \"ON\" : \"OFF\"}\n            </Badge>\n          </div>\n          \n          {/* Controles principales */}\n          <div className=\"flex gap-2 flex-wrap\">\n            <Button \n              onClick={startProcessing} \n              disabled={!cameraInitialized || isProcessing}\n              className=\"flex items-center gap-2\"\n            >\n              <Activity className=\"w-4 h-4\" />\n              Iniciar Procesamiento\n            </Button>\n            \n            <Button \n              onClick={stopProcessing} \n              disabled={!isProcessing}\n              variant=\"outline\"\n            >\n              Detener\n            </Button>\n            \n            <Button \n              onClick={resetProcessor} \n              variant=\"outline\"\n              className=\"flex items-center gap-2\"\n            >\n              <Settings className=\"w-4 h-4\" />\n              Reset\n            </Button>\n          </div>\n          \n          {/* Métricas de rendimiento */}\n          <div className=\"grid grid-cols-2 md:grid-cols-4 gap-4\">\n            <div className=\"space-y-1\">\n              <div className=\"text-sm text-muted-foreground\">Frames Procesados</div>\n              <div className=\"text-2xl font-bold\">{frameCount}</div>\n            </div>\n            \n            <div className=\"space-y-1\">\n              <div className=\"text-sm text-muted-foreground\">FPS Promedio</div>\n              <div className=\"text-2xl font-bold\">{processingStats.fps.toFixed(1)}</div>\n            </div>\n            \n            <div className=\"space-y-1\">\n              <div className=\"text-sm text-muted-foreground\">Tiempo Procesamiento</div>\n              <div className=\"text-2xl font-bold\">{processingStats.averageTime.toFixed(1)}ms</div>\n            </div>\n            \n            <div className=\"space-y-1\">\n              <div className=\"text-sm text-muted-foreground\">Calidad General</div>\n              <div className=\"text-2xl font-bold\">\n                {currentFrame ? currentFrame.qualityMetrics.overallQuality.toFixed(0) : '0'}%\n              </div>\n              <Progress \n                value={currentFrame ? currentFrame.qualityMetrics.overallQuality : 0} \n                className=\"h-2\" \n              />\n            </div>\n          </div>\n        </CardContent>\n      </Card>\n      \n      <Tabs defaultValue=\"processing\" className=\"w-full\">\n        <TabsList className=\"grid w-full grid-cols-4\">\n          <TabsTrigger value=\"processing\" className=\"flex items-center gap-2\">\n            <Camera className=\"w-4 h-4\" />\n            Procesamiento\n          </TabsTrigger>\n          <TabsTrigger value=\"analysis\" className=\"flex items-center gap-2\">\n            <BarChart3 className=\"w-4 h-4\" />\n            Análisis\n          </TabsTrigger>\n          <TabsTrigger value=\"config\" className=\"flex items-center gap-2\">\n            <Settings className=\"w-4 h-4\" />\n            Configuración\n          </TabsTrigger>\n          <TabsTrigger value=\"metrics\" className=\"flex items-center gap-2\">\n            <Gauge className=\"w-4 h-4\" />\n            Métricas\n          </TabsTrigger>\n        </TabsList>\n        \n        {/* Tab de Procesamiento */}\n        <TabsContent value=\"processing\" className=\"space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-6\">\n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg\">Video Original</CardTitle>\n              </CardHeader>\n              <CardContent>\n                <div className=\"relative\">\n                  <video\n                    ref={videoRef}\n                    autoPlay\n                    muted\n                    playsInline\n                    className=\"w-full h-auto bg-black rounded-lg\"\n                    style={{ maxHeight: '300px' }}\n                  />\n                  <canvas\n                    ref={originalCanvasRef}\n                    className=\"absolute inset-0 w-full h-full pointer-events-none\"\n                    style={{ maxHeight: '300px' }}\n                  />\n                </div>\n              </CardContent>\n            </Card>\n            \n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg\">ROI Procesado</CardTitle>\n              </CardHeader>\n              <CardContent>\n                <canvas\n                  ref={canvasRef}\n                  width={config.roiSize.width}\n                  height={config.roiSize.height}\n                  className=\"w-full h-auto bg-slate-100 rounded-lg border\"\n                  style={{ maxHeight: '300px' }}\n                />\n              </CardContent>\n            </Card>\n          </div>\n        </TabsContent>\n        \n        {/* Tab de Análisis */}\n        <TabsContent value=\"analysis\" className=\"space-y-4\">\n          {currentFrame ? (\n            <div className=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6\">\n              {/* Detección de Dedo */}\n              <Card>\n                <CardHeader>\n                  <CardTitle className=\"text-lg flex items-center gap-2\">\n                    <Target className=\"w-5 h-5\" />\n                    Detección de Dedo\n                  </CardTitle>\n                </CardHeader>\n                <CardContent className=\"space-y-4\">\n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Confianza</span>\n                      <span className=\"text-sm font-semibold\">\n                        {(currentFrame.fingerDetection.confidence * 100).toFixed(1)}%\n                      </span>\n                    </div>\n                    <Progress value={currentFrame.fingerDetection.confidence * 100} className=\"h-2\" />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Cobertura</span>\n                      <span className=\"text-sm font-semibold\">\n                        {(currentFrame.fingerDetection.coverage * 100).toFixed(1)}%\n                      </span>\n                    </div>\n                    <Progress value={currentFrame.fingerDetection.coverage * 100} className=\"h-2\" />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Score de Textura</span>\n                      <span className=\"text-sm font-semibold\">\n                        {(currentFrame.fingerDetection.textureScore * 100).toFixed(1)}%\n                      </span>\n                    </div>\n                    <Progress value={currentFrame.fingerDetection.textureScore * 100} className=\"h-2\" />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Score de Bordes</span>\n                      <span className=\"text-sm font-semibold\">\n                        {(currentFrame.fingerDetection.edgeScore * 100).toFixed(1)}%\n                      </span>\n                    </div>\n                    <Progress value={Math.min(currentFrame.fingerDetection.edgeScore * 100, 100)} className=\"h-2\" />\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Consistencia de Color</span>\n                      <span className=\"text-sm font-semibold\">\n                        {(currentFrame.fingerDetection.colorConsistency * 100).toFixed(1)}%\n                      </span>\n                    </div>\n                    <Progress value={currentFrame.fingerDetection.colorConsistency * 100} className=\"h-2\" />\n                  </div>\n                </CardContent>\n              </Card>\n              \n              {/* Métricas de Calidad */}\n              <Card>\n                <CardHeader>\n                  <CardTitle className=\"text-lg flex items-center gap-2\">\n                    <BarChart3 className=\"w-5 h-5\" />\n                    Calidad de Señal\n                  </CardTitle>\n                </CardHeader>\n                <CardContent className=\"space-y-4\">\n                  <div className=\"grid grid-cols-2 gap-4\">\n                    <div>\n                      <div className=\"text-sm text-muted-foreground\">SNR</div>\n                      <div className=\"text-lg font-semibold\">\n                        {currentFrame.qualityMetrics.snr.toFixed(1)} dB\n                      </div>\n                    </div>\n                    <div>\n                      <div className=\"text-sm text-muted-foreground\">Contraste</div>\n                      <div className=\"text-lg font-semibold\">\n                        {currentFrame.qualityMetrics.contrast.toFixed(3)}\n                      </div>\n                    </div>\n                    <div>\n                      <div className=\"text-sm text-muted-foreground\">Nitidez</div>\n                      <div className=\"text-lg font-semibold\">\n                        {currentFrame.qualityMetrics.sharpness.toFixed(3)}\n                      </div>\n                    </div>\n                    <div>\n                      <div className=\"text-sm text-muted-foreground\">Iluminación</div>\n                      <div className=\"text-lg font-semibold\">\n                        {currentFrame.qualityMetrics.illumination.toFixed(0)}%\n                      </div>\n                    </div>\n                  </div>\n                  \n                  <div className=\"space-y-2\">\n                    <div className=\"flex justify-between\">\n                      <span className=\"text-sm\">Estabilidad</span>\n                      <span className=\"text-sm font-semibold\">\n                        {currentFrame.qualityMetrics.stability.toFixed(0)}%\n                      </span>\n                    </div>\n                    <Progress value={currentFrame.qualityMetrics.stability} className=\"h-2\" />\n                  </div>\n                </CardContent>\n              </Card>\n              \n              {/* Densidad Óptica */}\n              <Card>\n                <CardHeader>\n                  <CardTitle className=\"text-lg flex items-center gap-2\">\n                    <Zap className=\"w-5 h-5\" />\n                    Densidad Óptica\n                  </CardTitle>\n                </CardHeader>\n                <CardContent className=\"space-y-4\">\n                  <div className=\"grid grid-cols-1 gap-3\">\n                    <div className=\"flex justify-between items-center\">\n                      <span className=\"text-sm\">OD Promedio</span>\n                      <span className=\"text-sm font-semibold\">\n                        {currentFrame.opticalDensity.averageOD.toFixed(3)}\n                      </span>\n                    </div>\n                    \n                    <div className=\"flex justify-between items-center\">\n                      <span className=\"text-sm\">Ratio OD</span>\n                      <span className=\"text-sm font-semibold\">\n                        {currentFrame.opticalDensity.odRatio.toFixed(3)}\n                      </span>\n                    </div>\n                    \n                    <div className=\"space-y-1\">\n                      <div className=\"text-xs text-muted-foreground\">Canales RGB</div>\n                      <div className=\"flex gap-2\">\n                        <div className=\"flex-1 text-center\">\n                          <div className=\"text-xs text-red-600\">R</div>\n                          <div className=\"text-sm font-mono\">\n                            {currentFrame.opticalDensity.redOD.length > 0 ? \n                              (currentFrame.opticalDensity.redOD.reduce((sum, val) => sum + val, 0) / \n                               currentFrame.opticalDensity.redOD.length).toFixed(3) : \n                              '0.000'}\n                          </div>\n                        </div>\n                        <div className=\"flex-1 text-center\">\n                          <div className=\"text-xs text-green-600\">G</div>\n                          <div className=\"text-sm font-mono\">\n                            {currentFrame.opticalDensity.greenOD.length > 0 ? \n                              (currentFrame.opticalDensity.greenOD.reduce((sum, val) => sum + val, 0) / \n                               currentFrame.opticalDensity.greenOD.length).toFixed(3) : \n                              '0.000'}\n                          </div>\n                        </div>\n                        <div className=\"flex-1 text-center\">\n                          <div className=\"text-xs text-blue-600\">B</div>\n                          <div className=\"text-sm font-mono\">\n                            {currentFrame.opticalDensity.blueOD.length > 0 ? \n                              (currentFrame.opticalDensity.blueOD.reduce((sum, val) => sum + val, 0) / \n                               currentFrame.opticalDensity.blueOD.length).toFixed(3) : \n                              '0.000'}\n                          </div>\n                        </div>\n                      </div>\n                    </div>\n                  </div>\n                </CardContent>\n              </Card>\n            </div>\n          ) : (\n            <Card>\n              <CardContent className=\"p-8 text-center text-muted-foreground\">\n                No hay datos de análisis disponibles. Inicie el procesamiento para ver los resultados.\n              </CardContent>\n            </Card>\n          )}\n        </TabsContent>\n        \n        {/* Tab de Configuración */}\n        <TabsContent value=\"config\" className=\"space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-2 gap-6\">\n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg flex items-center gap-2\">\n                  <Target className=\"w-5 h-5\" />\n                  Región de Interés (ROI)\n                </CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-4\">\n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Ancho del ROI</label>\n                  <Slider\n                    value={[config.roiSize.width]}\n                    onValueChange={([value]) => updateProcessorConfig({ \n                      roiSize: { ...config.roiSize, width: value } \n                    })}\n                    min={50}\n                    max={400}\n                    step={10}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {config.roiSize.width}px\n                  </div>\n                </div>\n                \n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Alto del ROI</label>\n                  <Slider\n                    value={[config.roiSize.height]}\n                    onValueChange={([value]) => updateProcessorConfig({ \n                      roiSize: { ...config.roiSize, height: value } \n                    })}\n                    min={50}\n                    max={400}\n                    step={10}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {config.roiSize.height}px\n                  </div>\n                </div>\n                \n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Posición X del ROI</label>\n                  <Slider\n                    value={[config.roiPosition.x]}\n                    onValueChange={([value]) => updateProcessorConfig({ \n                      roiPosition: { ...config.roiPosition, x: value } \n                    })}\n                    min={0}\n                    max={1}\n                    step={0.1}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {(config.roiPosition.x * 100).toFixed(0)}%\n                  </div>\n                </div>\n                \n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Posición Y del ROI</label>\n                  <Slider\n                    value={[config.roiPosition.y]}\n                    onValueChange={([value]) => updateProcessorConfig({ \n                      roiPosition: { ...config.roiPosition, y: value } \n                    })}\n                    min={0}\n                    max={1}\n                    step={0.1}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {(config.roiPosition.y * 100).toFixed(0)}%\n                  </div>\n                </div>\n              </CardContent>\n            </Card>\n            \n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg flex items-center gap-2\">\n                  <Settings className=\"w-5 h-5\" />\n                  Configuración de Procesamiento\n                </CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-4\">\n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Espacio de Color</label>\n                  <Select \n                    value={config.colorSpaceConversion} \n                    onValueChange={(value: 'RGB' | 'XYZ' | 'Lab' | 'YUV') => \n                      updateProcessorConfig({ colorSpaceConversion: value })\n                    }\n                  >\n                    <SelectTrigger>\n                      <SelectValue />\n                    </SelectTrigger>\n                    <SelectContent>\n                      <SelectItem value=\"RGB\">RGB</SelectItem>\n                      <SelectItem value=\"XYZ\">XYZ</SelectItem>\n                      <SelectItem value=\"Lab\">Lab</SelectItem>\n                      <SelectItem value=\"YUV\">YUV</SelectItem>\n                    </SelectContent>\n                  </Select>\n                </div>\n                \n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Umbral de Calidad</label>\n                  <Slider\n                    value={[config.qualityThreshold]}\n                    onValueChange={([value]) => updateProcessorConfig({ qualityThreshold: value })}\n                    min={0}\n                    max={100}\n                    step={5}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {config.qualityThreshold}%\n                  </div>\n                </div>\n                \n                <div className=\"space-y-2\">\n                  <label className=\"text-sm font-medium\">Profundidad de Análisis de Textura</label>\n                  <Slider\n                    value={[config.textureAnalysisDepth]}\n                    onValueChange={([value]) => updateProcessorConfig({ textureAnalysisDepth: value })}\n                    min={1}\n                    max={7}\n                    step={1}\n                    className=\"w-full\"\n                  />\n                  <div className=\"text-xs text-muted-foreground\">\n                    Actual: {config.textureAnalysisDepth}\n                  </div>\n                </div>\n                \n                <div className=\"flex items-center space-x-2\">\n                  <input\n                    type=\"checkbox\"\n                    id=\"stabilization\"\n                    checked={config.enableStabilization}\n                    onChange={(e) => updateProcessorConfig({ enableStabilization: e.target.checked })}\n                    className=\"rounded\"\n                  />\n                  <label htmlFor=\"stabilization\" className=\"text-sm font-medium\">\n                    Habilitar Estabilización\n                  </label>\n                </div>\n              </CardContent>\n            </Card>\n          </div>\n        </TabsContent>\n        \n        {/* Tab de Métricas */}\n        <TabsContent value=\"metrics\" className=\"space-y-4\">\n          <div className=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6\">\n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg\">Rendimiento</CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-4\">\n                <div className=\"grid grid-cols-2 gap-4\">\n                  <div>\n                    <div className=\"text-sm text-muted-foreground\">FPS Actual</div>\n                    <div className=\"text-2xl font-bold\">{processingStats.fps.toFixed(1)}</div>\n                  </div>\n                  <div>\n                    <div className=\"text-sm text-muted-foreground\">Tiempo Promedio</div>\n                    <div className=\"text-2xl font-bold\">{processingStats.averageTime.toFixed(1)}ms</div>\n                  </div>\n                  <div>\n                    <div className=\"text-sm text-muted-foreground\">Total Frames</div>\n                    <div className=\"text-2xl font-bold\">{processingStats.totalFrames}</div>\n                  </div>\n                  <div>\n                    <div className=\"text-sm text-muted-foreground\">Frames Actuales</div>\n                    <div className=\"text-2xl font-bold\">{frameCount}</div>\n                  </div>\n                </div>\n              </CardContent>\n            </Card>\n            \n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg\">Estado del Procesador</CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-4\">\n                {processorRef.current && (() => {\n                  const stats = processorRef.current.getStatistics();\n                  return (\n                    <div className=\"space-y-3\">\n                      <div className=\"flex justify-between\">\n                        <span className=\"text-sm\">Historial de Frames</span>\n                        <span className=\"text-sm font-semibold\">{stats.frameHistorySize}</span>\n                      </div>\n                      <div className=\"flex justify-between\">\n                        <span className=\"text-sm\">Contador de Frames</span>\n                        <span className=\"text-sm font-semibold\">{stats.frameCounter}</span>\n                      </div>\n                      <div className=\"flex justify-between\">\n                        <span className=\"text-sm\">Referencia de Estabilización</span>\n                        <span className=\"text-sm font-semibold\">\n                          {stats.hasStabilizationReference ? 'Sí' : 'No'}\n                        </span>\n                      </div>\n                      <div className=\"flex justify-between\">\n                        <span className=\"text-sm\">Calidad Promedio</span>\n                        <span className=\"text-sm font-semibold\">\n                          {stats.averageQuality.toFixed(1)}%\n                        </span>\n                      </div>\n                      <div className=\"flex justify-between\">\n                        <span className=\"text-sm\">Tasa de Procesamiento</span>\n                        <span className=\"text-sm font-semibold\">\n                          {stats.processingRate.toFixed(1)} fps\n                        </span>\n                      </div>\n                    </div>\n                  );\n                })()}\n              </CardContent>\n            </Card>\n            \n            <Card>\n              <CardHeader>\n                <CardTitle className=\"text-lg\">Algoritmos Activos</CardTitle>\n              </CardHeader>\n              <CardContent className=\"space-y-3\">\n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm flex items-center gap-2\">\n                    <Palette className=\"w-4 h-4\" />\n                    Transformación de Color\n                  </span>\n                  <Badge variant=\"default\">{config.colorSpaceConversion}</Badge>\n                </div>\n                \n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm flex items-center gap-2\">\n                    <Zap className=\"w-4 h-4\" />\n                    Densidad Óptica\n                  </span>\n                  <Badge variant=\"default\">Beer-Lambert</Badge>\n                </div>\n                \n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm flex items-center gap-2\">\n                    <Grid3X3 className=\"w-4 h-4\" />\n                    Análisis de Textura\n                  </span>\n                  <Badge variant=\"default\">GLCM</Badge>\n                </div>\n                \n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm flex items-center gap-2\">\n                    <Target className=\"w-4 h-4\" />\n                    Detección de Bordes\n                  </span>\n                  <Badge variant=\"default\">Sobel</Badge>\n                </div>\n                \n                <div className=\"flex items-center justify-between\">\n                  <span className=\"text-sm flex items-center gap-2\">\n                    <Activity className=\"w-4 h-4\" />\n                    Estabilización\n                  </span>\n                  <Badge variant={config.enableStabilization ? \"default\" : \"secondary\"}>\n                    {config.enableStabilization ? \"Lucas-Kanade\" : \"Deshabilitado\"}\n                  </Badge>\n                </div>\n              </CardContent>\n            </Card>\n          </div>\n        </TabsContent>\n      </Tabs>\n    </div>\n  );\n};"

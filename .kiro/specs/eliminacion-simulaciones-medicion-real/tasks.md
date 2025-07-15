@@ -24,7 +24,9 @@
 
 
 
-- [-] 3. Desarrollar RealTimeImageProcessor con algoritmos ópticos avanzados
+- [x] 3. Desarrollar RealTimeImageProcessor con algoritmos ópticos avanzados
+
+
 
   - Implementar transformación de espacio de color RGB → XYZ → Lab
   - Crear función de cálculo de densidad óptica usando fórmula OD = -log10(I/I₀)
