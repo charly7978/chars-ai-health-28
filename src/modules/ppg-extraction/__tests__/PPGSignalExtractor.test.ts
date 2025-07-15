@@ -6,6 +6,7 @@
 import { PPGSignalExtractor } from '../PPGSignalExtractor';
 import { ProcessedFrame } from '../../../types/image-processing';
 import { PPGSignal, PulseWaveform, SpectralAnalysis } from '../../../types/ppg-extraction';
+import { describe } from 'node:test';
 
 // Helper para crear frames de prueba
 const createTestFrame = (
@@ -38,7 +39,9 @@ const createTestFrame = (
     textureScore: 0.6,
     edgeScore: 0.5,
     colorConsistency: 0.7,
-    position: { x: 50, y: 50, width: 100, height: 100 }
+    position: { x: 50, y: 50, width: 100, height: 100 },
+    quality: 0,
+    area: 0
   },
   qualityMetrics: {
     snr: 15,

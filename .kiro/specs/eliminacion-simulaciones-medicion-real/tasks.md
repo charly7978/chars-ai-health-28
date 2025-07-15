@@ -102,7 +102,8 @@
   - Escribir pruebas unitarias para sistema de calibración automática
   - _Requisitos: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 9. Reemplazar generadores de ID aleatorios con sistema determinístico
+- [x] 9. Reemplazar generadores de ID aleatorios con sistema determinístico
+
   - Eliminar Math.random() de useVitalSignsProcessor.ts y reemplazar con hash determinístico
   - Actualizar useVitalMeasurement.ts para usar timestamps precisos como identificadores
   - Modificar useHeartBeatProcessor.ts para generar sessionId basado en datos de dispositivo
@@ -110,7 +111,9 @@
   - Escribir pruebas unitarias para verificar determinismo de identificadores
   - _Requisitos: 1.1, 6.1, 6.3_
 
-- [ ] 10. Reemplazar SignalTrendAnalyzer con cálculos dinámicos reales
+
+- [x] 10. Reemplazar SignalTrendAnalyzer con cálculos dinámicos reales
+
   - Eliminar scores constantes (siempre 1) y implementar cálculos basados en señal real
   - Desarrollar análisis de estabilidad usando desviación estándar y varianza
   - Crear análisis de periodicidad usando autocorrelación y FFT

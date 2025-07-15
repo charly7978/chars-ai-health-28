@@ -102,7 +102,9 @@ const frequency = 1.5; // Hz (90 BPM)
 
 const signal = Array(samplingRate * duration).fill(0).map((_, i) => {
   const t = i / samplingRate;
-  return Math.sin(2 * Math.PI * frequency * t) + 0.1 * Math.random();
+  // Usar ruido determinístico basado en índice en lugar de Math.random()
+  const deterministicNoise = 0.1 * Math.sin(i * 0.1) * Math.cos(i * 0.05);
+  return Math.sin(2 * Math.PI * frequency * t) + deterministicNoise;
 });
 
 // Realizar análisis FFT
