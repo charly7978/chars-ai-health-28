@@ -179,7 +179,8 @@ export class AdvancedMathEngine {
       const measurement = [signal[i]];
 
       // Paso de predicción
-      const predictedState = this.matrixMultiply(F, kalmanState.state);
+      const stateMatrix = [[kalmanState.state[0]], [kalmanState.state[1]]];
+      const predictedState = this.matrixMultiply(F, stateMatrix);
       const predictedCovariance = this.matrixAdd(
         this.matrixMultiply(this.matrixMultiply(F, kalmanState.covariance), this.matrixTranspose(F)),
         Q
@@ -187,7 +188,7 @@ export class AdvancedMathEngine {
 
       // Paso de actualización
       const measurementMatrix = [[measurement[0]], [measurement[1] || 0]];
-      const predictedMeasurement = this.matrixMultiply(H, [[predictedState[0]], [predictedState[1]]]);
+      const predictedMeasurement = this.matrixMultiply(H, predictedState);
       const innovation = this.matrixSubtract(measurementMatrix, predictedMeasurement);
 
       const innovationCovariance = this.matrixAdd(
@@ -203,8 +204,8 @@ export class AdvancedMathEngine {
       // Actualizar estado
       const stateUpdate = this.matrixMultiply(kalmanGain, innovation);
       kalmanState.state = [
-        predictedState[0] + stateUpdate[0][0],
-        predictedState[1] + (stateUpdate[1] ? stateUpdate[1][0] : 0)
+        predictedState[0][0] + stateUpdate[0][0],
+        predictedState[1][0] + (stateUpdate[1] ? stateUpdate[1][0] : 0)
       ];
 
       kalmanState.covariance = this.matrixSubtract(
