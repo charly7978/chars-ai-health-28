@@ -52,6 +52,19 @@ const createTestFrame = (
   frameId: `test_frame_${timestamp}`
 });
 
+// Helper para calcular ruido determinístico basado en características de señal
+const calculateDeterministicNoise = (signal: number, index: number): number => {
+  // Generar ruido determinístico usando características de la señal y el índice
+  const signalHash = Math.abs(Math.sin(signal * 0.1 + index * 0.01));
+  const indexHash = Math.abs(Math.cos(index * 0.05));
+  
+  // Combinar hashes para crear ruido determinístico en rango [-1, 1]
+  const deterministicValue = (signalHash + indexHash) % 2 - 1;
+  
+  // Escalar a amplitud de ruido apropiada
+  return deterministicValue * 2; // Ruido con amplitud ±2
+};
+
 // Helper para crear señal PPG sintética
 const createSyntheticPPGFrames = (count: number, heartRate: number = 72): ProcessedFrame[] => {
   const frames: ProcessedFrame[] = [];
@@ -67,9 +80,9 @@ const createSyntheticPPGFrames = (count: number, heartRate: number = 72): Proces
     const acAmplitude = 10;
     const ppgSignal = dcComponent + acAmplitude * Math.sin(2 * Math.PI * heartRateHz * t);
     
-    // Agregar ruido realista
-    const noise = (Math.random() - 0.5) * 2;
-    const noisySignal = ppgSignal + noise;
+    // Agregar ruido determinístico basado en características de la señal
+    const deterministicNoise = calculateDeterministicNoise(ppgSignal, i);
+    const noisySignal = ppgSignal + deterministicNoise;
     
     // Crear valores RGB basados en la señal PPG
     const pixelCount = 100;
@@ -365,12 +378,13 @@ describe('PPGSignalExtractor', () => {
     });
     
     it('debe calcular SNR espectral correctamente', () => {
-      // Señal pura con ruido conocido
+      // Señal pura con ruido determinístico conocido
       const signal = Array.from({ length: 128 }, (_, i) => {
         const t = i / 30;
         const pureSignal = Math.sin(2 * Math.PI * 1.0 * t);
-        const noise = (Math.random() - 0.5) * 0.1;
-        return pureSignal + noise;
+        // Ruido determinístico basado en índice
+        const deterministicNoise = (Math.sin(i * 0.1) * 0.05);
+        return pureSignal + deterministicNoise;
       });
       
       const analysis = extractor.performSpectralAnalysis(signal);
