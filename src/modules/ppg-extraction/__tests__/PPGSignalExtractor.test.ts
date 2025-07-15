@@ -6,6 +6,8 @@
 import { PPGSignalExtractor } from '../PPGSignalExtractor';
 import { ProcessedFrame } from '../../../types/image-processing';
 import { PPGSignal, PulseWaveform, SpectralAnalysis } from '../../../types/ppg-extraction';
+import { describe, beforeEach, it } from 'node:test';
+import { describe, beforeEach, it } from 'node:test';
 import { describe } from 'node:test';
 
 // Helper para crear frames de prueba
@@ -518,7 +520,17 @@ describe('PPGSignalExtractor', () => {
       
       // Buffer debe mantenerse en tamaño razonable
       expect(stats.signalBufferSize).toBeLessThanOrEqual(10);
-      expect(stats.frameHistorySize).toBeLessThanOrEqual(512);
+   
+
+function beforeEach(arg0: () => void) {
+  throw new Error('Function not implemented.');
+}
+
+
+function expect(samplingRate: number) {
+  throw new Error('Function not implemented.');
+}
+   expect(stats.frameHistorySize).toBeLessThanOrEqual(512);
     });
   });
 });

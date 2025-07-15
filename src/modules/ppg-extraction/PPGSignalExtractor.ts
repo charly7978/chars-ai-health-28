@@ -14,6 +14,7 @@
 import { ProcessedFrame } from '../../types/image-processing';
 
 export interface PPGSignal {
+  infrared(infrared: any): unknown;
   red: number[];
   green: number[];
   blue: number[];
@@ -59,6 +60,9 @@ export interface PPGExtractionConfig {
 }
 
 export class PPGSignalExtractor {
+  performSpectralAnalysis(signal: number[]) {
+    throw new Error('Method not implemented.');
+  }
   private config: PPGExtractionConfig;
   private signalBuffer: PPGSignal[] = [];
   private frameHistory: ProcessedFrame[] = [];
@@ -948,6 +952,10 @@ export class PPGSignalExtractor {
   }
 
   public getStatistics(): {
+    calibrationProgress(calibrationProgress: any): unknown;
+    signalBufferSize(signalBufferSize: any): unknown;
+    frameHistorySize(frameHistorySize: any): unknown;
+    lastSignalQuality(lastSignalQuality: any): unknown;
     isCalibrated: boolean;
     bufferSize: number;
     avgQuality: number;
