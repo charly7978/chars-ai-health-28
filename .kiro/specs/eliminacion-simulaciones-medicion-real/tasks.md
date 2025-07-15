@@ -24,7 +24,8 @@
 
 
 
-- [ ] 3. Desarrollar RealTimeImageProcessor con algoritmos ópticos avanzados
+- [-] 3. Desarrollar RealTimeImageProcessor con algoritmos ópticos avanzados
+
   - Implementar transformación de espacio de color RGB → XYZ → Lab
   - Crear función de cálculo de densidad óptica usando fórmula OD = -log10(I/I₀)
   - Desarrollar detección de dedo usando matrices GLCM para análisis de textura

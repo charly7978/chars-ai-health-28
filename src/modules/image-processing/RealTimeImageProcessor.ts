@@ -940,6 +940,33 @@ export class RealTimeImageProcessor {
   }
   
   /**
+   * Obtiene estadísticas del procesador
+   */
+  public getStatistics(): {
+    frameHistorySize: number;
+    frameCounter: number;
+    hasStabilizationReference: boolean;
+    averageQuality: number;
+    processingRate: number;
+  } {
+    const averageQuality = this.frameHistory.length > 0 
+      ? this.frameHistory.reduce((sum, frame) => sum + frame.qualityMetrics.overallQuality, 0) / this.frameHistory.length
+      : 0;
+    
+    const processingRate = this.frameHistory.length > 1
+      ? this.frameHistory.length / ((this.frameHistory[this.frameHistory.length - 1].timestamp - this.frameHistory[0].timestamp) / 1000)
+      : 0;
+    
+    return {
+      frameHistorySize: this.frameHistory.length,
+      frameCounter: this.frameCounter,
+      hasStabilizationReference: this.stabilizationReference !== null,
+      averageQuality,
+      processingRate
+    };
+  }
+  
+  /**
    * Resetea el procesador
    */
   public reset(): void {
