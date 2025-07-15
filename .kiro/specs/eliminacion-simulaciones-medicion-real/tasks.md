@@ -126,6 +126,8 @@
 
 
 
+
+
 - [ ] 11. Implementar procesador de glucosa real con espectroscopía NIR
   - Eliminar GlucoseProcessor vacío y crear implementación real
   - Desarrollar análisis espectral para absorción lumínica en diferentes longitudes de onda

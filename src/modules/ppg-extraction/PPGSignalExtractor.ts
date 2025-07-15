@@ -157,7 +157,10 @@ export class PPGSignalExtractor {
       dcComponent,
       pulsatileIndex,
       qualityIndex,
-      spectralFeatures
+      spectralFeatures,
+      infrared: function (infrared: any): unknown {
+        throw new Error('Function not implemented.');
+      }
     };
     
     // 9. Actualizar buffer de señales para análisis temporal
