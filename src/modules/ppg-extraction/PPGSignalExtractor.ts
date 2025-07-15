@@ -194,6 +194,21 @@ export class PPGSignalExtractor {
   }
 
   /**
+   * Aplica ley de Beer-Lambert para cálculos de concentración
+   * A = ε × c × l donde A=absorbancia, ε=coeficiente extinción, c=concentración, l=longitud
+   */
+  public applyBeerLambertLaw(absorbance: number, concentration: number): number {
+    const pathLength = this.PHYSIOLOGICAL_RANGES.OPTICAL_PATH_LENGTH;
+    const extinctionCoeff = this.BEER_LAMBERT_COEFFICIENTS.HbO2_GREEN_540nm;
+    
+    // Calcular concentración real usando ley de Beer-Lambert
+    // c = A / (ε × l)
+    const calculatedConcentration = absorbance / (extinctionCoeff * pathLength);
+    
+    return Math.max(0, calculatedConcentration);
+  }
+
+  /**
    * Extrae forma de onda de pulso real con características hemodinámicas
    */
   public extractPulseWaveform(signal: number[]): PulseWaveform {
@@ -266,7 +281,6 @@ export class PPGSignalExtractor {
     const magnitudes = fftResult.map(complex => 
       Math.sqrt(complex.real * complex.real + complex.imag * complex.imag)
     );
-    const phases = fftResult.map(complex => Math.atan2(complex.imag, complex.real));
     
     // 4. Generar array de frecuencias correspondientes
     const frequencies = Array.from({ length: magnitudes.length }, (_, i) => 
@@ -499,26 +513,6 @@ export class PPGSignalExtractor {
     }
     
     return qualityIndex;
-  }
-
-  // Función duplicada eliminada - se mantiene solo la implementación pública
-    
-    // Calcular pureza espectral
-    const spectralPurity = this.calculateRealSpectralPurity(magnitudes, dominantFrequency, frequencies);
-    
-    // Calcular SNR
-    const snr = this.calculateRealSpectralSNR(magnitudes, dominantFrequency, frequencies);
-    
-    // Calcular densidad espectral de potencia
-    const powerSpectralDensity = magnitudes.map(mag => mag * mag / magnitudes.length);
-    
-    return {
-      dominantFrequency,
-      harmonics,
-      spectralPurity,
-      snr,
-      powerSpectralDensity
-    };
   }
 
   // ==================== MÉTODOS DE UTILIDAD MATEMÁTICA ====================
@@ -822,12 +816,12 @@ export class PPGSignalExtractor {
   }
 
   private findRealDominantFrequency(frequencies: number[], magnitudes: number[]): number {
-    let maxMagnitude = 0;
-    let dominantFreq = 0;
+    // Buscar en rango fisiológico de frecuencia cardíaca (0.5-4 Hz = 30-240 BPM)
+    const minFreq = this.config.cutoffFrequencies.low;
+    const maxFreq = this.config.cutoffFrequencies.high;
     
-    // Buscar en rango fisiológico de frecuencia cardíaca
-    const minFreq = this.PHYSIOLOGICAL_RANGES.HEART_RATE.min / 60; // Hz
-    const maxFreq = this.PHYSIOLOGICAL_RANGES.HEART_RATE.max / 60; // Hz
+    let maxMagnitude = 0;
+    let dominantFreq = 1.0; // Frecuencia por defecto (60 BPM)
     
     for (let i = 0; i < frequencies.length; i++) {
       if (frequencies[i] >= minFreq && frequencies[i] <= maxFreq) {
@@ -843,21 +837,25 @@ export class PPGSignalExtractor {
 
   private detectRealHarmonics(frequencies: number[], magnitudes: number[], fundamentalFreq: number): number[] {
     const harmonics: number[] = [];
-    const tolerance = 0.05; // Hz de tolerancia
+    const tolerance = 0.1; // Hz de tolerancia para detección de armónicos
     
     // Buscar hasta el 5to armónico
     for (let harmonic = 2; harmonic <= 5; harmonic++) {
       const targetFreq = fundamentalFreq * harmonic;
+      let bestMatch = -1;
+      let bestMagnitude = 0;
       
       for (let i = 0; i < frequencies.length; i++) {
         if (Math.abs(frequencies[i] - targetFreq) <= tolerance) {
-          // Verificar que la magnitud sea significativa
-          const maxMagnitude = Math.max(...magnitudes);
-          if (magnitudes[i] > maxMagnitude * 0.1) { // Al menos 10% de la magnitud máxima
-            harmonics.push(frequencies[i]);
+          if (magnitudes[i] > bestMagnitude) {
+            bestMagnitude = magnitudes[i];
+            bestMatch = frequencies[i];
           }
-          break;
         }
+      }
+      
+      if (bestMatch > 0) {
+        harmonics.push(bestMatch);
       }
     }
     
@@ -865,50 +863,64 @@ export class PPGSignalExtractor {
   }
 
   private calculateRealSpectralPurity(magnitudes: number[], dominantFreq: number, frequencies: number[]): number {
-    const dominantIndex = frequencies.findIndex(f => Math.abs(f - dominantFreq) < 0.01);
-    if (dominantIndex === -1) return 0;
+    // Encontrar índice de frecuencia dominante
+    let dominantIndex = 0;
+    for (let i = 0; i < frequencies.length; i++) {
+      if (Math.abs(frequencies[i] - dominantFreq) < 0.05) {
+        dominantIndex = i;
+        break;
+      }
+    }
     
-    const dominantMagnitude = magnitudes[dominantIndex];
+    // Calcular potencia total y potencia del pico dominante
     const totalPower = magnitudes.reduce((sum, mag) => sum + mag * mag, 0);
-    const dominantPower = dominantMagnitude * dominantMagnitude;
+    const dominantPower = magnitudes[dominantIndex] * magnitudes[dominantIndex];
     
-    // Pureza espectral = Potencia dominante / Potencia total
+    // Pureza espectral = potencia dominante / potencia total
     return totalPower > 0 ? dominantPower / totalPower : 0;
   }
 
   private calculateRealSpectralSNR(magnitudes: number[], dominantFreq: number, frequencies: number[]): number {
-    const dominantIndex = frequencies.findIndex(f => Math.abs(f - dominantFreq) < 0.01);
-    if (dominantIndex === -1) return 0;
+    // Encontrar índice de frecuencia dominante
+    let dominantIndex = 0;
+    for (let i = 0; i < frequencies.length; i++) {
+      if (Math.abs(frequencies[i] - dominantFreq) < 0.05) {
+        dominantIndex = i;
+        break;
+      }
+    }
     
+    // Calcular potencia de señal (pico dominante)
     const signalPower = magnitudes[dominantIndex] * magnitudes[dominantIndex];
     
+    // Calcular potencia de ruido (promedio excluyendo pico dominante y armónicos)
     let noisePower = 0;
     let noiseCount = 0;
     
-    // Calcular potencia de ruido excluyendo señal y armónicos
     for (let i = 0; i < magnitudes.length; i++) {
       const freq = frequencies[i];
-      const isSignalOrHarmonic = Math.abs(freq - dominantFreq) < 0.1 ||
-                                Math.abs(freq - dominantFreq * 2) < 0.1 ||
-                                Math.abs(freq - dominantFreq * 3) < 0.1;
+      const isHarmonic = freq > dominantFreq * 1.8 && freq < dominantFreq * 2.2 ||
+                        freq > dominantFreq * 2.8 && freq < dominantFreq * 3.2 ||
+                        freq > dominantFreq * 3.8 && freq < dominantFreq * 4.2;
       
-      if (!isSignalOrHarmonic) {
+      if (i !== dominantIndex && !isHarmonic) {
         noisePower += magnitudes[i] * magnitudes[i];
         noiseCount++;
       }
     }
     
-    const avgNoisePower = noiseCount > 0 ? noisePower / noiseCount : 1;
+    const avgNoisePower = noiseCount > 0 ? noisePower / noiseCount : 0.001;
     
-    // SNR en dB = 10 * log10(Potencia señal / Potencia ruido)
-    return avgNoisePower > 0 ? 10 * Math.log10(signalPower / avgNoisePower) : 0;
+    // SNR en dB
+    return signalPower > 0 ? 10 * Math.log10(signalPower / Math.max(avgNoisePower, 0.001)) : 0;
   }
 
   private updateSignalBuffer(signal: PPGSignal): void {
     this.signalBuffer.push(signal);
-    const maxBufferSize = 10;
+    const maxBufferSize = 10; // Mantener últimas 10 señales
+    
     if (this.signalBuffer.length > maxBufferSize) {
-      this.signalBuffer.shift();
+      this.signalBuffer = this.signalBuffer.slice(-maxBufferSize);
     }
   }
 
@@ -932,28 +944,26 @@ export class PPGSignalExtractor {
       calibrationFrames: 0,
       spectralCalibration: []
     };
-    console.log('PPGSignalExtractor: Sistema reseteado');
+    console.log('PPGSignalExtractor: Estado reiniciado');
   }
 
   public getStatistics(): {
     isCalibrated: boolean;
-    calibrationProgress: number;
-    signalBufferSize: number;
-    frameHistorySize: number;
-    lastSignalQuality: number;
-    spectralCalibrationStatus: boolean;
+    bufferSize: number;
+    avgQuality: number;
+    lastDominantFreq: number;
+    processingReady: boolean;
   } {
     const lastSignal = this.signalBuffer[this.signalBuffer.length - 1];
-    const lastQuality = lastSignal ? 
+    const avgQuality = lastSignal ? 
       lastSignal.qualityIndex.reduce((sum, q) => sum + q, 0) / lastSignal.qualityIndex.length : 0;
     
     return {
       isCalibrated: this.calibrationData.isCalibrated,
-      calibrationProgress: Math.min(this.calibrationData.calibrationFrames / 30, 1),
-      signalBufferSize: this.signalBuffer.length,
-      frameHistorySize: this.frameHistory.length,
-      lastSignalQuality: lastQuality,
-      spectralCalibrationStatus: this.calibrationData.spectralCalibration.length > 0
+      bufferSize: this.signalBuffer.length,
+      avgQuality,
+      lastDominantFreq: lastSignal?.spectralFeatures.dominantFrequency || 0,
+      processingReady: this.calibrationData.isCalibrated && this.frameHistory.length >= 10
     };
   }
 }

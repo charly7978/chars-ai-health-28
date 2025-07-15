@@ -131,7 +131,9 @@
   - Escribir pruebas unitarias para análisis lipídico avanzado
   - _Requisitos: 1.2, 4.2, 7.2_
 
-- [x] 13. Optimizar procesadores existentes eliminando simulaciones residuales
+- [-] 13. Optimizar procesadores existentes eliminando simulaciones residuales
+
+
 
 
 
