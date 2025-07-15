@@ -61,6 +61,8 @@
   - _Requisitos: 2.1, 2.4, 7.2, 7.3_
 
 - [ ] 6. Desarrollar BiometricAnalyzer con algoritmos médicos validados
+
+
   - Implementar cálculo de frecuencia cardíaca: HR = 60 × fs × N_peaks / N_samples
   - Crear cálculo de SpO2: R = (AC_red/DC_red) / (AC_ir/DC_ir), SpO2 = 110 - 25 × R
   - Desarrollar estimación de presión arterial usando PWV y análisis hemodinámico

@@ -67,39 +67,7 @@ export class AdvancedVitalSignsProcessor {
     this.bloodPressureProcessor = new BloodPressureProcessor();
   }
   
-  // Método principal unificado
-  processSignal(signal: PPGSignal): BiometricReading | null {
-    // 1. Validación y preprocesamiento
-    if (!signal || signal.red.length === 0) return null;
-    
-    // 2. Actualizar buffers con solapamiento del 50%
-    this.updateBuffers(signal);
-    
-    // 3. Procesar solo cuando tengamos ventana completa
-    if (this.redBuffer.length >= this.WINDOW_SIZE) {
-      const windowRed = this.redBuffer.slice(0, this.WINDOW_SIZE);
-      const windowIR = this.irBuffer.slice(0, this.WINDOW_SIZE);
-      const windowGreen = this.greenBuffer.slice(0, this.WINDOW_SIZE);
-      
-      // 4. Cálculos biométricos paralelizados
-      const [hr, hrv] = this.calculateCardiacMetrics(windowRed);
-      const spo2 = this.calculateSpO2(windowRed, windowIR);
-      const {sbp, dbp} = this.calculateBloodPressure(windowRed, windowGreen);
-      const glucose = this.estimateGlucose(windowRed, windowIR, windowGreen);
-      
-      // 5. Validación médica de resultados
-      if (!this.validateResults(hr, spo2, sbp, dbp, glucose)) {
-        return null;
-      }
-      
-      // 6. Calcular confianza de medición
-      const confidence = this.calculateConfidence(windowRed, windowIR);
-      
-      return { hr, hrv, spo2, sbp, dbp, glucose, confidence };
-    }
-    
-    return null;
-  }
+
   
   private updateBuffers(signal: PPGSignal): void {
     // Implementación de buffer circular con solapamiento
@@ -232,7 +200,7 @@ export class AdvancedVitalSignsProcessor {
     }
     this.bloodPressureProcessor.setCalibration(referenceSystolic, referenceDiastolic, this.redBuffer.slice());
   }
-}
+
   // Métodos de calibración
   private isCalibrating = false;
   private calibrationProgress = {
@@ -296,42 +264,84 @@ export class AdvancedVitalSignsProcessor {
     console.log('AdvancedVitalSignsProcessor: Reset completo realizado');
   }
 
-  // Método processSignal que el hook espera
-  public processSignal(value: number, rrData?: { intervals: number[], lastPeakTime: number | null }): VitalSignsResult {
-    // Simular procesamiento de señal PPG
-    const mockPPGSignal = {
-      red: [value],
-      ir: [value * 0.8],
-      green: [value * 0.9],
-      timestamp: Date.now()
-    };
-
-    const biometricReading = super.processSignal(mockPPGSignal);
-    
-    if (!biometricReading) {
-      return {
-        spo2: 0,
-        pressure: "0/0",
-        arrhythmiaStatus: "SIN DATOS",
-        glucose: 0,
-        lipids: {
-          totalCholesterol: 0,
-          triglycerides: 0
-        },
-        hemoglobin: 0
+  // Método processSignal que el hook espera (sobrecarga del método existente)
+  public processSignal(value: number, rrData?: { intervals: number[], lastPeakTime: number | null }): VitalSignsResult;
+  public processSignal(signal: PPGSignal): BiometricReading | null;
+  public processSignal(valueOrSignal: number | PPGSignal, rrData?: { intervals: number[], lastPeakTime: number | null }): VitalSignsResult | BiometricReading | null {
+    // Si es un número (llamada desde hook)
+    if (typeof valueOrSignal === 'number') {
+      // Simular procesamiento de señal PPG
+      const mockPPGSignal: PPGSignal = {
+        red: [valueOrSignal],
+        ir: [valueOrSignal * 0.8],
+        green: [valueOrSignal * 0.9],
+        timestamp: Date.now()
       };
-    }
 
-    return {
-      spo2: biometricReading.spo2,
-      pressure: `${biometricReading.sbp}/${biometricReading.dbp}`,
-      arrhythmiaStatus: "NORMAL",
-      glucose: biometricReading.glucose,
-      lipids: {
-        totalCholesterol: 180 + (biometricReading.hr - 70) * 2,
-        triglycerides: 120 + (biometricReading.spo2 - 95) * 5
-      },
-      hemoglobin: 14.5 + (biometricReading.confidence - 0.5) * 2
-    };
+      const biometricReading = this.processSignalInternal(mockPPGSignal);
+      
+      if (!biometricReading) {
+        return {
+          spo2: 0,
+          pressure: "0/0",
+          arrhythmiaStatus: "SIN DATOS",
+          glucose: 0,
+          lipids: {
+            totalCholesterol: 0,
+            triglycerides: 0
+          },
+          hemoglobin: 0
+        };
+      }
+
+      return {
+        spo2: biometricReading.spo2,
+        pressure: `${biometricReading.sbp}/${biometricReading.dbp}`,
+        arrhythmiaStatus: "NORMAL",
+        glucose: biometricReading.glucose,
+        lipids: {
+          totalCholesterol: 180 + (biometricReading.hr - 70) * 2,
+          triglycerides: 120 + (biometricReading.spo2 - 95) * 5
+        },
+        hemoglobin: 14.5 + (biometricReading.confidence - 0.5) * 2
+      };
+    } else {
+      // Si es un PPGSignal (llamada original)
+      return this.processSignalInternal(valueOrSignal);
+    }
+  }
+
+  // Renombrar el método original para evitar conflictos
+  private processSignalInternal(signal: PPGSignal): BiometricReading | null {
+    // 1. Validación y preprocesamiento
+    if (!signal || signal.red.length === 0) return null;
+    
+    // 2. Actualizar buffers con solapamiento del 50%
+    this.updateBuffers(signal);
+    
+    // 3. Procesar solo cuando tengamos ventana completa
+    if (this.redBuffer.length >= this.WINDOW_SIZE) {
+      const windowRed = this.redBuffer.slice(0, this.WINDOW_SIZE);
+      const windowIR = this.irBuffer.slice(0, this.WINDOW_SIZE);
+      const windowGreen = this.greenBuffer.slice(0, this.WINDOW_SIZE);
+      
+      // 4. Cálculos biométricos paralelizados
+      const [hr, hrv] = this.calculateCardiacMetrics(windowRed);
+      const spo2 = this.calculateSpO2(windowRed, windowIR);
+      const {sbp, dbp} = this.calculateBloodPressure(windowRed, windowGreen);
+      const glucose = this.estimateGlucose(windowRed, windowIR, windowGreen);
+      
+      // 5. Validación médica de resultados
+      if (!this.validateResults(hr, spo2, sbp, dbp, glucose)) {
+        return null;
+      }
+      
+      // 6. Calcular confianza de medición
+      const confidence = this.calculateConfidence(windowRed, windowIR);
+      
+      return { hr, hrv, spo2, sbp, dbp, glucose, confidence };
+    }
+    
+    return null;
   }
 }
