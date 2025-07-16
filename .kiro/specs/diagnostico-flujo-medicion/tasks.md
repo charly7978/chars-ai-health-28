@@ -8,6 +8,8 @@
   - Implementar validación de callbacks en tiempo real
   - Añadir métricas de rendimiento para identificar cuellos de botella
 
+
+
   - _Requisitos: 3.1, 3.2, 3.3_
 
 - [ ] 2. Corregir problemas críticos en la cadena de callbacks
@@ -16,7 +18,8 @@
   - Validar que los callbacks se ejecuten correctamente en cada nivel
   - _Requisitos: 1.1, 1.2, 1.3_
 
-- [ ] 3. Optimizar el procesamiento de frames de cámara
+- [-] 3. Optimizar el procesamiento de frames de cámara
+
   - Ajustar la tasa de procesamiento de frames para dispositivos móviles
   - Implementar throttling inteligente basado en rendimiento del dispositivo
   - Mejorar la eficiencia del procesamiento de ImageData

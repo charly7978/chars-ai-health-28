@@ -213,10 +213,41 @@ export const useSignalProcessor = () => {
     // Ejecutar verificación de callbacks inmediatamente
     ensureCallbacks();
     
+    // Integrar validador de cadena de callbacks
+    const validationResult = callbackValidator.current.validateProcessor(processorRef.current);
+    if (validationResult.repaired) {
+      logger.warn('useSignalProcessor', 'Callbacks were automatically repaired', validationResult);
+    }
+    
     // Verificar callbacks periódicamente durante los primeros 10 segundos
     const callbackCheckInterval = setInterval(() => {
       ensureCallbacks();
+      callbackValidator.current.monitorCallbackExecution();
     }, 1000);
+    
+    // Configurar listeners para eventos de emergencia
+    const handleEmergencySignal = (event: CustomEvent) => {
+      logger.warn('useSignalProcessor', 'Emergency signal received', event.detail);
+      setLastSignal(event.detail);
+    };
+    
+    const handleEmergencyError = (event: CustomEvent) => {
+      logger.error('useSignalProcessor', 'Emergency error received', event.detail);
+      setError(event.detail);
+    };
+    
+    const handleRepairNeeded = (event: CustomEvent) => {
+      logger.critical('useSignalProcessor', 'Callback repair needed', event.detail);
+      // Intentar reinicializar el procesador
+      if (processorRef.current) {
+        processorRef.current.stop();
+        processorRef.current.start();
+      }
+    };
+    
+    window.addEventListener('emergencySignal', handleEmergencySignal as EventListener);
+    window.addEventListener('emergencyError', handleEmergencyError as EventListener);
+    window.addEventListener('callbackRepairNeeded', handleRepairNeeded as EventListener);
     
     setTimeout(() => {
       clearInterval(callbackCheckInterval);
