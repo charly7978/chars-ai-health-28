@@ -346,7 +346,7 @@ const Index = () => {
     }
     
     const savedResults = resetVitalSigns();
-    if (savedResults) {
+    if (savedResults && typeof savedResults === 'object') {
       setVitalSigns(savedResults);
       setShowResults(true);
     }
