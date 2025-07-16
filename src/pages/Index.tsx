@@ -9,6 +9,7 @@ import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 import { toast } from "@/components/ui/use-toast";
 import DiagnosticOverlay from "@/components/DiagnosticOverlay";
+import MobileConsole from "@/components/MobileConsole";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -42,6 +43,7 @@ const Index = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [rrIntervals, setRRIntervals] = useState<number[]>([]);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [showMobileConsole, setShowMobileConsole] = useState(false);
   
   const { 
     startProcessing, 
@@ -702,6 +704,12 @@ const Index = () => {
       <DiagnosticOverlay 
         isVisible={showDiagnostics}
         onToggle={() => setShowDiagnostics(!showDiagnostics)}
+      />
+
+      {/* Consola móvil para ver logs en el celular */}
+      <MobileConsole 
+        isVisible={showMobileConsole}
+        onToggle={() => setShowMobileConsole(!showMobileConsole)}
       />
     </div>
   );
