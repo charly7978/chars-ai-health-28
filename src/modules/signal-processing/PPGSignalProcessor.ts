@@ -162,11 +162,25 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       this.frameProcessedCount++;
       const shouldLog = this.frameProcessedCount % 30 === 0;  // Log every 30 frames
 
-      // CRITICAL CHECK: Ensure callbacks are available
+      // CRITICAL CHECK: Ensure callbacks are available with fallback creation
       if (!this.onSignalReady) {
-        console.error("PPGSignalProcessor: onSignalReady callback not available, cannot continue");
-        this.handleError("CALLBACK_ERROR", "Callback onSignalReady not available");
-        return;
+        console.error("PPGSignalProcessor: onSignalReady callback not available, creating emergency fallback");
+        
+        // Create emergency fallback callback
+        this.onSignalReady = (signal: ProcessedSignal) => {
+          console.warn("PPGSignalProcessor: Using emergency fallback callback", signal);
+          // This is a last resort - the signal will be processed but may not reach the UI
+          // Log the signal so it can be seen in diagnostics
+          console.log("EMERGENCY SIGNAL:", {
+            timestamp: new Date(signal.timestamp).toISOString(),
+            fingerDetected: signal.fingerDetected,
+            quality: signal.quality,
+            rawValue: signal.rawValue,
+            filteredValue: signal.filteredValue
+          });
+        };
+        
+        this.handleError("CALLBACK_ERROR", "Emergency fallback callback created - check callback chain");
       }
 
       // 1. Extract frame features with enhanced validation
