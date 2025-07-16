@@ -313,6 +313,13 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         perfusionIndex: perfusionIndex
       };
 
+      console.log("🟢 PPGSignalProcessor: Ejecutando onSignalReady callback", {
+        fingerDetected: processedSignal.fingerDetected,
+        quality: processedSignal.quality,
+        rawValue: processedSignal.rawValue,
+        filteredValue: processedSignal.filteredValue
+      });
+      
       this.onSignalReady(processedSignal);
 
       if (shouldLog) {

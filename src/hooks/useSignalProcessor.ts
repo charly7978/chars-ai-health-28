@@ -360,12 +360,21 @@ export const useSignalProcessor = () => {
   }, []);
 
   const processFrame = useCallback((imageData: ImageData) => {
+    console.log("🟠 useSignalProcessor/processFrame: LLAMADO", {
+      hasProcessor: !!processorRef.current,
+      isProcessing,
+      imageSize: `${imageData.width}x${imageData.height}`,
+      timestamp: new Date().toISOString()
+    });
+    
     if (!processorRef.current) {
+      console.error("🔴 useSignalProcessor: No processor available to process frames");
       logger.error("useSignalProcessor", "No processor available to process frames");
       return;
     }
     
     if (!isProcessing) {
+      console.log("🔴 useSignalProcessor: Not processing, ignoring frame");
       logger.debug("useSignalProcessor", "Not processing, ignoring frame");
       return;
     }
