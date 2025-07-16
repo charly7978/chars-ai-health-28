@@ -6,7 +6,6 @@ import { DiagnosticLogger } from '../utils/DiagnosticLogger';
 import { CallbackDiagnostics } from '../utils/CallbackDiagnostics';
 import { FrameProcessingMonitor } from '../utils/FrameProcessingMonitor';
 import { SignalQualityValidator } from '../utils/SignalQualityValidator';
-import { CallbackChainValidator } from '../utils/CallbackChainValidator';
 
 /**
  * Custom hook for managing PPG signal processing
@@ -36,7 +35,6 @@ export const useSignalProcessor = () => {
   const callbackDiagnostics = useRef(new CallbackDiagnostics());
   const frameMonitor = useRef(new FrameProcessingMonitor());
   const signalValidator = useRef(new SignalQualityValidator());
-  const callbackValidator = useRef(new CallbackChainValidator());
 
   // Create processor with well-defined callbacks
   useEffect(() => {
@@ -173,91 +171,9 @@ export const useSignalProcessor = () => {
     // Create processor with proper callbacks
     processorRef.current = new PPGSignalProcessor(onSignalReady, onError);
     
-    // CRITICAL FIX: Ensure callbacks are always defined with fallbacks
-    const ensureCallbacks = () => {
-      if (!processorRef.current) return;
-      
-      // Verificar y crear callback de respaldo para onSignalReady
-      if (!processorRef.current.onSignalReady) {
-        logger.error('useSignalProcessor', 'onSignalReady callback missing, creating fallback');
-        processorRef.current.onSignalReady = (signal: ProcessedSignal) => {
-          logger.warn('useSignalProcessor', 'Using fallback onSignalReady callback', signal);
-          setLastSignal(signal);
-          setError(null);
-          setFramesProcessed(prev => prev + 1);
-        };
-      }
-      
-      // Verificar y crear callback de respaldo para onError
-      if (!processorRef.current.onError) {
-        logger.error('useSignalProcessor', 'onError callback missing, creating fallback');
-        processorRef.current.onError = (error: ProcessingError) => {
-          logger.error('useSignalProcessor', 'Using fallback onError callback', error);
-          setError(error);
-        };
-      }
-      
-      // Forzar re-asignación de callbacks para asegurar que estén correctamente vinculados
-      const originalOnSignalReady = processorRef.current.onSignalReady;
-      const originalOnError = processorRef.current.onError;
-      
-      processorRef.current.onSignalReady = originalOnSignalReady;
-      processorRef.current.onError = originalOnError;
-      
-      logger.info('useSignalProcessor', 'Callbacks verified and ensured', {
-        hasOnSignalReady: !!processorRef.current.onSignalReady,
-        hasOnError: !!processorRef.current.onError
-      });
-    };
-    
-    // Ejecutar verificación de callbacks inmediatamente
-    ensureCallbacks();
-    
-    // Integrar validador de cadena de callbacks
-    const validationResult = callbackValidator.current.validateProcessor(processorRef.current);
-    if (validationResult.repaired) {
-      logger.warn('useSignalProcessor', 'Callbacks were automatically repaired', validationResult);
-    }
-    
-    // Verificar callbacks periódicamente durante los primeros 10 segundos
-    const callbackCheckInterval = setInterval(() => {
-      ensureCallbacks();
-      callbackValidator.current.monitorCallbackExecution();
-    }, 1000);
-    
-    // Configurar listeners para eventos de emergencia
-    const handleEmergencySignal = (event: CustomEvent) => {
-      logger.warn('useSignalProcessor', 'Emergency signal received', event.detail);
-      setLastSignal(event.detail);
-    };
-    
-    const handleEmergencyError = (event: CustomEvent) => {
-      logger.error('useSignalProcessor', 'Emergency error received', event.detail);
-      setError(event.detail);
-    };
-    
-    const handleRepairNeeded = (event: CustomEvent) => {
-      logger.critical('useSignalProcessor', 'Callback repair needed', event.detail);
-      // Intentar reinicializar el procesador
-      if (processorRef.current) {
-        processorRef.current.stop();
-        processorRef.current.start();
-      }
-    };
-    
-    window.addEventListener('emergencySignal', handleEmergencySignal as EventListener);
-    window.addEventListener('emergencyError', handleEmergencyError as EventListener);
-    window.addEventListener('callbackRepairNeeded', handleRepairNeeded as EventListener);
-    
-    setTimeout(() => {
-      clearInterval(callbackCheckInterval);
-      logger.info('useSignalProcessor', 'Callback verification period completed');
-    }, 10000);
-    
-    logger.info("useSignalProcessor", "Processor created with callbacks established", {
+    console.log("useSignalProcessor: Processor created with callbacks established:", {
       hasOnSignalReadyCallback: !!processorRef.current.onSignalReady,
-      hasOnErrorCallback: !!processorRef.current.onError,
-      processorType: processorRef.current.constructor.name
+      hasOnErrorCallback: !!processorRef.current.onError
     });
     
     return () => {
@@ -360,21 +276,12 @@ export const useSignalProcessor = () => {
   }, []);
 
   const processFrame = useCallback((imageData: ImageData) => {
-    console.log("🟠 useSignalProcessor/processFrame: LLAMADO", {
-      hasProcessor: !!processorRef.current,
-      isProcessing,
-      imageSize: `${imageData.width}x${imageData.height}`,
-      timestamp: new Date().toISOString()
-    });
-    
     if (!processorRef.current) {
-      console.error("🔴 useSignalProcessor: No processor available to process frames");
       logger.error("useSignalProcessor", "No processor available to process frames");
       return;
     }
     
     if (!isProcessing) {
-      console.log("🔴 useSignalProcessor: Not processing, ignoring frame");
       logger.debug("useSignalProcessor", "Not processing, ignoring frame");
       return;
     }
