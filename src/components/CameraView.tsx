@@ -234,11 +234,25 @@ const CameraView = ({
       }
 
       if (videoRef.current) {
+        // Asegurarse de que el stream se asigne correctamente
         videoRef.current.srcObject = newStream;
+        
+        // Configuración para asegurar la reproducción
+        videoRef.current.setAttribute('autoplay', '');
+        videoRef.current.setAttribute('playsinline', '');
+        videoRef.current.setAttribute('muted', '');
+        
+        // Forzar la reproducción del video
+        videoRef.current.play().catch(err => {
+          console.error("Error al reproducir el video:", err);
+        });
+        
         if (isAndroid) {
           videoRef.current.style.willChange = 'transform';
           videoRef.current.style.transform = 'translateZ(0)';
         }
+        
+        console.log('Stream de video asignado al elemento <video>');
       }
 
       setStream(newStream);
@@ -411,6 +425,31 @@ const CameraView = ({
     };
   }, [stream, isMonitoring, isFingerDetected, deviceSupportsAutoFocus]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleCanPlay = () => {
+      console.log('El video está listo para reproducirse');
+      video.play().catch(err => {
+        console.error('Error al reproducir el video en handleCanPlay:', err);
+      });
+    };
+
+    video.addEventListener('canplay', handleCanPlay);
+    
+    // Intentar reproducir de nuevo si el stream cambia
+    if (video.srcObject) {
+      video.play().catch(err => {
+        console.error('Error en reproducción inicial del video:', err);
+      });
+    }
+
+    return () => {
+      video.removeEventListener('canplay', handleCanPlay);
+    };
+  }, [stream]);
+
   return (
     <video
       ref={videoRef}
@@ -421,7 +460,8 @@ const CameraView = ({
       style={{
         willChange: 'transform',
         transform: 'translateZ(0)',
-        backfaceVisibility: 'hidden'
+        backfaceVisibility: 'hidden',
+        backgroundColor: '#000' // Fondo negro mientras se carga el video
       }}
     />
   );
