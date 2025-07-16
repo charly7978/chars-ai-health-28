@@ -191,6 +191,8 @@
   - _Requisitos: 7.1, 7.4, 7.5_
 
 - [ ] 15. Integrar y optimizar sistema completo
+
+
   - Integrar todos los componentes nuevos en el pipeline principal
   - Optimizar rendimiento usando Web Workers para cálculos intensivos
   - Implementar gestión de memoria con buffers circulares

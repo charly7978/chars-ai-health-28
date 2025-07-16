@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { PPGSignalProcessor } from '../modules/SignalProcessor';
 import { ProcessedSignal, ProcessingError } from '../types/signal';
 import { generateSessionId } from '../utils/deterministicId';
+import { DiagnosticLogger } from '../utils/DiagnosticLogger';
+import { CallbackDiagnostics } from '../utils/CallbackDiagnostics';
+import { FrameProcessingMonitor } from '../utils/FrameProcessingMonitor';
+import { SignalQualityValidator } from '../utils/SignalQualityValidator';
 
 /**
  * Custom hook for managing PPG signal processing
@@ -26,65 +30,112 @@ export const useSignalProcessor = () => {
   const errorCountRef = useRef(0);
   const lastErrorTimeRef = useRef(0);
 
+  // Sistema de diagnóstico integrado
+  const logger = DiagnosticLogger.getInstance();
+  const callbackDiagnostics = useRef(new CallbackDiagnostics());
+  const frameMonitor = useRef(new FrameProcessingMonitor());
+  const signalValidator = useRef(new SignalQualityValidator());
+
   // Create processor with well-defined callbacks
   useEffect(() => {
-    console.log("useSignalProcessor: Creating new processor instance", {
-      timestamp: new Date().toISOString(),
-      sessionId: generateSessionId()
+    const sessionId = generateSessionId();
+    
+    logger.info('useSignalProcessor', 'Creating new processor instance', {
+      sessionId,
+      timestamp: new Date().toISOString()
     });
 
-    // Define signal ready callback with proper physiological validation
-    const onSignalReady = (signal: ProcessedSignal) => {
-      console.log("[DIAG] useSignalProcessor/onSignalReady: Frame recibido", {
-        timestamp: new Date(signal.timestamp).toISOString(),
-        fingerDetected: signal.fingerDetected,
-        quality: signal.quality,
-        rawValue: signal.rawValue,
-        filteredValue: signal.filteredValue,
-        stack: new Error().stack
-      });
-      
-      // Use signal with medical validation - no forcing detection
-      setLastSignal(signal);
-      setError(null);
-      setFramesProcessed(prev => prev + 1);
-      
-      // Store for history tracking
-      signalHistoryRef.current.push(signal);
-      if (signalHistoryRef.current.length > 100) { // Keep last 100 signals
-        signalHistoryRef.current.shift();
-      }
-      
-      // Track quality transitions for analysis
-      const prevSignal = signalHistoryRef.current[signalHistoryRef.current.length - 2];
-      if (prevSignal && Math.abs(prevSignal.quality - signal.quality) > 15) {
-        qualityTransitionsRef.current.push({
-          time: signal.timestamp,
-          from: prevSignal.quality,
-          to: signal.quality
+    // Define enhanced signal ready callback with full diagnostics
+    const onSignalReady = callbackDiagnostics.current.wrapCallback(
+      'onSignalReady',
+      (signal: ProcessedSignal) => {
+        // Registrar ejecución del callback
+        frameMonitor.current.recordCallbackExecution();
+        
+        // Validar calidad de señal
+        const validation = signalValidator.current.validateSignal(signal);
+        
+        logger.signalFlow('SignalReceived', true, {
+          fingerDetected: signal.fingerDetected,
+          quality: signal.quality,
+          rawValue: signal.rawValue,
+          filteredValue: signal.filteredValue,
+          validation: validation
         });
         
-        // Keep limited history
-        if (qualityTransitionsRef.current.length > 20) {
-          qualityTransitionsRef.current.shift();
+        // Log detallado para diagnóstico
+        logger.debug('useSignalProcessor', 'Signal received and validated', {
+          signal: {
+            timestamp: new Date(signal.timestamp).toISOString(),
+            fingerDetected: signal.fingerDetected,
+            quality: signal.quality,
+            rawValue: signal.rawValue,
+            filteredValue: signal.filteredValue,
+            perfusionIndex: signal.perfusionIndex
+          },
+          validation: {
+            isValid: validation.isValid,
+            quality: validation.quality,
+            issueCount: validation.issues.length
+          }
+        });
+        
+        // Advertir sobre problemas de calidad
+        if (!validation.isValid) {
+          logger.warn('useSignalProcessor', 'Signal quality issues detected', {
+            issues: validation.issues,
+            suggestions: validation.suggestions
+          });
+        }
+        
+        // Use signal with medical validation - no forcing detection
+        setLastSignal(signal);
+        setError(null);
+        setFramesProcessed(prev => prev + 1);
+        
+        // Store for history tracking
+        signalHistoryRef.current.push(signal);
+        if (signalHistoryRef.current.length > 100) { // Keep last 100 signals
+          signalHistoryRef.current.shift();
+        }
+        
+        // Track quality transitions for analysis
+        const prevSignal = signalHistoryRef.current[signalHistoryRef.current.length - 2];
+        if (prevSignal && Math.abs(prevSignal.quality - signal.quality) > 15) {
+          qualityTransitionsRef.current.push({
+            time: signal.timestamp,
+            from: prevSignal.quality,
+            to: signal.quality
+          });
+          
+          logger.info('useSignalProcessor', 'Quality transition detected', {
+            from: prevSignal.quality,
+            to: signal.quality,
+            change: signal.quality - prevSignal.quality
+          });
+          
+          // Keep limited history
+          if (qualityTransitionsRef.current.length > 20) {
+            qualityTransitionsRef.current.shift();
+          }
+        }
+        
+        // Update statistics with valid signals only
+        if (signal.fingerDetected && signal.quality > 30) {
+          setSignalStats(prev => {
+            const newStats = {
+              minValue: Math.min(prev.minValue, signal.filteredValue),
+              maxValue: Math.max(prev.maxValue, signal.filteredValue),
+              avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
+              totalValues: prev.totalValues + 1,
+              lastQualityUpdateTime: signal.timestamp
+            };
+            
+            return newStats;
+          });
         }
       }
-      
-      // Update statistics with valid signals only
-      if (signal.fingerDetected && signal.quality > 30) {
-        setSignalStats(prev => {
-          const newStats = {
-            minValue: Math.min(prev.minValue, signal.filteredValue),
-            maxValue: Math.max(prev.maxValue, signal.filteredValue),
-            avgValue: (prev.avgValue * prev.totalValues + signal.filteredValue) / (prev.totalValues + 1),
-            totalValues: prev.totalValues + 1,
-            lastQualityUpdateTime: signal.timestamp
-          };
-          
-          return newStats;
-        });
-      }
-    };
+    );
 
     // Enhanced error handling with rate limiting
     const onError = (error: ProcessingError) => {
@@ -226,31 +277,80 @@ export const useSignalProcessor = () => {
 
   const processFrame = useCallback((imageData: ImageData) => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No processor available to process frames");
+      logger.error("useSignalProcessor", "No processor available to process frames");
       return;
     }
-    if (isProcessing) {
-      if (framesProcessed % 10 === 0) {
-        console.log(`[DIAG] useSignalProcessor/processFrame: Procesando frame #${framesProcessed}`, {
-          width: imageData.width,
-          height: imageData.height,
-          timestamp: Date.now(),
-          processorIsProcessing: processorRef.current.isProcessing
+    
+    if (!isProcessing) {
+      logger.debug("useSignalProcessor", "Not processing, ignoring frame");
+      return;
+    }
+
+    // Iniciar monitoreo de frame
+    const frameStartTime = frameMonitor.current.startFrameProcessing();
+    
+    try {
+      // Validar que los callbacks estén configurados
+      const callbackValidation = callbackDiagnostics.current.validateCallbackChain({
+        onSignalReady: processorRef.current.onSignalReady,
+        onError: processorRef.current.onError
+      });
+      
+      if (!callbackValidation.isValid) {
+        logger.error("useSignalProcessor", "Callback validation failed", {
+          missingCallbacks: callbackValidation.missingCallbacks,
+          validCallbacks: callbackValidation.validCallbacks
         });
-      }
-      // Verify callbacks are properly assigned
-      if (!processorRef.current.onSignalReady) {
-        console.error("processFrame: onSignalReady is not defined in the processor");
+        
+        frameMonitor.current.endFrameProcessing(frameStartTime, false);
         return;
       }
       
-      try {
-        processorRef.current.processFrame(imageData);
-      } catch (error) {
-        console.error("processFrame: Error processing frame", error);
+      // Log detallado cada 30 frames para evitar spam
+      if (framesProcessed % 30 === 0) {
+        logger.debug("useSignalProcessor", "Processing frame with diagnostics", {
+          frameNumber: framesProcessed,
+          imageSize: `${imageData.width}x${imageData.height}`,
+          processorState: processorRef.current.isProcessing,
+          callbacksValid: callbackValidation.isValid
+        });
       }
+      
+      // Procesar frame
+      processorRef.current.processFrame(imageData);
+      
+      // Finalizar monitoreo exitoso
+      frameMonitor.current.endFrameProcessing(frameStartTime, true);
+      
+    } catch (error) {
+      logger.error("useSignalProcessor", "Frame processing error", {
+        error: error instanceof Error ? error.message : String(error),
+        frameNumber: framesProcessed,
+        imageSize: `${imageData.width}x${imageData.height}`
+      });
+      
+      // Registrar error en el monitor
+      frameMonitor.current.recordError(error);
+      frameMonitor.current.endFrameProcessing(frameStartTime, false);
     }
-  }, [isProcessing, framesProcessed]);
+  }, [isProcessing, framesProcessed, logger]);
+
+  // Función para obtener métricas de diagnóstico
+  const getDiagnosticMetrics = useCallback(() => {
+    const frameMetrics = frameMonitor.current.getMetrics();
+    const callbackStats = callbackDiagnostics.current.getExecutionStats();
+    const qualityStats = signalValidator.current.getQualityStats();
+    const deviceMetrics = frameMonitor.current.getDeviceMetrics();
+    
+    return {
+      ...frameMetrics,
+      callbackStats,
+      qualityStats,
+      deviceMetrics,
+      suggestions: frameMonitor.current.getOptimizationSuggestions(),
+      isLowPerformance: frameMonitor.current.isPerformanceLow()
+    };
+  }, []);
 
   return {
     isProcessing,
@@ -264,6 +364,12 @@ export const useSignalProcessor = () => {
     calibrate,
     processFrame,
     signalHistory: signalHistoryRef.current,
-    qualityTransitions: qualityTransitionsRef.current
+    qualityTransitions: qualityTransitionsRef.current,
+    // Nuevas funciones de diagnóstico
+    getDiagnosticMetrics,
+    diagnosticLogger: logger,
+    frameMonitor: frameMonitor.current,
+    callbackDiagnostics: callbackDiagnostics.current,
+    signalValidator: signalValidator.current
   };
 };

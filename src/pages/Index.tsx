@@ -8,6 +8,7 @@ import PPGSignalMeter from "@/components/PPGSignalMeter";
 import MonitorButton from "@/components/MonitorButton";
 import { VitalSignsResult } from "@/modules/vital-signs/VitalSignsProcessor";
 import { toast } from "@/components/ui/use-toast";
+import DiagnosticOverlay from "@/components/DiagnosticOverlay";
 
 const Index = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -40,8 +41,16 @@ const Index = () => {
   } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [rrIntervals, setRRIntervals] = useState<number[]>([]);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   
-  const { startProcessing, stopProcessing, lastSignal, processFrame } = useSignalProcessor();
+  const { 
+    startProcessing, 
+    stopProcessing, 
+    lastSignal, 
+    processFrame,
+    getDiagnosticMetrics,
+    diagnosticLogger 
+  } = useSignalProcessor();
   const { 
     processSignal: processHeartBeat, 
     setArrhythmiaState 
@@ -688,6 +697,12 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      {/* Overlay de diagnóstico - solo visible en desarrollo */}
+      <DiagnosticOverlay 
+        isVisible={showDiagnostics}
+        onToggle={() => setShowDiagnostics(!showDiagnostics)}
+      />
     </div>
   );
 };
