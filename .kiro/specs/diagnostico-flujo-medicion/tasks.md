@@ -7,6 +7,7 @@
   - Crear herramientas de logging avanzado para rastrear el flujo de datos desde la cámara hasta la UI
   - Implementar validación de callbacks en tiempo real
   - Añadir métricas de rendimiento para identificar cuellos de botella
+
   - _Requisitos: 3.1, 3.2, 3.3_
 
 - [ ] 2. Corregir problemas críticos en la cadena de callbacks
