@@ -64,26 +64,20 @@ const CameraView = ({
       }
 
       const isAndroid = /android/i.test(navigator.userAgent);
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
+      // Configuración para la cámara trasera (requerida para la medición de signos vitales)
       let baseVideoConstraints: MediaTrackConstraints = {
         facingMode: { exact: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 }
       };
-
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("CameraView: Configurando cámara para detección de dedo");
-      }
+      
+      console.log('CameraView: Configurando cámara trasera para medición de signos vitales');
+      console.log("CameraView: Configurando cámara para detección de dedo");
 
       if (isAndroid) {
         Object.assign(baseVideoConstraints, {
           frameRate: { ideal: 30, max: 30 },
           resizeMode: 'crop-and-scale'
-        });
-      } else if (isIOS) {
-        Object.assign(baseVideoConstraints, {
-          frameRate: { ideal: 30, min: 30 },
         });
       } else {
         Object.assign(baseVideoConstraints, {
@@ -99,10 +93,20 @@ const CameraView = ({
       if (process.env.NODE_ENV !== 'production') {
         console.log("CameraView: Intentando obtener acceso a la cámara con constraints:", constraints);
       }
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("CameraView: Acceso a la cámara obtenido exitosamente");
-      }
+      // Intentamos obtener acceso a la cámara trasera
+      console.log('Solicitando acceso a la cámara trasera...');
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints)
+        .catch(error => {
+          console.error('Error al acceder a la cámara trasera:', error);
+          toast({
+            title: 'Error de cámara',
+            description: 'No se pudo acceder a la cámara trasera. Asegúrate de dar los permisos necesarios.',
+            variant: 'destructive',
+          });
+          throw error; // Relanzamos el error para manejarlo más arriba
+        });
+      
+      console.log('Acceso a la cámara trasera concedido');
       
       if (!onStreamReady) {
         if (process.env.NODE_ENV !== 'production') {
