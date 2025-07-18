@@ -1,6 +1,16 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
+// Configuración común para todos los proyectos
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Configuración del buildscript
 buildscript {
+    // Aplicar variables primero
     apply from: "variables.gradle"
     
     repositories {
@@ -13,6 +23,11 @@ buildscript {
         classpath "com.google.gms:google-services:$googleServicesVersion"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
     }
+}
+
+// Tarea para limpiar el proyecto
+task clean(type: Delete) {
+    delete rootProject.buildDir
 }
 
 apply from: "variables.gradle"
