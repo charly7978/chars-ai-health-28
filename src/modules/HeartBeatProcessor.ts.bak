@@ -1,26 +1,54 @@
-import { 
-  AUDIO, 
-  DETECTION, 
-  SIGNAL_PROCESSING,
-  ERROR_CODES
-} from '../config/constants';
-import { logger } from '../utils/logger';
-
 export class HeartBeatProcessor {
-  // Referencias a configuraciones centralizadas
-  private readonly CONFIG = {
-    ...SIGNAL_PROCESSING,
-    ...AUDIO,
-    ...DETECTION
-  };
+  // ────────── CONFIGURACIONES PRINCIPALES (Valores optimizados para precisión médica) ──────────
+  private readonly DEFAULT_SAMPLE_RATE = 60;
+  private readonly DEFAULT_WINDOW_SIZE = 40;
+  private readonly DEFAULT_MIN_BPM = 30;
+  private readonly DEFAULT_MAX_BPM = 220;
+  private readonly DEFAULT_SIGNAL_THRESHOLD = 0.02; // Reducido para captar señal más débil
+  private readonly DEFAULT_MIN_CONFIDENCE = 0.30; // Reducido para mejor detección
+  private readonly DEFAULT_DERIVATIVE_THRESHOLD = -0.005; // Ajustado para mejor sensibilidad
+  private readonly DEFAULT_MIN_PEAK_TIME_MS = 300; // Restaurado a valor médicamente apropiado
+  private readonly WARMUP_TIME_MS = 1000; // Reducido para obtener lecturas más rápido
 
-  // Parámetros adaptativos inicializados con valores por defecto
-  private adaptiveSignalThreshold: number = this.CONFIG.SIGNAL_THRESHOLD;
-  private adaptiveMinConfidence: number = this.CONFIG.MIN_CONFIDENCE;
-  private adaptiveDerivativeThreshold: number = this.CONFIG.DERIVATIVE_THRESHOLD;
+  // Parámetros de filtrado ajustados para precisión médica
+  private readonly MEDIAN_FILTER_WINDOW = 3;
+  private readonly MOVING_AVERAGE_WINDOW = 3; // Aumentado para mejor filtrado
+  private readonly EMA_ALPHA = 0.5; // Restaurado para equilibrio entre estabilidad y respuesta
+  private readonly BASELINE_FACTOR = 0.8; // Restaurado para seguimiento adecuado
 
-  // Control de estado y procesamiento de señal
+  // Parámetros de beep y vibración
+  private readonly BEEP_DURATION = 450; 
+  private readonly BEEP_VOLUME = 1.0;
+  private readonly MIN_BEEP_INTERVAL_MS = 600; // Restaurado para prevenir beeps excesivos
+  private readonly VIBRATION_PATTERN = [40, 20, 60];
+
+  // AUTO-RESET mejorado
+  private readonly LOW_SIGNAL_THRESHOLD = 0; // Deshabilitado auto-reset por baja señal
+  private readonly LOW_SIGNAL_FRAMES = 25; // Aumentado para mayor tolerancia
   private lowSignalCount = 0;
+
+  // ────────── PARÁMETROS ADAPTATIVOS MÉDICAMENTE VÁLIDOS ──────────
+  private adaptiveSignalThreshold: number;
+  private adaptiveMinConfidence: number;
+  private adaptiveDerivativeThreshold: number;
+
+  // Límites para los parámetros adaptativos - Valores médicamente apropiados
+  private readonly MIN_ADAPTIVE_SIGNAL_THRESHOLD = 0.05; // Reducido para mejor sensibilidad
+  private readonly MAX_ADAPTIVE_SIGNAL_THRESHOLD = 0.4;
+  private readonly MIN_ADAPTIVE_MIN_CONFIDENCE = 0.40; // Reducido para mejor detección
+  private readonly MAX_ADAPTIVE_MIN_CONFIDENCE = 0.80;
+  private readonly MIN_ADAPTIVE_DERIVATIVE_THRESHOLD = -0.08;
+  private readonly MAX_ADAPTIVE_DERIVATIVE_THRESHOLD = -0.005;
+
+  // ────────── PARÁMETROS PARA PROCESAMIENTO ──────────
+  private readonly SIGNAL_BOOST_FACTOR = 1.8; // Aumentado para mejor amplificación
+  private readonly PEAK_DETECTION_SENSITIVITY = 0.6; // Aumentado para mejor detección
+  
+  // Control del auto-ajuste
+  private readonly ADAPTIVE_TUNING_PEAK_WINDOW = 10; // Reducido para adaptarse más rápido
+  private readonly ADAPTIVE_TUNING_LEARNING_RATE = 0.20; // Aumentado para adaptarse más rápido
+  
+  // Variables internas
   private recentPeakAmplitudes: number[] = [];
   private recentPeakConfidences: number[] = [];
   private recentPeakDerivatives: number[] = [];
@@ -28,74 +56,51 @@ export class HeartBeatProcessor {
   private signalBuffer: number[] = [];
   private medianBuffer: number[] = [];
   private movingAverageBuffer: number[] = [];
-  private smoothedValue = 0;
+  private smoothedValue: number = 0;
   private audioContext: AudioContext | null = null;
   private heartSoundOscillator: OscillatorNode | null = null;
   private lastBeepTime = 0;
   private lastPeakTime: number | null = null;
   private previousPeakTime: number | null = null;
   private bpmHistory: number[] = [];
-  private baseline = 0;
-  private lastValue = 0;
+  private baseline: number = 0;
+  private lastValue: number = 0;
   private values: number[] = [];
+  private startTime: number = 0;
   private peakConfirmationBuffer: number[] = [];
-  private lastConfirmedPeak = false;
-  private smoothBPM = 0;
+  private lastConfirmedPeak: boolean = false;
+  private smoothBPM: number = 0;
+  private readonly BPM_ALPHA = 0.3; // Restaurado para suavizado apropiado
   private peakCandidateIndex: number | null = null;
-  private peakCandidateValue = 0;
-  private isArrhythmiaDetected = false;
+  private peakCandidateValue: number = 0;
+  private isArrhythmiaDetected: boolean = false;
+  
+  // Variables para mejorar la detección
   private peakValidationBuffer: number[] = [];
-  private lastSignalStrength = 0;
+  private readonly PEAK_VALIDATION_THRESHOLD = 0.3; // Reducido para validación más permisiva
+  private lastSignalStrength: number = 0;
   private recentSignalStrengths: number[] = [];
-  private currentSignalQuality = 0;
-  private startTime = Date.now();
+  private readonly SIGNAL_STRENGTH_HISTORY = 30;
   
-  // Referencia a constantes de configuración
-  private get BPM_ALPHA() { return this.CONFIG.BPM_ALPHA; }
-  private get PEAK_VALIDATION_THRESHOLD() { return this.CONFIG.PEAK_VALIDATION_THRESHOLD; }
-  private get SIGNAL_STRENGTH_HISTORY() { return this.CONFIG.SIGNAL_STRENGTH_HISTORY; }
-  private get BEEP_VOLUME() { return this.CONFIG.BEEP_VOLUME; }
-  private get MIN_BEEP_INTERVAL_MS() { return this.CONFIG.MIN_BEEP_INTERVAL_MS; }
-  private get VIBRATION_PATTERN() { return this.CONFIG.VIBRATION_PATTERN; }
-  private get DEFAULT_WINDOW_SIZE() { return this.CONFIG.DEFAULT_WINDOW_SIZE; }
-  private get BASELINE_FACTOR() { return this.CONFIG.BASELINE_FACTOR; }
-  private get DEFAULT_MIN_PEAK_TIME_MS() { return this.CONFIG.DEFAULT_MIN_PEAK_TIME_MS; }
-  private get ADAPTIVE_TUNING_PEAK_WINDOW() { return this.CONFIG.ADAPTIVE_TUNING_PEAK_WINDOW; }
-  private get SIGNAL_BOOST_FACTOR() { return this.CONFIG.SIGNAL_BOOST_FACTOR; }
-  private get WARMUP_TIME_MS() { return this.CONFIG.WARMUP_TIME_MS; }
-  private get MEDIAN_FILTER_WINDOW() { return this.CONFIG.MEDIAN_FILTER_WINDOW; }
-  private get MOVING_AVERAGE_WINDOW() { return this.CONFIG.MOVING_AVERAGE_WINDOW; }
-  private get DEFAULT_MIN_BPM() { return this.CONFIG.DEFAULT_MIN_BPM; }
-  private get DEFAULT_MAX_BPM() { return this.CONFIG.DEFAULT_MAX_BPM; }
-  private get ADAPTIVE_TUNING_LEARNING_RATE() { return this.CONFIG.ADAPTIVE_TUNING_LEARNING_RATE; }
-  private get MIN_ADAPTIVE_SIGNAL_THRESHOLD() { return this.CONFIG.MIN_ADAPTIVE_SIGNAL_THRESHOLD; }
-  private get MAX_ADAPTIVE_SIGNAL_THRESHOLD() { return this.CONFIG.MAX_ADAPTIVE_SIGNAL_THRESHOLD; }
-  private get MIN_ADAPTIVE_MIN_CONFIDENCE() { return this.CONFIG.MIN_ADAPTIVE_MIN_CONFIDENCE; }
-  private get MAX_ADAPTIVE_MIN_CONFIDENCE() { return this.CONFIG.MAX_ADAPTIVE_MIN_CONFIDENCE; }
-  private get MIN_ADAPTIVE_DERIVATIVE_THRESHOLD() { return this.CONFIG.MIN_ADAPTIVE_DERIVATIVE_THRESHOLD; }
-  private get MAX_ADAPTIVE_DERIVATIVE_THRESHOLD() { return this.CONFIG.MAX_ADAPTIVE_DERIVATIVE_THRESHOLD; }
-  private get PEAK_DETECTION_SENSITIVITY() { return this.CONFIG.PEAK_DETECTION_SENSITIVITY; }
-  private get EMA_ALPHA() { return this.CONFIG.EMA_ALPHA; }
-  private get LOW_SIGNAL_THRESHOLD() { return this.CONFIG.LOW_SIGNAL_THRESHOLD; }
-  private get LOW_SIGNAL_FRAMES() { return this.CONFIG.LOW_SIGNAL_FRAMES; }
-  private get DEFAULT_SIGNAL_THRESHOLD() { return this.CONFIG.DEFAULT_SIGNAL_THRESHOLD; }
-  private get DEFAULT_MIN_CONFIDENCE() { return this.CONFIG.DEFAULT_MIN_CONFIDENCE; }
-  private get DEFAULT_DERIVATIVE_THRESHOLD() { return this.CONFIG.DEFAULT_DERIVATIVE_THRESHOLD; }
-  
-  // Inicializar parámetros del filtro de Kalman
-  private P_kalman: number = 1.0; // Covarianza del error estimado
-  private X_kalman: number = 0; // Valor estimado
-  private K_kalman: number = 0; // Ganancia de Kalman
+  // Nueva variable para retroalimentación de calidad de señal
+  private currentSignalQuality: number = 0;
+  private P: number; // Covarianza del error estimado para Kalman Filter
+  private X: number; // Estado estimado para Kalman Filter
+  private K: number; // Ganancia de Kalman para Kalman Filter
 
   constructor() {
+    // Inicializar parámetros adaptativos con valores médicamente apropiados
+    this.adaptiveSignalThreshold = this.DEFAULT_SIGNAL_THRESHOLD;
+    this.adaptiveMinConfidence = this.DEFAULT_MIN_CONFIDENCE;
+    this.adaptiveDerivativeThreshold = this.DEFAULT_DERIVATIVE_THRESHOLD;
+
     this.initAudio();
-    logger.info('HeartBeatProcessor inicializado', { 
-      config: {
-        sampleRate: this.CONFIG.SAMPLE_RATE,
-        minBPM: this.CONFIG.MIN_BPM,
-        maxBPM: this.CONFIG.MAX_BPM
-      }
-    });
+    this.startTime = Date.now();
+
+    // Inicializar parámetros del filtro de Kalman
+    this.P = 1; // Covarianza del error inicial
+    this.X = 0; // Estado estimado inicial
+    this.K = 0; // Ganancia de Kalman inicial
   }
 
   private async initAudio() {
@@ -103,12 +108,10 @@ export class HeartBeatProcessor {
       this.audioContext = new AudioContext();
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
-        logger.info('Contexto de audio reanudado');
       }
-      logger.info('Contexto de audio inicializado correctamente');
+      console.log("HeartBeatProcessor: Audio Context Initialized and resumed");
     } catch (error) {
-      logger.error('Error al inicializar el audio', error);
-      throw new Error(ERROR_CODES.AUDIO_INIT_ERROR);
+      console.error("HeartBeatProcessor: Error initializing audio", error);
     }
   }
 
@@ -339,20 +342,17 @@ export class HeartBeatProcessor {
     const range = maxSignal - minSignal;
     
     // Calcular factor de amplificación proporcional a la fuerza de la señal
-    let boostFactor: number;
+    let boostFactor = this.SIGNAL_BOOST_FACTOR;
     
     if (range < 1.0) {
       // Señal débil - amplificar moderadamente
-      boostFactor = Number((this.SIGNAL_BOOST_FACTOR * 1.8).toFixed(2)); // Más amplificación para señales débiles
+      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.8; // Más amplificación para señales débiles
     } else if (range < 3.0) {
       // Señal moderada - amplificar ligeramente
-      boostFactor = Number((this.SIGNAL_BOOST_FACTOR * 1.4).toFixed(2));
+      boostFactor = this.SIGNAL_BOOST_FACTOR * 1.4;
     } else if (range > 10.0) {
       // Señal fuerte - no amplificar
       boostFactor = 1.0;
-    } else {
-      // Usar el valor por defecto
-      boostFactor = this.SIGNAL_BOOST_FACTOR;
     }
     
     // Aplicar amplificación lineal centrada en el promedio
@@ -601,14 +601,14 @@ export class HeartBeatProcessor {
     const Q_processNoise = processNoise; // Controlado por el parámetro de entrada
 
     // Predicción
-    this.P_kalman = this.P_kalman + Q_processNoise;
+    this.P = this.P + Q_processNoise;
 
     // Actualización
-    this.K_kalman = this.P_kalman / (this.P_kalman + R_measurementNoise);
-    this.X_kalman = this.X_kalman + this.K_kalman * (value - this.X_kalman);
-    this.P_kalman = (1 - this.K_kalman) * this.P_kalman;
+    this.K = this.P / (this.P + R_measurementNoise);
+    this.X = this.X + this.K * (value - this.X);
+    this.P = (1 - this.K) * this.P;
 
-    return this.X_kalman;
+    return this.X;
   }
 
   public getFinalBPM(): number { 
@@ -669,9 +669,9 @@ export class HeartBeatProcessor {
     this.peakValidationBuffer = [];
     
     // Reiniciar los parámetros del filtro de Kalman
-    this.P_kalman = 1; 
-    this.X_kalman = 0;
-    this.K_kalman = 0;
+    this.P = 1; 
+    this.X = 0;
+    this.K = 0;
     console.log("HeartBeatProcessor: Full reset including adaptive parameters, arrhythmia flag, and Kalman filter state.");
   }
 
