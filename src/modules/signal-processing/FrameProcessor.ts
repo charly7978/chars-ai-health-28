@@ -1,6 +1,15 @@
 import { FrameData } from './types';
 import { ProcessedSignal } from '../../types/signal';
 
+// Constants for signal processing
+const DEFAULT_RED_VALUE = 5;
+const DEFAULT_GREEN_VALUE = 4;
+const DEFAULT_BLUE_VALUE = 4;
+const DEFAULT_RATIO = 1.2;
+const MIN_PIXEL_VALUE = 0;
+const MAX_PIXEL_VALUE = 255;
+const MIN_VALID_PIXELS = 100;
+
 /**
  * Processes video frames to extract PPG signals and detect ROI
  * PROHIBIDA LA SIMULACIÓN Y TODO TIPO DE MANIPULACIÓN FORZADA DE DATOS
@@ -33,87 +42,229 @@ export class FrameProcessor {
     };
   }
   
-  extractFrameData(imageData: ImageData): FrameData {
-    const data = imageData.data;
-    let redSum = 0;
-    let greenSum = 0;
-    let blueSum = 0;
-    let pixelCount = 0;
-    let totalLuminance = 0;
-    
-    // Centro de la imagen
-    const centerX = Math.floor(imageData.width / 2);
-    const centerY = Math.floor(imageData.height / 2);
-    const roiSize = Math.min(imageData.width, imageData.height) * this.CONFIG.ROI_SIZE_FACTOR;
-    
-    const startX = Math.max(0, Math.floor(centerX - roiSize / 2));
-    const endX = Math.min(imageData.width, Math.floor(centerX + roiSize / 2));
-    const startY = Math.max(0, Math.floor(centerY - roiSize / 2));
-    const endY = Math.min(imageData.height, Math.floor(centerY + roiSize / 2));
-    
-    // Grid for texture analysis
-    const gridSize = this.CONFIG.TEXTURE_GRID_SIZE;
-    const cells: Array<{ red: number, green: number, blue: number, count: number, edgeScore: number }> = [];
-    for (let i = 0; i < gridSize * gridSize; i++) {
-      cells.push({ red: 0, green: 0, blue: 0, count: 0, edgeScore: 0 });
+  /**
+   * Returns default frame data with safe fallback values
+   */
+  private getDefaultFrameData(): FrameData {
+    return {
+      redValue: DEFAULT_RED_VALUE,
+      textureScore: 0.6,
+      rToGRatio: DEFAULT_RATIO,
+      rToBRatio: DEFAULT_RATIO,
+      avgRed: DEFAULT_RED_VALUE,
+      avgGreen: DEFAULT_GREEN_VALUE,
+      avgBlue: DEFAULT_BLUE_VALUE
+    };
+  }
+  
+  /**
+   * Validates if a pixel is within physiological ranges
+   */
+  /**
+   * Validates if a pixel is within physiological ranges
+   */
+  private isValidPixel(r: number, g: number, b: number): boolean {
+    // Check for valid RGB range
+    if (r < MIN_PIXEL_VALUE || r > MAX_PIXEL_VALUE ||
+        g < MIN_PIXEL_VALUE || g > MAX_PIXEL_VALUE ||
+        b < MIN_PIXEL_VALUE || b > MAX_PIXEL_VALUE) {
+      return false;
     }
     
-    // Edge detection matrices - Kernel mejorado
-    const edgeDetectionMatrix = [
+    // Check for saturated or too dark pixels
+    const isSaturated = r > 250 && g > 250 && b > 250;
+    const isTooDark = r < 5 && g < 5 && b < 5;
+    
+    if (isSaturated || isTooDark) {
+      return false;
+    }
+    
+    // Basic physiological validation
+    const rgRatio = r / Math.max(1, g);
+    const rbRatio = r / Math.max(1, b);
+    const minRG = this.RG_RATIO_RANGE[0];
+    const maxRG = this.RG_RATIO_RANGE[1];
+    
+    return rgRatio >= minRG && rgRatio <= maxRG &&
+           rbRatio >= 1.0 && r > g && r > b;
+  }
+
+  extractFrameData(imageData: ImageData): FrameData {
+    // Input validation
+    if (!imageData?.data || imageData.width <= 0 || imageData.height <= 0) {
+      console.error("FrameProcessor: Invalid image data");
+      return this.getDefaultFrameData();
+    }
+    
+    const startTime = performance.now();
+    const frameSize = imageData.width * imageData.height;
+    
+    if (imageData.data.length < frameSize * 4) {
+      console.error("FrameProcessor: Incomplete image data");
+      return this.getDefaultFrameData();
+    }
+    const data = imageData.data;
+    let redSum = 0, greenSum = 0, blueSum = 0;
+    let pixelCount = 0, totalLuminance = 0;
+    let minRed = 255, maxRed = 0;
+    let validPixels = 0, invalidPixels = 0;
+    
+    // Calculate adaptive ROI
+    const centerX = Math.floor(imageData.width / 2);
+    const centerY = Math.floor(imageData.height / 2);
+    
+    // Adaptive ROI size based on image dimensions
+    const roiSize = Math.max(
+      32, // Minimum size
+      Math.min(
+        Math.min(imageData.width, imageData.height) * this.CONFIG.ROI_SIZE_FACTOR,
+        320 // Maximum size to avoid processing too many pixels
+      )
+    );
+    
+    // Calculate ROI bounds with boundary checks
+    const halfRoi = Math.floor(roiSize / 2);
+    const startX = Math.max(0, centerX - halfRoi);
+    const endX = Math.min(imageData.width, centerX + halfRoi);
+    const startY = Math.max(0, centerY - halfRoi);
+    const endY = Math.min(imageData.height, centerY + halfRoi);
+    
+    // Validate ROI dimensions
+    const roiWidth = endX - startX;
+    const roiHeight = endY - startY;
+    if (roiWidth <= 0 || roiHeight <= 0) {
+      console.error("Invalid ROI dimensions", { roiWidth, roiHeight });
+      return this.getDefaultFrameData();
+    }
+    
+    // ROI bounds are already calculated above, removing duplicate declarations
+    
+    // Initialize texture analysis grid
+    const gridSize = Math.min(this.CONFIG.TEXTURE_GRID_SIZE, 8);
+    const cells = Array(gridSize * gridSize).fill(0).map(() => ({
+      red: 0, green: 0, blue: 0, count: 0, edgeScore: 0
+    }));
+    
+    // Edge detection kernel
+    const edgeKernel = [
       [-1, -2, -1],
-      [-2,  12, -2], // Valor central incrementado para mejor detección
+      [-2, 12, -2],
       [-1, -2, -1]
     ];
     const edgeValues: number[] = [];
+    let saturatedPixels = 0, darkPixels = 0;
     
-    // Extraer señal con amplificación adecuada
+    // Process ROI pixels with enhanced validation
+    const pixelData = new Uint8ClampedArray(roiWidth * roiHeight * 4);
+    
+    // First pass: copy ROI data and calculate basic statistics
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
-        const i = (y * imageData.width + x) * 4;
-        const r = data[i];     // Canal rojo
-        const g = data[i+1];   // Canal verde
-        const b = data[i+2];   // Canal azul
+        const srcIdx = (y * imageData.width + x) * 4;
+        const dstIdx = ((y - startY) * roiWidth + (x - startX)) * 4;
         
-        // Calculate pixel luminance
-        const luminance = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-        totalLuminance += luminance;
+        // Copy pixel data
+        pixelData[dstIdx] = data[srcIdx];     // R
+        pixelData[dstIdx + 1] = data[srcIdx + 1]; // G
+        pixelData[dstIdx + 2] = data[srcIdx + 2]; // B
+        pixelData[dstIdx + 3] = data[srcIdx + 3]; // A
         
-        // Calculate grid cell
-        const gridX = Math.min(gridSize - 1, Math.floor(((x - startX) / (endX - startX)) * gridSize));
-        const gridY = Math.min(gridSize - 1, Math.floor(((y - startY) / (endY - startY)) * gridSize));
+        // Extract and validate pixel values
+        const r = data[srcIdx];
+        const g = data[srcIdx + 1];
+        const b = data[srcIdx + 2];
+        
+        // Count saturated/dark pixels for diagnostics
+        if (r > 250 && g > 250 && b > 250) {
+          saturatedPixels++;
+        } else if (r < 5 && g < 5 && b < 5) {
+          darkPixels++;
+        } else {
+          // Only consider non-saturated, non-dark pixels as valid
+          validPixels++;
+          
+          // Update min/max for dynamic range analysis
+          if (r < minRed) minRed = r;
+          if (r > maxRed) maxRed = r;
+          
+          // Calculate luminance for lighting analysis
+          const luminance = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+          totalLuminance += luminance;
+        }
+      }
+    }
+    
+    // Validate we have enough valid pixels
+    if (validPixels < MIN_VALID_PIXELS) {
+      console.error("FrameProcessor: Not enough valid pixels", { 
+        validPixels, 
+        required: MIN_VALID_PIXELS 
+      });
+      return this.getDefaultFrameData();
+    }
+    
+    // Second pass: texture and edge analysis
+    for (let y = 1; y < roiHeight - 1; y++) {
+      for (let x = 1; x < roiWidth - 1; x++) {
+        const idx = (y * roiWidth + x) * 4;
+        const r = pixelData[idx];
+        const g = pixelData[idx + 1];
+        const b = pixelData[idx + 2];
+        
+        // Skip processing for invalid pixels
+        if (!this.isValidPixel(r, g, b)) {
+          invalidPixels++;
+          continue;
+        }
+        
+        // Calculate grid cell for texture analysis
+        const gridX = Math.min(gridSize - 1, Math.floor((x / roiWidth) * gridSize));
+        const gridY = Math.min(gridSize - 1, Math.floor((y / roiHeight) * gridSize));
         const cellIdx = gridY * gridSize + gridX;
         
-        // Edge detection for each grid cell
+        // Edge detection using kernel
         let edgeValue = 0;
-        if (x > startX && x < endX - 1 && y > startY && y < endY - 1) {
-          for (let ky = -1; ky <= 1; ky++) {
-            for (let kx = -1; kx <= 1; kx++) {
-              const ni = ((y + ky) * imageData.width + (x + kx)) * 4;
-              edgeValue += data[ni] * edgeDetectionMatrix[ky+1][kx+1];
-            }
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            const ni = ((y + ky) * roiWidth + (x + kx)) * 4;
+            edgeValue += pixelData[ni] * edgeKernel[ky+1][kx+1];
           }
-          edgeValue = Math.abs(edgeValue) / 255;
-          edgeValues.push(edgeValue);
+        }
+        
+        edgeValue = Math.abs(edgeValue) / 255;
+        edgeValues.push(edgeValue);
+        
+        // Enhanced red channel amplification
+        const enhancedR = Math.min(255, r * this.RED_GAIN);
+        
+        // Apply suppression to green channel
+        const attenuatedG = g * this.GREEN_SUPPRESSION;
+        
+        // Update cell statistics
+        if (cellIdx >= 0 && cellIdx < cells.length) {
+          cells[cellIdx].red += enhancedR;
+          cells[cellIdx].green += attenuatedG;
+          cells[cellIdx].blue += b;
+          cells[cellIdx].count++;
           cells[cellIdx].edgeScore += edgeValue;
         }
         
-        // Amplificación mejorada del canal rojo
-        const enhancedR = Math.min(255, r * this.RED_GAIN);
+        // Calculate color ratios for physiological validation
+        const rgRatio = r / Math.max(1, g);
+        const rbRatio = r / Math.max(1, b);
         
-        // Supresión medida del canal verde
-        const attenuatedG = g * this.GREEN_SUPPRESSION;
+        // Validate physiological color ratios
+        const validColorRatios = (
+          rgRatio >= this.RG_RATIO_RANGE[0] && 
+          rgRatio <= this.RG_RATIO_RANGE[1] &&
+          rbRatio >= 1.0 &&
+          r > g && r > b
+        );
         
-        cells[cellIdx].red += enhancedR;
-        cells[cellIdx].green += attenuatedG;
-        cells[cellIdx].blue += b;
-        cells[cellIdx].count++;
+        // Apply adaptive gain based on validation
+        const adaptiveGain = validColorRatios ? this.SIGNAL_GAIN : this.SIGNAL_GAIN * 0.7;
         
-        // Ganancia adaptativa basada en ratio r/g fisiológico - más permisiva
-        const rgRatio = r / (g + 1); // Use raw r and g for this ratio
-        // Ganancia reducida para ratios no fisiológicos pero más permisiva
-        const adaptiveGain = (rgRatio > this.RG_RATIO_RANGE[0] && rgRatio < this.RG_RATIO_RANGE[1]) ? // Rango ampliado (antes 0.9-3.0)
-                           this.SIGNAL_GAIN : this.SIGNAL_GAIN * 0.8; // Penalización reducida
-        
+        // Accumulate color values
         redSum += enhancedR * adaptiveGain;
         greenSum += attenuatedG;
         blueSum += b;
@@ -131,52 +282,52 @@ export class FrameProcessor {
       this.lastLightLevel = this.lastLightLevel * 0.7 + avgLuminance * 0.3;
     }
     
-    // Calculate texture (variation between cells) with physiological constraints
-    let textureScore = 0.5; // Base value
+    // Calculate texture score based on cell variations and edges
+    let textureScore = 0.5; // Default neutral value
     
-    if (cells.some(cell => cell.count > 0)) {
-      // Normalize cells by count and consider edges
-      const normCells = cells
-        .filter(cell => cell.count > 0)
-        .map(cell => ({
-          red: cell.red / cell.count,
-          green: cell.green / cell.count,
-          blue: cell.blue / cell.count,
-          edgeScore: cell.edgeScore / Math.max(1, cell.count)
-        }));
+    const validCells = cells.filter(cell => cell.count > 0);
+    
+    if (validCells.length > 1) {
+      // Normalize cell values
+      const normCells = validCells.map(cell => ({
+        red: cell.red / Math.max(1, cell.count),
+        green: cell.green / Math.max(1, cell.count),
+        blue: cell.blue / Math.max(1, cell.count),
+        edgeScore: cell.edgeScore / Math.max(1, cell.count)
+      }));
       
-      if (normCells.length > 1) {
-        // Calculate variations between adjacent cells with edge weighting
-        let totalVariation = 0;
-        let comparisonCount = 0;
-        
-        for (let i = 0; i < normCells.length; i++) {
-          for (let j = i + 1; j < normCells.length; j++) {
-            const cell1 = normCells[i];
-            const cell2 = normCells[j];
-            
-            // Calculate color difference with emphasis on red channel
-            const redDiff = Math.abs(cell1.red - cell2.red) * 1.3; // Mayor énfasis en rojo
-            const greenDiff = Math.abs(cell1.green - cell2.green) * 0.8; // Menor énfasis
-            const blueDiff = Math.abs(cell1.blue - cell2.blue) * 0.6; // Menor énfasis
-            
-            // Include edge information in texture calculation
-            const edgeDiff = Math.abs(cell1.edgeScore - cell2.edgeScore) * this.EDGE_ENHANCEMENT;
-            
-            // Weighted average of differences
-            const avgDiff = (redDiff + greenDiff + blueDiff + edgeDiff) / 2.7;
-            totalVariation += avgDiff;
-            comparisonCount++;
-          }
-        }
-        
-        if (comparisonCount > 0) {
-          const avgVariation = totalVariation / comparisonCount;
+      // Calculate pairwise variations between cells
+      const variations: number[] = [];
+      const redWeight = 1.3;   // Higher weight for red channel
+      const greenWeight = 0.8;
+      const blueWeight = 0.6;
+      const weightSum = redWeight + greenWeight + blueWeight + this.EDGE_ENHANCEMENT;
+      
+      for (let i = 0; i < normCells.length; i++) {
+        for (let j = i + 1; j < normCells.length; j++) {
+          const cell1 = normCells[i];
+          const cell2 = normCells[j];
           
-          // Cálculo de textura mejorado - más permisivo
-          const normalizedVar = Math.pow(avgVariation / 3, 0.65); // Exponente reducido
-          textureScore = Math.max(0.35, Math.min(1, normalizedVar)); // Mínimo más alto
+          // Calculate color differences with channel weights
+          const redDiff = Math.abs(cell1.red - cell2.red) * redWeight;
+          const greenDiff = Math.abs(cell1.green - cell2.green) * greenWeight;
+          const blueDiff = Math.abs(cell1.blue - cell2.blue) * blueWeight;
+          
+          // Include edge information
+          const edgeDiff = Math.abs(cell1.edgeScore - cell2.edgeScore) * this.EDGE_ENHANCEMENT;
+          
+          // Weighted average of differences
+          const avgDiff = (redDiff + greenDiff + blueDiff + edgeDiff) / weightSum;
+          variations.push(avgDiff);
         }
+      }
+      
+      // Calculate final texture score with bounds checking
+      if (variations.length > 0) {
+        const sumVariation = variations.reduce((sum, val) => sum + val, 0);
+        const avgVariation = sumVariation / variations.length;
+        const normalizedVar = Math.pow(avgVariation / 3, 0.65);
+        textureScore = Math.max(0.35, Math.min(1, normalizedVar));
       }
     }
     
@@ -194,60 +345,71 @@ export class FrameProcessor {
     }
     
     // No pixels detected - return enhanced default values
-    if (pixelCount < 1) {
-      console.log("FrameProcessor: No pixels detected in this frame, using default values");
-      return { 
-        redValue: 5, // Valor base mayor para evitar ceros (antes 0)
-        textureScore: 0.6, // Valor base mayor (antes 0.5)
-        rToGRatio: 1.2, // Valor más fisiológico
-        rToBRatio: 1.2,
-        avgRed: 5,
-        avgGreen: 4,
-        avgBlue: 4
-      };
+    if (pixelCount < 1 || validPixels < 100) {
+      console.warn("FrameProcessor: Insufficient valid pixels, using default values", {
+        pixelCount,
+        validPixels,
+        invalidPixels,
+        saturatedPixels,
+        darkPixels
+      });
+      return this.getDefaultFrameData();
     }
     
     // Apply dynamic calibration based on history - with medical constraints
-    let dynamicGain = 1.0; // Base gain
-    if (this.lastFrames.length >= 3) { // Reducido (antes 5)
-      const avgHistRed = this.lastFrames.reduce((sum, frame) => sum + frame.red, 0) / this.lastFrames.length;
+    const WEAK_SIGNAL_THRESHOLD = 40;
+    const MIN_GAIN = 1.0;
+    const WEAK_GAIN = 1.1;
+    const MODERATE_GAIN = 1.25;
+    
+    let dynamicGain = MIN_GAIN; // Base gain
+    
+    if (this.lastFrames.length >= 3) { // Reduced from 5 for faster adaptation
+      const frameCount = this.lastFrames.length;
+      const avgHistRed = this.lastFrames.reduce((sum, frame) => sum + frame.red, 0) / frameCount;
+      const edgeContrast = this.calculateEdgeContrast();
       
-      // Ganancia moderada incluso para señales muy débiles
-      if (avgHistRed < 40 && avgHistRed > this.MIN_RED_THRESHOLD && 
-          this.calculateEdgeContrast() > this.EDGE_CONTRAST_THRESHOLD) {
-        dynamicGain = 1.25; // Ganancia ligeramente reducida
-      } else if (avgHistRed <= this.MIN_RED_THRESHOLD) { // Umbral reducido
-        // Very weak signal - likely no finger present
-        dynamicGain = 1.1; // Algo de amplificación incluso con señal muy débil (antes 1.0)
+      // Apply gain based on signal strength and edge contrast
+      if (avgHistRed < WEAK_SIGNAL_THRESHOLD && 
+          avgHistRed > this.MIN_RED_THRESHOLD && 
+          edgeContrast > this.EDGE_CONTRAST_THRESHOLD) {
+        dynamicGain = MODERATE_GAIN; // Moderate gain for weak but valid signals
+      } else if (avgHistRed <= this.MIN_RED_THRESHOLD) {
+        dynamicGain = WEAK_GAIN; // Minimal gain for very weak signals
       }
     }
     
-    // Calculate average values with physiologically valid minimum thresholds
+    // Calculate final color values with validation
     const avgRed = Math.max(0, (redSum / pixelCount) * dynamicGain);
     const avgGreen = greenSum / pixelCount;
     const avgBlue = blueSum / pixelCount;
     
-    // Calculate color ratio indexes with proper physiological constraints - más permisivo
-    const rToGRatio = avgGreen > 3 ? avgRed / avgGreen : 1.2; 
-    const rToBRatio = avgBlue > 3 ? avgRed / avgBlue : 1.2; 
+    // Calculate color ratios with physiological constraints
+    const rToGRatio = Math.max(0.1, Math.min(10, avgGreen > 3 ? avgRed / avgGreen : 1.2));
+    const rToBRatio = Math.max(0.1, Math.min(10, avgBlue > 3 ? avgRed / avgBlue : 1.2));
     
-    // Light level affects detection quality
+    // Calculate light level quality factor
     const lightLevelFactor = this.getLightLevelQualityFactor(this.lastLightLevel);
     
-    // More detailed logging for diagnostics
+    // Detailed logging for diagnostics
     console.log("FrameProcessor: Extracted data:", {
-      avgRed: avgRed.toFixed(1), 
-      avgGreen: avgGreen.toFixed(1), 
+      avgRed: avgRed.toFixed(1),
+      avgGreen: avgGreen.toFixed(1),
       avgBlue: avgBlue.toFixed(1),
       textureScore: textureScore.toFixed(2),
-      rToGRatio: rToGRatio.toFixed(2), 
+      rToGRatio: rToGRatio.toFixed(2),
       rToBRatio: rToBRatio.toFixed(2),
       lightLevel: this.lastLightLevel.toFixed(1),
       lightQuality: lightLevelFactor.toFixed(2),
       dynamicGain: dynamicGain.toFixed(2),
       pixelCount,
+      validPixels,
+      invalidPixels,
+      saturatedPixels,
+      darkPixels,
       frameSize: `${imageData.width}x${imageData.height}`,
-      roiSize: `${roiSize.toFixed(1)}`
+      roiSize: `${roiWidth}x${roiHeight}`,
+      processingTime: `${(performance.now() - startTime).toFixed(2)}ms`
     });
     
     return {

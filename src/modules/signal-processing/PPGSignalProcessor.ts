@@ -79,8 +79,10 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   async initialize(): Promise<void> {
     console.log("[DIAG] PPGSignalProcessor: initialize() called", {
       hasSignalReadyCallback: !!this.onSignalReady,
-      hasErrorCallback: !!this.onError
+      hasErrorCallback: !!this.onError,
+      timestamp: new Date().toISOString()
     });
+    
     try {
       // Reset all filters and analyzers
       this.lastValues = [];
@@ -91,13 +93,33 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
       this.signalAnalyzer.reset();
       this.frameProcessedCount = 0;
       
+      // Ensure callbacks are properly set
+      if (!this.onSignalReady) {
+        console.warn("PPGSignalProcessor: No onSignalReady callback provided, using fallback");
+        this.onSignalReady = (signal) => {
+          console.log("Fallback onSignalReady:", signal);
+        };
+      }
+      
+      if (!this.onError) {
+        console.warn("PPGSignalProcessor: No onError callback provided, using fallback");
+        this.onError = (error) => {
+          console.error("PPG Error:", error);
+        };
+      }
+      
       console.log("PPGSignalProcessor: System initialized with callbacks:", {
         hasSignalReadyCallback: !!this.onSignalReady,
-        hasErrorCallback: !!this.onError
+        hasErrorCallback: !!this.onError,
+        timestamp: new Date().toISOString()
       });
+      
+      return Promise.resolve();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
       console.error("PPGSignalProcessor: Initialization error", error);
-      this.handleError("INIT_ERROR", "Error initializing advanced processor");
+      this.handleError("INIT_ERROR", `Error initializing advanced processor: ${errorMessage}`);
+      return Promise.reject(error);
     }
   }
 
@@ -146,47 +168,75 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
   }
 
   processFrame(imageData: ImageData): void {
-    console.log("[DIAG] PPGSignalProcessor: processFrame() called", {
-      isProcessing: this.isProcessing,
-      hasOnSignalReadyCallback: !!this.onSignalReady,
-      imageSize: `${imageData.width}x${imageData.height}`,
-      timestamp: new Date().toISOString()
-    });
+    // Validación temprana de parámetros
+    if (!imageData || !imageData.data || imageData.width <= 0 || imageData.height <= 0) {
+      console.error("PPGSignalProcessor: Invalid image data received");
+      return;
+    }
+    
+    const frameStartTime = performance.now();
+    const frameNumber = this.frameProcessedCount + 1;
+    const shouldLog = frameNumber % 30 === 0; // Log cada 30 frames
+    
+    if (shouldLog) {
+      console.log("[DIAG] PPGSignalProcessor: Processing frame", {
+        frameNumber,
+        imageSize: `${imageData.width}x${imageData.height}`,
+        timestamp: new Date().toISOString(),
+        isProcessing: this.isProcessing,
+        hasOnSignalReady: !!this.onSignalReady,
+        memory: (performance as any).memory ? {
+          usedJSHeapSize: Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) + 'MB',
+          totalJSHeapSize: Math.round((performance as any).memory.totalJSHeapSize / 1024 / 1024) + 'MB'
+        } : 'Not available'
+      });
+    }
+    
     if (!this.isProcessing) {
-      console.log("PPGSignalProcessor: Not processing, ignoring frame");
+      if (shouldLog) {
+        console.log("PPGSignalProcessor: Not processing, ignoring frame");
+      }
       return;
     }
 
     try {
-      // Count processed frames
+      // Incrementar contador de frames
       this.frameProcessedCount++;
-      const shouldLog = this.frameProcessedCount % 30 === 0;  // Log every 30 frames
-
-      // CRITICAL CHECK: Ensure callbacks are available with fallback creation
+      
+      // Verificar y asegurar callbacks
       if (!this.onSignalReady) {
-        console.error("PPGSignalProcessor: onSignalReady callback not available, creating emergency fallback");
-        
-        // Create emergency fallback callback
-        this.onSignalReady = (signal: ProcessedSignal) => {
-          console.warn("PPGSignalProcessor: Using emergency fallback callback", signal);
-          // This is a last resort - the signal will be processed but may not reach the UI
-          // Log the signal so it can be seen in diagnostics
-          console.log("EMERGENCY SIGNAL:", {
-            timestamp: new Date(signal.timestamp).toISOString(),
-            fingerDetected: signal.fingerDetected,
-            quality: signal.quality,
-            rawValue: signal.rawValue,
-            filteredValue: signal.filteredValue
-          });
-        };
-        
-        this.handleError("CALLBACK_ERROR", "Emergency fallback callback created - check callback chain");
+        console.error("PPGSignalProcessor: onSignalReady callback is missing in processFrame");
+        this.onSignalReady = this.createFallbackCallback();
+        this.handleError("CALLBACK_ERROR", "Fallback callback created in processFrame");
       }
 
-      // 1. Extract frame features with enhanced validation
-      const extractionResult = this.frameProcessor.extractFrameData(imageData);
+      // 1. Extraer características del frame con validación mejorada
+      let extractionResult;
+      try {
+        extractionResult = this.frameProcessor.extractFrameData(imageData);
+      } catch (error) {
+        console.error("Error extracting frame data:", error);
+        this.handleError("FRAME_EXTRACTION_ERROR", `Error extracting frame data: ${error.message}`);
+        return;
+      }
+      
       const { redValue, textureScore, rToGRatio, rToBRatio } = extractionResult;
-      const roi = this.frameProcessor.detectROI(redValue, imageData);
+      
+      // Validar valores extraídos
+      if (isNaN(redValue) || !isFinite(redValue)) {
+        console.error("Invalid redValue:", redValue);
+        this.handleError("INVALID_SIGNAL", "Invalid signal value detected");
+        return;
+      }
+      
+      // Detección de ROI con manejo de errores
+      let roi;
+      try {
+        roi = this.frameProcessor.detectROI(redValue, imageData);
+      } catch (error) {
+        console.error("Error detecting ROI:", error);
+        roi = { x: 0, y: 0, width: imageData.width, height: imageData.height };
+      }
 
       // DEBUGGING: Log extracted redValue and ROI
       if (shouldLog) {
@@ -226,31 +276,71 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         return;
       }
 
-      // 2. Apply multi-stage filtering to the signal
-      let filteredValue = this.kalmanFilter.filter(redValue);
-      filteredValue = this.sgFilter.filter(filteredValue);
-      // Eliminar amplificación fija; la amplificación adaptativa se maneja en HeartBeatProcessor
-      // const AMPLIFICATION_FACTOR = 30;
-      // filteredValue = filteredValue * AMPLIFICATION_FACTOR;
+      // 2. Aplicar filtrado en cascada a la señal
+      let filteredValue;
+      try {
+        // Filtro Kalman para reducir ruido
+        filteredValue = this.kalmanFilter.filter(redValue);
+        
+        // Filtro Savitzky-Golay para suavizado preservando características
+        filteredValue = this.sgFilter.filter(filteredValue);
+        
+        // Validar resultado del filtrado
+        if (isNaN(filteredValue) || !isFinite(filteredValue)) {
+          console.error("Invalid filtered value:", filteredValue, "from redValue:", redValue);
+          filteredValue = redValue; // Usar valor sin filtrar como respaldo
+        }
+      } catch (error) {
+        console.error("Error filtering signal:", error);
+        filteredValue = redValue; // Usar valor sin filtrar en caso de error
+        this.handleError("FILTER_ERROR", `Error filtering signal: ${error.message}`);
+      }
 
-      // 3. Perform signal trend analysis with strict physiological validation
-      const trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
-
-      // Actualizar los puntajes del detector en SignalAnalyzer
-      this.signalAnalyzer.updateDetectorScores({
+      // 3. Análisis de tendencia de la señal con validación fisiológica
+      let trendResult;
+      let detectionResult;
+      let isFingerDetected = false;
+      let signalQuality = 0;
+      
+      try {
+        // Análisis de tendencia
+        trendResult = this.trendAnalyzer.analyzeTrend(filteredValue);
+        
+        // Validar rango fisiológico
+        const biophysicalValidation = this.biophysicalValidator.validateBiophysicalRange(
+          redValue, 
+          rToGRatio, 
+          rToBRatio
+        );
+        
+        // Actualizar puntajes del detector en SignalAnalyzer
+        this.signalAnalyzer.updateDetectorScores({
           redValue: redValue,
           redChannel: redValue / 255, // Normalizar a 0-1
           stability: this.trendAnalyzer.getStabilityScore(),
           pulsatility: this.biophysicalValidator.calculatePulsatilityIndex(filteredValue),
-          biophysical: this.biophysicalValidator.validateBiophysicalRange(redValue, rToGRatio, rToBRatio),
+          biophysical: biophysicalValidation,
           periodicity: this.trendAnalyzer.getPeriodicityScore(),
           textureScore: textureScore
-      });
-
-      // Obtener resultados de detección de dedo y calidad de SignalAnalyzer
-      const detectionResult = this.signalAnalyzer.analyzeSignalMultiDetector(filteredValue, trendResult);
-      const isFingerDetected = detectionResult.isFingerDetected;
-      const signalQuality = detectionResult.quality; // Calidad general de 0-100
+        });
+        
+        // Obtener resultados de detección
+        detectionResult = this.signalAnalyzer.analyzeSignalMultiDetector(filteredValue, trendResult);
+        isFingerDetected = detectionResult.isFingerDetected;
+        signalQuality = detectionResult.quality; // Calidad general de 0-100
+        
+        // Validar calidad de la señal
+        if (isNaN(signalQuality) || signalQuality < 0 || signalQuality > 100) {
+          console.warn("Invalid signal quality:", signalQuality, "- Clamping to valid range");
+          signalQuality = Math.max(0, Math.min(100, signalQuality || 0));
+        }
+      } catch (error) {
+        console.error("Error in signal analysis:", error);
+        this.handleError("ANALYSIS_ERROR", `Error analyzing signal: ${error.message}`);
+        // Valores por defecto seguros
+        isFingerDetected = false;
+        signalQuality = 0;
+      }
 
       if (trendResult === "non_physiological" && !this.isCalibrating) {
         if (shouldLog) {
@@ -300,30 +390,54 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
         return;
       }
 
-      // Calcular el índice de perfusión (PI) real
-      const perfusionIndex = this.biophysicalValidator.calculatePulsatilityIndex(filteredValue);
-
-      const processedSignal: ProcessedSignal = {
-        timestamp: Date.now(),
-        rawValue: redValue,
-        filteredValue: filteredValue,
-        quality: signalQuality, // Usar la calidad del SignalAnalyzer
-        fingerDetected: isFingerDetected, // Usar la detección de dedo del SignalAnalyzer
-        roi: roi,
-        perfusionIndex: perfusionIndex
-      };
-
-      console.log("🟢 PPGSignalProcessor: Ejecutando onSignalReady callback", {
-        fingerDetected: processedSignal.fingerDetected,
-        quality: processedSignal.quality,
-        rawValue: processedSignal.rawValue,
-        filteredValue: processedSignal.filteredValue
-      });
-      
-      this.onSignalReady(processedSignal);
-
-      if (shouldLog) {
-        console.log("PPGSignalProcessor DEBUG: Sent onSignalReady (OK):", processedSignal);
+      // 4. Preparar señal procesada con validación
+      let processedSignal: ProcessedSignal;
+      try {
+        // Calcular el índice de perfusión (PI) con manejo de errores
+        const perfusionIndex = this.biophysicalValidator.calculatePulsatilityIndex(filteredValue);
+        
+        // Crear objeto de señal procesada
+        processedSignal = {
+          timestamp: Date.now(),
+          rawValue: redValue,
+          filteredValue: filteredValue,
+          quality: signalQuality,
+          fingerDetected: isFingerDetected,
+          roi: roi,
+          perfusionIndex: perfusionIndex
+        };
+        
+        // Validar señal antes de enviar
+        if (this.validateProcessedSignal(processedSignal)) {
+          // Registrar métricas de rendimiento
+          const processTime = performance.now() - frameStartTime;
+          if (shouldLog) {
+            console.log("PPGSignalProcessor: Frame processed successfully", {
+              processTime: `${processTime.toFixed(2)}ms`,
+              fps: frameNumber > 1 ? `${(1000/processTime).toFixed(1)} fps` : 'N/A',
+              signal: {
+                quality: processedSignal.quality,
+                fingerDetected: processedSignal.fingerDetected,
+                perfusionIndex: processedSignal.perfusionIndex.toFixed(2),
+                rawValue: Math.round(processedSignal.rawValue),
+                filteredValue: processedSignal.filteredValue.toFixed(2)
+              },
+              roi: {
+                x: roi.x, y: roi.y,
+                width: roi.width, height: roi.height
+              }
+            });
+          }
+          
+          // Enviar señal procesada
+          this.onSignalReady(processedSignal);
+        } else {
+          console.warn("PPGSignalProcessor: Invalid signal detected, not sending");
+          this.handleError("INVALID_SIGNAL", "Signal validation failed");
+        }
+      } catch (error) {
+        console.error("Error creating processed signal:", error);
+        this.handleError("SIGNAL_CREATION_ERROR", `Error creating processed signal: ${error.message}`);
       }
     } catch (error) {
       console.error("PPGSignalProcessor: Error processing frame", error);
@@ -331,17 +445,81 @@ export class PPGSignalProcessor implements SignalProcessorInterface {
     }
   }
 
-  private handleError(code: string, message: string): void {
-    console.error("PPGSignalProcessor: Error", code, message);
+  /**
+   * Valida una señal procesada antes de enviarla
+   */
+  private validateProcessedSignal(signal: ProcessedSignal): boolean {
+    // Validar valores numéricos
+    if (isNaN(signal.quality) || signal.quality < 0 || signal.quality > 100) {
+      console.error("Invalid signal quality:", signal.quality);
+      return false;
+    }
+    
+    if (isNaN(signal.rawValue) || signal.rawValue < 0 || signal.rawValue > 255) {
+      console.error("Invalid raw value:", signal.rawValue);
+      return false;
+    }
+    
+    if (isNaN(signal.filteredValue) || !isFinite(signal.filteredValue)) {
+      console.error("Invalid filtered value:", signal.filteredValue);
+      return false;
+    }
+    
+    if (isNaN(signal.perfusionIndex) || signal.perfusionIndex < 0 || signal.perfusionIndex > 100) {
+      console.error("Invalid perfusion index:", signal.perfusionIndex);
+      return false;
+    }
+    
+    // Validar ROI
+    if (!signal.roi || 
+        isNaN(signal.roi.x) || isNaN(signal.roi.y) || 
+        isNaN(signal.roi.width) || isNaN(signal.roi.height) ||
+        signal.roi.width <= 0 || signal.roi.height <= 0) {
+      console.error("Invalid ROI:", signal.roi);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Crea un callback de respaldo para onSignalReady
+   */
+  private createFallbackCallback(): (signal: ProcessedSignal) => void {
+    console.warn("PPGSignalProcessor: Creating fallback onSignalReady callback");
+    return (signal: ProcessedSignal) => {
+      console.log("Fallback onSignalReady:", {
+        timestamp: new Date(signal.timestamp).toISOString(),
+        quality: signal.quality,
+        fingerDetected: signal.fingerDetected,
+        rawValue: signal.rawValue,
+        filteredValue: signal.filteredValue
+      });
+    };
+  }
+  
+  /**
+   * Maneja errores de manera consistente
+   */
+  private handleError(code: string, message: string, details?: any): void {
     const error: ProcessingError = {
       code,
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      details: details || {}
     };
+    
+    console.error(`PPGSignalProcessor [${code}]: ${message}`, details);
+    
+    // Enviar error a través del callback si está disponible
     if (typeof this.onError === 'function') {
-      this.onError(error);
+      try {
+        this.onError(error);
+      } catch (callbackError) {
+        console.error("Error in error callback:", callbackError);
+      }
     } else {
-      console.error("PPGSignalProcessor: onError callback not available, cannot report error:", error);
+      console.error("PPGSignalProcessor: onError callback not available, error not reported:", error);
     }
   }
 }

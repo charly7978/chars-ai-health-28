@@ -1,50 +1,28 @@
-// Aplicar variables primero
-apply from: "../variables.gradle"
-
-// Aplicar plugins
+// Configuración de plugins - Debe ser el primer bloque en el archivo
 plugins {
     id 'com.android.application'
-    id 'kotlin-android'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.google.gms.google-services' apply false
 }
 
-// Configuración de Kotlin
-android {
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-}
+// Cargar versiones desde el proyecto raíz
+def versions = rootProject.buildscript.ext.versions
 
 android {
     namespace "com.charsai.healt28"
-    compileSdk rootProject.ext.compileSdkVersion
+    compileSdk 34
     
     defaultConfig {
         applicationId "com.charsai.healt28"
-        minSdk rootProject.ext.minSdkVersion
-        targetSdk rootProject.ext.targetSdkVersion
+        minSdk 23
+        targetSdk 34
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
         aaptOptions {
-            // Archivos y directorios a omitir del directorio de activos empaquetados
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
-    }
-    
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    
-    // Configuración específica de Kotlin
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-    
-    // Habilitar vista de enlace de datos si es necesario
-    buildFeatures {
-        viewBinding true
     }
     
     buildTypes {
@@ -52,6 +30,19 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+    
+    buildFeatures {
+        viewBinding true
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    
+    kotlinOptions {
+        jvmTarget = '17'
     }
 }
 
@@ -62,26 +53,35 @@ repositories {
 }
 
 dependencies {
+    // Capacitor
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
-    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
-    
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
-    
     implementation project(':capacitor-cordova-android-plugins')
+    
+    // AndroidX Core
+    implementation "androidx.appcompat:appcompat:$versions.appcompat"
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+    implementation "androidx.core:core-ktx:$versions.coreKtx"
+    implementation "androidx.activity:activity-ktx:$versions.activity"
+    implementation "androidx.fragment:fragment-ktx:$versions.fragment"
+    
+    // Testing
+    testImplementation "junit:junit:$versions.junit"
+    androidTestImplementation "androidx.test.ext:junit:$versions.testExtJunit"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$versions.espressoCore"
+    
+    // Firebase (opcional, si se usa)
+    // implementation platform('com.google.firebase:firebase-bom:32.7.0')
+    // implementation 'com.google.firebase:firebase-analytics-ktx'
 }
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.exists()) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch (Exception e) {
-    logger.warn("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+// Aplicar plugin de Google Services si existe el archivo de configuración
+def googleServicesFile = rootProject.file('google-services.json')
+if (googleServicesFile.exists()) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.warn("google-services.json no encontrado. Algunas funcionalidades podrían no estar disponibles.")
 }

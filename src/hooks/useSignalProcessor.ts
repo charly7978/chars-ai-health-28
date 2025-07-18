@@ -45,9 +45,70 @@ export const useSignalProcessor = () => {
       timestamp: new Date().toISOString()
     });
 
-    // Define enhanced signal ready callback with full diagnostics
-    const onSignalReady = callbackDiagnostics.current.wrapCallback(
+    // Definir el callback onSignalReady con manejo de errores
+    const onSignalReady = (signal: ProcessedSignal) => {
+      try {
+        // Validar la señal entrante
+        if (!signal || typeof signal !== 'object') {
+          throw new Error('Señal inválida recibida');
+        }
+
+        // Registrar ejecución del callback
+        frameMonitor.current.recordCallbackExecution();
+        
+        // Validar calidad de señal
+        const validation = signalValidator.current.validateSignal(signal);
+        
+        // Log detallado solo si hay cambios significativos o errores
+        if (!validation.isValid || signal.quality < 50) {
+          logger.warn('useSignalProcessor', 'Signal quality issues detected', {
+            quality: signal.quality,
+            issues: validation.issues,
+            suggestions: validation.suggestions
+          });
+        }
+        
+        // Actualizar el estado con la nueva señal
+        setLastSignal(prevSignal => {
+          // Solo actualizar si hay un cambio significativo para evitar re-renderizados innecesarios
+          if (!prevSignal || 
+              prevSignal.quality !== signal.quality ||
+              prevSignal.fingerDetected !== signal.fingerDetected) {
+            return signal;
+          }
+          return prevSignal;
+        });
+        
+        // Limpiar errores previos si la señal es válida
+        if (validation.isValid) {
+          setError(null);
+        }
+        
+        // Actualizar contador de frames procesados
+        setFramesProcessed(prev => prev + 1);
+        
+        // Almacenar en el historial para análisis
+        signalHistoryRef.current = [
+          ...signalHistoryRef.current.slice(-99), // Mantener solo los últimos 100
+          signal
+        ];
+        
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido en onSignalReady';
+        logger.error('useSignalProcessor', 'Error en onSignalReady', {
+          error: errorMessage,
+          signal: signal
+        });
+      }
+    };
+    
+    // Envolver el callback con el diagnóstico
+    const wrappedOnSignalReady = callbackDiagnostics.current.wrapCallback(
       'onSignalReady',
+      onSignalReady
+    );
+    
+    // Definir el manejador de errores
       (signal: ProcessedSignal) => {
         // Registrar ejecución del callback
         frameMonitor.current.recordCallbackExecution();
@@ -168,13 +229,42 @@ export const useSignalProcessor = () => {
       setError(error);
     };
 
-    // Create processor with proper callbacks
-    processorRef.current = new PPGSignalProcessor(onSignalReady, onError);
-    
-    console.log("useSignalProcessor: Processor created with callbacks established:", {
-      hasOnSignalReadyCallback: !!processorRef.current.onSignalReady,
-      hasOnErrorCallback: !!processorRef.current.onError
-    });
+      // Crear el procesador con los callbacks asegurados
+    try {
+      processorRef.current = new PPGSignalProcessor(
+        wrappedOnSignalReady, 
+        onError
+      );
+      
+      // Verificación de callbacks
+      if (!processorRef.current.onSignalReady || !processorRef.current.onError) {
+        throw new Error('Fallo al establecer los callbacks del procesador');
+      }
+      
+      logger.info('useSignalProcessor', 'Processor created with callbacks', {
+        hasOnSignalReadyCallback: !!processorRef.current.onSignalReady,
+        hasOnErrorCallback: !!processorRef.current.onError,
+        sessionId
+      });
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido al crear el procesador';
+      logger.error('useSignalProcessor', 'Error creating processor', {
+        error: errorMessage,
+        sessionId
+      });
+      
+      // Establecer un estado de error claro
+      setError({
+        message: 'Error al inicializar el procesador de señales',
+        code: 'PROCESSOR_INIT_ERROR',
+        timestamp: Date.now(),
+        details: errorMessage
+      });
+      
+      // Detener cualquier procesamiento
+      setIsProcessing(false);
+    }
     
     return () => {
       if (processorRef.current) {
@@ -188,18 +278,38 @@ export const useSignalProcessor = () => {
 
   const startProcessing = useCallback(() => {
     if (!processorRef.current) {
-      console.error("useSignalProcessor: No processor available");
+      const errorMsg = "No hay procesador disponible para iniciar";
+      logger.error('useSignalProcessor', errorMsg);
+      setError({
+        message: errorMsg,
+        code: 'NO_PROCESSOR',
+        timestamp: Date.now()
+      });
       return;
     }
 
-    console.log("useSignalProcessor: Starting processing", {
-      previousState: isProcessing,
+    // Validar que los callbacks estén configurados
+    if (!processorRef.current.onSignalReady || !processorRef.current.onError) {
+      const errorMsg = "Callbacks del procesador no configurados correctamente";
+      logger.error('useSignalProcessor', errorMsg, {
+        hasOnSignalReady: !!processorRef.current.onSignalReady,
+        hasOnError: !!processorRef.current.onError
+      });
+      
+      setError({
+        message: errorMsg,
+        code: 'INVALID_CALLBACKS',
+        timestamp: Date.now()
+      });
+      return;
+    }
+
+    logger.info('useSignalProcessor', 'Iniciando procesamiento', {
       timestamp: new Date().toISOString(),
-      processorExists: !!processorRef.current,
-      hasSignalReadyCallback: !!processorRef.current.onSignalReady
+      sessionId: generateSessionId()
     });
     
-    // Reset all stats and history
+    // Resetear estados
     setIsProcessing(true);
     setFramesProcessed(0);
     setSignalStats({
@@ -210,10 +320,32 @@ export const useSignalProcessor = () => {
       lastQualityUpdateTime: 0
     });
     
+    // Limpiar referencias
     signalHistoryRef.current = [];
     qualityTransitionsRef.current = [];
     errorCountRef.current = 0;
     lastErrorTimeRef.current = 0;
+    
+    // Iniciar el procesador
+    try {
+      processorRef.current.start();
+      logger.info('useSignalProcessor', 'Procesamiento iniciado correctamente');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Error desconocido al iniciar el procesamiento';
+      logger.error('useSignalProcessor', 'Error al iniciar el procesamiento', {
+        error: errorMsg,
+        stack: err instanceof Error ? err.stack : undefined
+      });
+      
+      setError({
+        message: 'Error al iniciar el procesamiento',
+        details: errorMsg,
+        code: 'START_ERROR',
+        timestamp: Date.now()
+      });
+      
+      setIsProcessing(false);
+    }
     
     // Start the processor
     processorRef.current.start();
@@ -275,29 +407,34 @@ export const useSignalProcessor = () => {
     }
   }, []);
 
+  // Función optimizada para procesar frames
   const processFrame = useCallback((imageData: ImageData) => {
     if (!processorRef.current) {
       logger.error("useSignalProcessor", "No processor available to process frames");
       return;
     }
     
+    // Verificar rápidamente si debemos procesar este frame
     if (!isProcessing) {
-      logger.debug("useSignalProcessor", "Not processing, ignoring frame");
       return;
     }
-
-    // Iniciar monitoreo de frame
-    const frameStartTime = frameMonitor.current.startFrameProcessing();
     
-    try {
-      // Validar que los callbacks estén configurados
-      const callbackValidation = callbackDiagnostics.current.validateCallbackChain({
-        onSignalReady: processorRef.current.onSignalReady,
-        onError: processorRef.current.onError
-      });
+    // Usar requestAnimationFrame para optimizar el procesamiento
+    requestAnimationFrame(() => {
+      // Iniciar monitoreo de frame
+      const frameStartTime = frameMonitor.current.startFrameProcessing();
       
-      if (!callbackValidation.isValid) {
-        logger.error("useSignalProcessor", "Callback validation failed", {
+      try {
+        // Validar que los callbacks estén configurados
+        const callbackValidation = callbackDiagnostics.current.validateCallbackChain({
+          onSignalReady: processorRef.current?.onSignalReady,
+          onError: processorRef.current?.onError
+        });
+        
+        if (!callbackValidation.isValid) {
+          // Solo registrar el error una vez cada 60 frames para evitar saturación
+          if (framesProcessed % 60 === 0) {
+            logger.error("useSignalProcessor", "Callback validation failed", {
           missingCallbacks: callbackValidation.missingCallbacks,
           validCallbacks: callbackValidation.validCallbacks
         });
@@ -352,23 +489,30 @@ export const useSignalProcessor = () => {
     };
   }, []);
 
-  return {
+  // Memoizar el valor de retorno para evitar recreaciones innecesarias
+  const api = React.useMemo(() => ({
     isProcessing,
     lastSignal,
     error,
     framesProcessed,
     signalStats,
-    isCalibrating: calibrationInProgressRef.current,
     startProcessing,
     stopProcessing,
-    calibrate,
     processFrame,
-    signalHistory: signalHistoryRef.current,
-    qualityTransitions: qualityTransitionsRef.current,
-    // Nuevas funciones de diagnóstico
-    getDiagnosticMetrics,
-    diagnosticLogger: logger,
-    frameMonitor: frameMonitor.current,
+    calibrate
+  }), [
+    isProcessing,
+    lastSignal,
+    error,
+    framesProcessed,
+    signalStats,
+    startProcessing,
+    stopProcessing,
+    processFrame,
+    calibrate
+  ]);
+
+  return api;
     callbackDiagnostics: callbackDiagnostics.current,
     signalValidator: signalValidator.current
   };
