@@ -3,6 +3,15 @@ apply plugin: 'com.android.application'
 android {
     namespace "com.charsai.healt28"
     compileSdk rootProject.ext.compileSdkVersion
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    
+    kotlinOptions {
+        jvmTarget = '17'
+    }
     defaultConfig {
         applicationId "com.charsai.healt28"
         minSdkVersion rootProject.ext.minSdkVersion
