@@ -4,10 +4,15 @@ apply from: "../variables.gradle"
 // Aplicar plugins
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+    id 'kotlin-android'
 }
 
-apply plugin: 'kotlin-android'
+// Configuración de Kotlin
+android {
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
 
 android {
     namespace "com.charsai.healt28"

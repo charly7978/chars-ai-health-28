@@ -1,18 +1,9 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
-// Configuración común para todos los proyectos
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// Aplicar variables primero
+apply from: "variables.gradle"
 
-// Configuración del buildscript
 buildscript {
-    // Aplicar variables primero
-    apply from: "variables.gradle"
-    
     repositories {
         google()
         mavenCentral()
@@ -25,31 +16,27 @@ buildscript {
     }
 }
 
-// Tarea para limpiar el proyecto
-task clean(type: Delete) {
-    delete rootProject.buildDir
-}
-
-apply from: "variables.gradle"
-
 allprojects {
     repositories {
         google()
         mavenCentral()
     }
     
+    // Configuración común para todas las tareas de compilación Java
     tasks.withType(JavaCompile).configureEach {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     
-    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    // Configuración común para todas las tareas de compilación Kotlin
+    plugins.withType(org.jetbrains.kotlin.gradle.internal.Kapt3GradleSubplugin) {
         kotlinOptions {
             jvmTarget = '17'
         }
     }
 }
 
+// Tarea para limpiar el proyecto
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
