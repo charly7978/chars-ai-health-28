@@ -39,6 +39,7 @@ export interface DeviceCapabilities {
   supportedColorSpaces: string[];
   hasImageStabilization: boolean;
   hasAutoFocus: boolean;
+  rearCameraId?: string; // ID of the rear camera if available
 }
 
 export class AndroidCameraController {
@@ -129,28 +130,75 @@ export class AndroidCameraController {
    */
   private async detectDeviceCapabilities(): Promise<void> {
     try {
+      // Solicitar permisos de cámara primero
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Detener el stream inmediatamente después de obtener permisos
+        stream.getTracks().forEach(track => track.stop());
+      } catch (error) {
+        console.error('AndroidCameraController: Error al solicitar permisos de cámara:', error);
+        throw new Error('No se pudieron obtener los permisos de cámara. Asegúrate de haber otorgado los permisos necesarios.');
+      }
+
       // Obtener lista de dispositivos de media
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       
       console.log('AndroidCameraController: Dispositivos de video detectados:', {
         totalDevices: videoDevices.length,
-        devices: videoDevices.map(d => ({ id: d.deviceId, label: d.label })),
+        devices: videoDevices.map(d => ({ 
+          id: d.deviceId, 
+          label: d.label || 'Etiqueta no disponible',
+          groupId: d.groupId 
+        })),
         timestamp: new Date().toISOString()
       });
       
-      // Buscar cámara trasera (generalmente la primera o la que no contiene "front")
-      const rearCamera = videoDevices.find(device => 
-        !device.label.toLowerCase().includes('front') &&
-        !device.label.toLowerCase().includes('user') &&
-        (device.label.toLowerCase().includes('back') || 
-         device.label.toLowerCase().includes('rear') ||
-         device.label.toLowerCase().includes('environment') ||
-         videoDevices.indexOf(device) === 0) // Primera cámara como fallback
-      );
+      // Detectar cámara trasera con lógica mejorada
+      let rearCamera = null;
+      
+      // 1. Primero intentar con facingMode 'environment'
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        const tracks = stream.getVideoTracks();
+        if (tracks.length > 0) {
+          const settings = tracks[0].getSettings();
+          rearCamera = videoDevices.find(d => d.deviceId === settings.deviceId) || null;
+          // Detener el stream después de usarlo
+          tracks.forEach(track => track.stop());
+        }
+      } catch (error) {
+        console.warn('No se pudo acceder a la cámara trasera con facingMode environment');
+      }
+      
+      // 2. Si no se encontró, buscar por etiquetas comunes
+      if (!rearCamera) {
+        rearCamera = videoDevices.find(device => {
+          const label = device.label.toLowerCase();
+          return (
+            label.includes('back') || 
+            label.includes('rear') || 
+            label.includes('environment') ||
+            label.includes('trasera') ||
+            // Algunos dispositivos usan groupId para identificar cámaras
+            (device.groupId && device.groupId.includes('back'))
+          );
+        });
+      }
+      
+      // 3. Si aún no se encontró, usar la primera cámara disponible
+      if (!rearCamera && videoDevices.length > 0) {
+        console.warn('No se pudo identificar la cámara trasera, usando la primera disponible');
+        rearCamera = videoDevices[0];
+      }
       
       // Detectar capacidades avanzadas
-      const hasFlash = 'torch' in navigator || 'ImageCapture' in window;
+      const hasFlash = 'torch' in navigator || 
+                      ('ImageCapture' in window && 
+                       typeof (window as any).ImageCapture !== 'undefined' &&
+                       'setOptions' in (window as any).ImageCapture.prototype);
       const hasImageStabilization = 'getSettings' in MediaStreamTrack.prototype;
       
       this.deviceCapabilities = {
@@ -160,7 +208,8 @@ export class AndroidCameraController {
         maxFrameRate: this.TARGET_FRAME_RATE,
         supportedColorSpaces: ['sRGB', 'P3'],
         hasImageStabilization,
-        hasAutoFocus: true // Asumimos que la mayoría de cámaras traseras tienen autofocus
+        hasAutoFocus: true, // Asumimos que la mayoría de cámaras traseras tienen autofocus
+        rearCameraId: rearCamera?.deviceId
       };
       
       console.log('AndroidCameraController: Capacidades detectadas:', {
@@ -190,24 +239,13 @@ export class AndroidCameraController {
    * Construye los constraints óptimos para la cámara trasera
    */
   private async buildOptimalConstraints(): Promise<MediaStreamConstraints> {
+    // Intentar primero con facingMode environment
     const videoConstraints: MediaTrackConstraints = {
-      // Especificar cámara trasera explícitamente
-      facingMode: { exact: 'environment' }, // 'environment' = cámara trasera
-      
-      // Configurar resolución óptima
+      facingMode: { ideal: 'environment' }, // 'environment' = cámara trasera
       width: { ideal: 1920, min: 640 },
       height: { ideal: 1080, min: 480 },
-      
-      // Configurar frame rate para análisis temporal preciso
-      frameRate: { 
-        ideal: this.TARGET_FRAME_RATE, 
-        min: this.MIN_FRAME_RATE 
-      },
-      
-      // Configuraciones avanzadas para medición PPG
+      frameRate: { ideal: 60, min: 30 },
       aspectRatio: { ideal: 16/9 },
-      
-      // Configuraciones de calidad de imagen
       ...(this.deviceCapabilities?.hasAutoFocus && {
         focusMode: 'continuous'
       })

@@ -639,40 +639,73 @@ export class HeartBeatProcessor {
     return Math.round(finalBPM);
   }
 
-  public reset() {
+  /**
+   * Resets all processor state to initial values
+   * @param fullReset If true, resets adaptive parameters and learning state
+   */
+  reset(fullReset: boolean = true) {
+    const resetStartTime = performance.now();
+    
+    // Clear all data buffers
+    this.values = [];
+    this.bpmHistory = [];
+    this.peakConfirmationBuffer = [];
     this.signalBuffer = [];
     this.medianBuffer = [];
     this.movingAverageBuffer = [];
-    this.peakConfirmationBuffer = [];
-    this.bpmHistory = [];
-    this.values = [];
-    this.smoothBPM = 0;
+    this.peakValidationBuffer = [];
+    this.recentSignalStrengths = [];
+    
+    // Reset timing and state variables
     this.lastPeakTime = null;
     this.previousPeakTime = null;
     this.lastConfirmedPeak = false;
     this.lastBeepTime = 0;
+    this.startTime = Date.now();
+    this.lowSignalCount = 0;
+    this.peaksSinceLastTuning = 0;
+    
+    // Reset signal processing state
     this.baseline = 0;
     this.lastValue = 0;
     this.smoothedValue = 0;
-    this.startTime = Date.now();
-    this.lowSignalCount = 0;
-
-    this.adaptiveSignalThreshold = this.DEFAULT_SIGNAL_THRESHOLD;
-    this.adaptiveMinConfidence = this.DEFAULT_MIN_CONFIDENCE;
-    this.adaptiveDerivativeThreshold = this.DEFAULT_DERIVATIVE_THRESHOLD;
-    this.recentPeakAmplitudes = [];
-    this.recentPeakConfidences = [];
-    this.recentPeakDerivatives = [];
-    this.peaksSinceLastTuning = 0;
+    this.currentSignalQuality = 0;
+    this.lastSignalStrength = 0;
     
+    // Reset peak detection state
+    this.peakCandidateIndex = null;
+    this.peakCandidateValue = 0;
     this.isArrhythmiaDetected = false;
-    this.peakValidationBuffer = [];
     
-    // Reiniciar los parámetros del filtro de Kalman
-    this.P_kalman = 1; 
-    this.X_kalman = 0;
-    this.K_kalman = 0;
-    console.log("HeartBeatProcessor: Full reset including adaptive parameters, arrhythmia flag, and Kalman filter state.");
+    if (fullReset) {
+      // Reset adaptive parameters to defaults
+      this.adaptiveSignalThreshold = this.DEFAULT_SIGNAL_THRESHOLD;
+      this.adaptiveMinConfidence = this.DEFAULT_MIN_CONFIDENCE;
+      this.adaptiveDerivativeThreshold = this.DEFAULT_DERIVATIVE_THRESHOLD;
+      
+      // Clear learning buffers
+      this.recentPeakAmplitudes = [];
+      this.recentPeakConfidences = [];
+      this.recentPeakDerivatives = [];
+      
+      // Reset Kalman filter with safe initial values
+      this.P_kalman = 1.0;
+      this.X_kalman = 0;
+      this.K_kalman = 0;
+      
+      console.log('HeartBeatProcessor: Full reset performed', {
+        resetDuration: performance.now() - resetStartTime,
+        adaptiveParams: {
+          signalThreshold: this.adaptiveSignalThreshold,
+          minConfidence: this.adaptiveMinConfidence,
+          derivativeThreshold: this.adaptiveDerivativeThreshold
+        }
+      });
+    } else {
+      console.log('HeartBeatProcessor: Soft reset performed', {
+        resetDuration: performance.now() - resetStartTime
+      });
+    }
   }
 
   public getRRIntervals(): { intervals: number[]; lastPeakTime: number | null } {
